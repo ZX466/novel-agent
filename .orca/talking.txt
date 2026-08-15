@@ -1,0 +1,112 @@
+# 📬 Talking — Claude（主协调）工作树留言板
+
+> **Agent：Claude** | **能力域：架构 / 代码质量 / 逻辑 / 测试、前端 / 体验 / 发布 / 运维** | **评审我的 Agent：Codex**
+> **工作树：E:/zxdevelop/project2/novel-agent** | **分支：main**
+> **行动前必读**：`.orca/workflow` + `.orca/agent-registry.md`
+
+---
+
+## 📌 通信规则
+1. 本文件是**本地留言板**（已被 .gitignore 忽略，不入库、无分支合并冲突）；跨工作树直接读写对应文件即可。
+2. **只追加、不改写**他人消息；每条消息以 `[任务] / [回复] / [状态] / [通知]` 开头、以 `---` 结尾。
+3. 动手前先通读整个文件，避免重复或覆盖。
+4. 任务生命周期留痕：收到 → `已接受` → `进行中` → `已完成 / 需澄清 / 超出范围`。
+5. 严禁写入涉密信息（API Key、密码、token 等）。
+6. 消息格式与 `.orca/workflow` 第三节保持一致。
+
+---
+
+## 🗺 协作全景（工作树一览）
+
+| Agent | 能力域 | 工作树路径 | 分支 |
+|---|---|---|---|
+| Claude | 主协调 / 架构 / 代码质量 / 逻辑 / 测试 / 前端 / 体验 / 发布 / 运维 | E:/zxdevelop/project2/novel-agent | main |
+| cline | 依赖 / 配置 / 文档 | E:/zxdevelop/.orca/worktrees/novel-agent/cline | ZX466/cline |
+| Codex | 安全 / 合规 / 风险 | E:/zxdevelop/.orca/worktrees/novel-agent/codex | ZX466/codex |
+| kilo | 接口 / 兼容性 | E:/zxdevelop/.orca/worktrees/novel-agent/kilo | ZX466/kilo |
+| opencode | 数据 / 数据库 | E:/zxdevelop/.orca/worktrees/novel-agent/opencode | ZX466/opencode |
+| Pi | 性能 | E:/zxdevelop/.orca/worktrees/novel-agent/pi | ZX466/pi |
+
+---
+
+## 📍 当前状态（Claude 维护，每次工作结束更新）
+- **状态**：🟢 就绪，等待新需求
+- **最近更新**：2026-08-15 21:52
+- **摘要**：协作基线初始化完成（talking.txt 统一格式 / .gitignore 接入 / 双远程推送）。
+
+---
+
+## 📋 我的待办（Claude 维护）
+
+### 进行中
+- （暂无）
+
+### 待分配 / 待处理
+- （暂无）
+
+### 已完成
+- 2026-08-15 建立 `.orca/workflow`、`.orca/agent-registry.md` 与各工作树 `.orca/talking.txt` 基线
+
+---
+
+## 💬 收到的消息（收件箱，只追加）
+
+（暂无消息）
+
+---
+
+## ✍️ 消息模板（与 .orca/workflow 一致）
+
+```
+[任务] <简短标题>
+来源: <Agent 名称>
+时间: <YYYY-MM-DD HH:MM>
+优先级: P0 / P1 / P2
+截止: <YYYY-MM-DD HH:MM>（可选）
+描述:
+  <具体任务描述>
+相关文件:
+  - <文件路径>
+期望产出:
+  <交付物描述>
+---
+```
+
+```
+[回复] <对应任务标题>
+来源: <Agent 名称>
+时间: <YYYY-MM-DD HH:MM>
+状态: 已接受 / 进行中 / 已完成 / 需澄清 / 超出范围
+进展:
+  <当前进度或结果>
+疑问:
+  <如有疑问，列出>
+---
+```
+
+```
+[状态] <一句话进展> / [通知] <简短标题>
+来源: <Agent 名称>
+时间: <YYYY-MM-DD HH:MM>
+内容:
+  <具体内容>
+---
+```
+
+> 给其他 Agent 留言 → 对应工作树的 `.orca/talking.txt`（路径见上方协作全景表）。
+
+---
+
+## 📜 工作日志（最新条目追加到末尾）
+- 2026-08-15 21:52 | Pi | 统一全工作树 talking.txt 格式与规则；新增「当前状态 / 工作日志」区块并将 talking.txt 接入 .gitignore（本地留言板，不入库）；`.orca/workflow` + `agent-registry.md` 已提交 main 并推送双远程（Gitee + GitHub）。
+
+---
+
+## 🔍 我的职责边界
+**负责：** 整体架构设计、代码质量把控、逻辑正确性、测试策略、前端开发与体验、发布与运维
+**评审（我评审谁）：** cline（依赖/配置/文档）、kilo（接口/兼容性）的工作
+**不做：** 性能深度优化（找 Pi）、安全审计 / 合规 / 风险（找 Codex）、数据库设计（找 opencode）、接口规范（找 kilo）
+
+---
+
+*格式以 .orca/workflow 为准；本文件由各 Agent 维护，勿删除历史消息。*

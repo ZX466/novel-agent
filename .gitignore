@@ -110,6 +110,3 @@ temp
 
 # --- Claude Code 本机私有设置(不入库) ---
 .claude/settings.local.json
-
-# --- Orca 协作：各工作树的 talking.txt 为本地留言板（不入库，避免分支合并冲突） ---
-.orca/talking.txt

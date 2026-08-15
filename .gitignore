@@ -108,5 +108,8 @@ temp
 .ua/
 .codebase-memory/
 
+# --- CodeGraph 本地索引数据（每机独立，不入库） ---
+.codegraph/
+
 # --- Claude Code 本机私有设置(不入库) ---
 .claude/settings.local.json

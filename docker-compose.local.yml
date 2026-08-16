@@ -1,0 +1,49 @@
+# =============================================================================
+# LOCAL-ONLY: PostgreSQL (pgvector) + Redis for local development
+# =============================================================================
+# 用途：腾讯云服务器到期后，本机轻量跑 PG + Redis 两个容器。
+# 前后端仍用本地进程（uvicorn + next dev），不在此 compose 内。
+#
+# 启动： docker compose -f docker-compose.local.yml up -d
+# 停止： docker compose -f docker-compose.local.yml down
+# 数据： pg_data / redis_data 卷持久化在本地，删除容器不丢数据。
+# =============================================================================
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: project11-postgres-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      # SECURITY: Override POSTGRES_PASSWORD in .env — the default is for dev only.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-project11}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-project11}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: project11-redis-local
+    restart: unless-stopped
+    command: ["redis-server", "--port", "16379", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-project11-redis}"]
+    ports:
+      - "16379:16379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "16379", "-a", "${REDIS_PASSWORD:-project11-redis}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pg_data:
+  redis_data:

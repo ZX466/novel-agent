@@ -231,16 +231,33 @@ def test_get_embedding_dim_reflects_last_actual_dim(monkeypatch):
 
 
 def test_embed_cache_key_hashes_text():
-    """The cache key must never contain the raw text (prompts are sensitive)."""
-    key = embedding._embed_cache_key("secret story premise", "m1")
+    """The cache key must never contain the raw text or the raw API key."""
+    stage = _make_stage(api_key="sk-secret-tenant")
+    key = embedding._embed_cache_key("secret story premise", "m1", stage)
     assert "secret story premise" not in key
-    assert key.startswith("m1|")
-    assert len(key) > len("m1|")  # a hex digest follows
+    assert "sk-secret-tenant" not in key
+    assert key.count("|") == 2  # identity | model | digest
+    assert "|m1|" in key
 
-    # Stable for the same (text, model), different for others.
-    assert embedding._embed_cache_key("a", "m") == embedding._embed_cache_key("a", "m")
-    assert embedding._embed_cache_key("a", "m") != embedding._embed_cache_key("b", "m")
-    assert embedding._embed_cache_key("a", "m") != embedding._embed_cache_key("a", "m2")
+    # Stable for the same (text, model, identity), different for others.
+    assert (
+        embedding._embed_cache_key("a", "m", stage)
+        == embedding._embed_cache_key("a", "m", stage)
+    )
+    assert (
+        embedding._embed_cache_key("a", "m", stage)
+        != embedding._embed_cache_key("b", "m", stage)
+    )
+    assert (
+        embedding._embed_cache_key("a", "m", stage)
+        != embedding._embed_cache_key("a", "m2", stage)
+    )
+    # Same text + model under a different API key -> different key (tenant
+    # isolation: users must never share cached vectors).
+    assert (
+        embedding._embed_cache_key("a", "m", stage)
+        != embedding._embed_cache_key("a", "m", _make_stage(api_key="sk-other"))
+    )
 
 
 @pytest.mark.asyncio
@@ -275,6 +292,29 @@ async def test_embed_text_cache_separates_models(monkeypatch):
     assert vb == [0.2]
     assert va2 == [0.1]  # model-a hit
     assert gc.await_count == 2  # a, b; third call served from cache
+
+
+@pytest.mark.asyncio
+async def test_embed_text_cache_separates_tenants(monkeypatch):
+    """Same model + same text under different API keys must NOT reuse vectors
+    (cross-tenant isolation: an API key leak must never surface another
+    tenant's cached embedding)."""
+    monkeypatch.setattr(settings, "embedding_dim", 1)
+    stage_a = _make_stage(model="m", api_key="sk-tenant-a")
+    stage_b = _make_stage(model="m", api_key="sk-tenant-b")
+
+    def _client_for(sc):
+        val = [0.1] if sc is stage_a else [0.2]
+        return _client_with_create(_mock_embedding_response([val]))
+
+    with patch.object(embedding, "_get_client", side_effect=_client_for) as gc:
+        va = await embedding.embed_text("same", stage_config=stage_a)
+        vb = await embedding.embed_text("same", stage_config=stage_b)
+        va2 = await embedding.embed_text("same", stage_config=stage_a)
+    assert va == [0.1]
+    assert vb == [0.2]
+    assert va2 == [0.1]  # tenant-a cache hit
+    assert gc.await_count == 2  # a, b embedded once each; third served from cache
 
 
 @pytest.mark.asyncio

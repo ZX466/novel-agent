@@ -7,11 +7,14 @@ from the first API response, so any model works without manual config.
 BYOK: if a StageConfig is supplied (api_base + api_key + model), it
 overrides .env defaults.
 
-Caching: identical (text, model) inputs hit an in-memory TTL cache, so
-repeated prompts (e.g. the same RAG query across pipeline runs, or a chapter
+Caching: identical (text, model, identity) inputs hit an in-memory TTL cache,
+so repeated prompts (e.g. the same RAG query across pipeline runs, or a chapter
 summary re-embedded on every edit) skip the LLM call entirely. The cache key
-is ``model | sha256(text)`` — raw query text is never retained in memory
-(embeddings of user prompts may contain story premises / secrets).
+is ``identity | model | sha256(text)`` where ``identity`` is the SHA-256 of the
+BYOK api_base + API key (env defaults when no stage_config is supplied) — so
+two tenants using the same model never share vectors. Raw query text and raw
+API keys are never retained in memory (embeddings of user prompts may contain
+story premises / secrets).
 """
 from __future__ import annotations
 
@@ -53,10 +56,25 @@ def clear_embedding_cache() -> None:
     _embed_cache.clear()
 
 
-def _embed_cache_key(text: str, model: str) -> str:
-    """Cache key: model + SHA-256 of the text (never the raw text itself)."""
+def _cache_identity(stage_config: StageConfig | None) -> str:
+    """Irreversible identity fingerprint of the embedding endpoint + key.
+
+    api_base and the API key are hashed together so that two tenants pointing
+    at the same model never share cached vectors (a cross-tenant retrieval
+    leak). The raw API key is never part of, or derivable from, the key.
+    """
+    api_base = (stage_config.api_base if stage_config else settings.embedding_api_base) or ""
+    api_key = (stage_config.api_key if stage_config else settings.embedding_api_key) or ""
+    return hashlib.sha256(f"{api_base}\n{api_key}".encode("utf-8")).hexdigest()
+
+
+def _embed_cache_key(text: str, model: str, stage_config: StageConfig | None) -> str:
+    """Cache key: tenant identity + model + SHA-256 of the text.
+
+    Never contains the raw text or the raw API key — only irreversible hashes.
+    """
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    return f"{model}|{digest}"
+    return f"{_cache_identity(stage_config)}|{model}|{digest}"
 
 
 def _cache_get(key: str) -> list[float] | None:
@@ -147,7 +165,7 @@ async def embed_text(
         raise ValueError("embed_text received empty input")
 
     model = _get_model(stage_config)
-    key = _embed_cache_key(text, model)
+    key = _embed_cache_key(text, model, stage_config)
     cached = _cache_get(key)
     if cached is not None:
         return list(cached)  # copy — callers must never mutate the shared vector
@@ -180,7 +198,7 @@ async def embed_batch(
         raise ValueError("embed_batch received empty string in list")
 
     model = _get_model(stage_config)
-    keys = [_embed_cache_key(t, model) for t in texts]
+    keys = [_embed_cache_key(t, model, stage_config) for t in texts]
     cached = [_cache_get(k) for k in keys]
 
     miss_indices = [i for i, vec in enumerate(cached) if vec is None]

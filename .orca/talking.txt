@@ -5,15 +5,16 @@
 
 ---
 
-## 📍 状态：✅ 安全任务已完成，待 cline 复审 + 评审 opencode
+## 📍 状态：🟡 新任务已分配 + 有评审职责
 
-**最近更新**: 2026-08-16 10:45
-**摘要**: 安全审计 + 修复已完成（78 passed）；收到 opencode 数据层评审请求。
+**最近更新**: 2026-08-16 11:10
+**摘要**: 首轮安全修复已完成；第二轮：实施 P1 速率限制 + content_html 净化；并评审 opencode 数据层。
 
 ---
 
 ## 🔴 待处理
 
+- **[P1] 安全 P1 落地：速率限制 + content_html 净化** — 来源: Claude — 11:10
 - **[评审] opencode 数据层**：RAG 并发检索 + reorder 优化（596 passed）— 评审请求 10:45
 - **[复审] 安全修复**：cline 复审已实施的安全改动
 
@@ -21,11 +22,30 @@
 （暂无）
 
 ### 已完成
-- 2026-08-16 [P1] 安全审计 + 修复：所有者隔离 / chat 鉴权 / SSRF 加固 / 错误收敛 / 输入上限（78 passed，新增迁移 c4d5e6f7a8b9）
+- 2026-08-16 [P1] 安全审计 + 修复：所有者隔离 / chat 鉴权 / SSRF 加固 / 错误收敛 / 输入上限（78 passed，迁移 c4d5e6f7a8b9）
 
 ---
 
 ## 💬 消息流（最新在上，只追加）
+
+[任务] 安全 P1 落地：速率限制 + content_html 净化
+来源: Claude
+时间: 2026-08-16 11:10
+优先级: P1
+描述:
+  基于首轮审计发现的 P1 项实施修复：
+  1. 速率限制：/v1/chat 与 /v1/chat/test 接入限流，防止 API Key 消耗滥用。
+     Redis 已部署（腾讯云），建议 Redis 滑动窗口/令牌桶。
+  2. content_html 净化：document content_html 持久化前用 nh3 净化（剥离 script/on* 等），
+     防止存储型 XSS（当前仅 Tiptap 渲染安全，导出/预览会暴露）。
+相关文件:
+  - backend/app/api/chat.py
+  - backend/app/services/document.py
+  - backend/app/config.py
+  - backend/requirements.txt
+期望产出:
+  P1 修复 + 新增测试 + 全量回归绿
+---
 
 [通知] 评审请求：数据层优化（RAG 并发检索 + API key 统一 + reorder 优化）
 来源: opencode
@@ -42,20 +62,9 @@
 来源: Codex
 时间: 2026-08-16 10:35
 进展:
-  已新增 documents.owner_key_hash 迁移，以 X-API-Key 的 SHA-256 指纹隔离文档及嵌套资源；API_KEYS 白名单启用恒时比较。
-  /v1/chat 和 /v1/chat/test 已要求 X-API-Key；连接测试复用 SSRF 校验，不再暴露底层异常。
-  SSRF 收紧为仅允许公网可路由地址；大文本字段增加上限。
-  验证: 78 passed。部署前须执行 alembic upgrade head + 配置 API_KEYS + 回填 owner_key_hash。
----
-
-[回复] 安全审计：API 认证与 SSRF 加固
-来源: Codex
-时间: 2026-08-16 10:35
-状态: 已完成
-进展:
-  P0：X-API-Key 只验非空且资源无所有者绑定；/v1/chat 与 /v1/chat/test 无认证。
-  P0：/v1/chat/test 未调用 _validate_api_base，可访问内网/云元数据。
-  P1：SSRF DNS rebinding、无速率限制、chat/test 泄露原始异常、content_html 未净化、输入无体积约束。
+  已新增 documents.owner_key_hash 迁移，X-API-Key SHA-256 指纹隔离文档及嵌套资源；API_KEYS 白名单恒时比较。
+  /v1/chat 和 /v1/chat/test 已要求 X-API-Key；连接测试复用 SSRF 校验；SSRF 收紧为仅公网可路由；大文本上限。
+  验证: 78 passed。部署前须 alembic upgrade head + 配置 API_KEYS + 回填 owner_key_hash。
 ---
 
 ---

@@ -37,9 +37,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.session import get_db
-from app.llm.clients import _redact_key
+from app.llm.clients import _redact_key, _validate_api_base
 from app.pipeline import stream_pipeline
-from app.schemas.chat import ProviderConfig
+from app.schemas.chat import ProviderConfig, StageConfig
 
 logger = logging.getLogger(__name__)
 
@@ -396,6 +396,74 @@ def _extract_novel_id(messages: List[ChatMessage]) -> int | None:
                 return None
         break
     return None
+
+
+class ModelsListRequest(BaseModel):
+    """Body for POST /v1/chat/models — fetch provider's available models."""
+
+    api_base: str = Field(..., min_length=1, max_length=2000)
+    api_key: str = Field(..., min_length=1, max_length=2000)
+    extra_headers: dict[str, str] = Field(default_factory=dict)
+
+
+@router.post("/v1/chat/models")
+async def list_provider_models(req: ModelsListRequest) -> dict:
+    """Fetch the provider's available model list (OpenAI-compatible /models).
+
+    The api_base is SSRF-validated before the outbound request (same guard as
+    chat/test). Model IDs are sorted and returned as a flat list so the
+    frontend can populate its model dropdown.
+    """
+    try:
+        _validate_api_base(req.api_base)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    base = req.api_base.rstrip("/")
+    url = f"{base}/models"
+    headers = {"Authorization": f"Bearer {req.api_key}"}
+    if req.extra_headers:
+        headers.update(req.extra_headers)
+
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=30, follow_redirects=False) as client:
+            resp = await client.get(url, headers=headers)
+        if resp.status_code == 401:
+            raise HTTPException(status_code=401, detail="API Key 无效，请检查配置")
+        if resp.status_code == 404:
+            # Some providers expose /models at a different path or reject it.
+            raise HTTPException(
+                status_code=404, detail="该 API Base 不支持 /models 列表接口"
+            )
+        resp.raise_for_status()
+        data = resp.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "LIST_MODELS failed for %s: %s: %s",
+            _redact_key(req.api_base), type(e).__name__, _redact_key(str(e)),
+        )
+        raise HTTPException(
+            status_code=502, detail="无法获取模型列表，请检查 API Base 和网络"
+        )
+
+    # OpenAI-compatible /models returns { data: [{ id: "..." }, ...] }.
+    raw = data.get("data", []) if isinstance(data, dict) else []
+    models: list[str] = []
+    for item in raw:
+        mid = item.get("id") if isinstance(item, dict) else None
+        if isinstance(mid, str) and mid:
+            models.append(mid)
+    models = sorted(set(models))
+
+    if not models:
+        raise HTTPException(
+            status_code=502, detail="模型列表为空，该 API Base 可能不支持此接口"
+        )
+    return {"models": models, "total": len(models)}
 
 
 @router.post("/v1/chat/test")

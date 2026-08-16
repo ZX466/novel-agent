@@ -98,6 +98,13 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     evaluate: null,
     embedding: null,
   });
+  // Provider-pulled model lists per stage (replaces hardcoded dropdown when non-empty).
+  const [fetchedModels, setFetchedModels] = useState<Record<AllStageKey, string[]>>({
+    draft: [],
+    refine: [],
+    evaluate: [],
+    embedding: [],
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -445,14 +452,61 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                             className="px-sp-2 py-sp-2 border rounded-sm text-[11px] outline-none"
                             style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--muted)", minWidth: "80px" }}
                           >
-                            <option value="">推荐↓</option>
-                            {(RECOMMENDED_MODELS[stageKey] || []).map((m) => (
+                            <option value="">{fetchedModels[stageKey].length ? "模型↓" : "推荐↓"}</option>
+                            {(fetchedModels[stageKey].length ? fetchedModels[stageKey] : RECOMMENDED_MODELS[stageKey] || []).map((m) => (
                               <option key={m} value={m}>{m}</option>
                             ))}
                           </select>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const stageForm = forms[stageKey];
+                              if (!stageForm.api_base || !stageForm.api_key) {
+                                alert("请先填写 API Base 和 API Key，再拉取模型");
+                                return;
+                              }
+                              const btn = document.getElementById(`fetch-models-${stageKey}`);
+                              if (btn) { btn.textContent = "拉取中..."; btn.setAttribute("disabled", "true"); }
+                              try {
+                                const res = await fetch(`${backendUrl}/v1/chat/models`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    api_base: stageForm.api_base.trim(),
+                                    api_key: stageForm.api_key.trim(),
+                                    extra_headers: stageForm.extra_headers_json.trim()
+                                      ? (JSON.parse(stageForm.extra_headers_json) as Record<string, string>)
+                                      : undefined,
+                                  }),
+                                });
+                                const data = await res.json();
+                                if (!res.ok) {
+                                  alert(`❌ 拉取失败: ${data.detail || data.error || `HTTP ${res.status}`}`);
+                                  return;
+                                }
+                                const list: string[] = data.models ?? [];
+                                setFetchedModels((prev) => ({ ...prev, [stageKey]: list }));
+                                if (list.length) {
+                                  alert(`✅ 拉取到 ${list.length} 个模型，已填入下拉列表`);
+                                }
+                              } catch (err) {
+                                alert(`❌ 拉取失败: ${err instanceof Error ? err.message : "网络错误"}`);
+                              } finally {
+                                if (btn) { btn.textContent = "拉取模型"; btn.removeAttribute("disabled"); }
+                              }
+                            }}
+                            id={`fetch-models-${stageKey}`}
+                            title="用当前 API Base + Key 拉取可用模型"
+                            className="px-sp-2 py-sp-2 border rounded-sm text-[11px] shrink-0 transition-colors"
+                            style={{ borderColor: "var(--border)", color: "var(--accent)" }}
+                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                          >
+                            拉取模型
+                          </button>
                         </div>
                         <span className="text-[10px] mt-0.5 block" style={{ color: "var(--muted)" }}>
-                          填纯 model 名，不要带 provider 前缀。
+                          填纯 model 名，不要带 provider 前缀。点击"拉取模型"可从 API 自动获取可用列表。
                           {stageKey === "embedding" && " 例如: text-embedding-v4 / text-embedding-3-small"}
                         </span>
                       </FieldGroup>

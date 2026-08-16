@@ -6,10 +6,18 @@ from the first API response, so any model works without manual config.
 
 BYOK: if a StageConfig is supplied (api_base + api_key + model), it
 overrides .env defaults.
+
+Caching: identical (text, model) inputs hit an in-memory TTL cache, so
+repeated prompts (e.g. the same RAG query across pipeline runs, or a chapter
+summary re-embedded on every edit) skip the LLM call entirely. The cache key
+is ``model | sha256(text)`` — raw query text is never retained in memory
+(embeddings of user prompts may contain story premises / secrets).
 """
 from __future__ import annotations
 
+import hashlib
 import logging
+import time
 from typing import Any
 
 from app.config import settings
@@ -21,10 +29,55 @@ logger = logging.getLogger(__name__)
 # Auto-detected embedding dimension. None until the first successful call.
 _actual_dim: int | None = None
 
+# --- In-memory embedding cache ----------------------------------------------
+# Small, bounded, TTL-based. Embeds are immutable per (text, model), so a
+# plain dict keyed by hash is sufficient — no LRU machinery needed.
+_EMBED_CACHE_TTL_SECONDS = 3600
+_EMBED_CACHE_MAX_ENTRIES = 4096
+
+_embed_cache: dict[str, tuple[float, list[float]]] = {}
+
 
 def get_embedding_dim() -> int:
     """Return the actual embedding dimension (auto-detected or from config)."""
     return _actual_dim or settings.embedding_dim
+
+
+def clear_embedding_cache() -> None:
+    """Drop all cached embeddings.
+
+    Call when the embedding model or EMBEDDING_DIM changes at runtime so
+    stale vectors (cached under the old model / truncated to the old dim)
+    are not reused.
+    """
+    _embed_cache.clear()
+
+
+def _embed_cache_key(text: str, model: str) -> str:
+    """Cache key: model + SHA-256 of the text (never the raw text itself)."""
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return f"{model}|{digest}"
+
+
+def _cache_get(key: str) -> list[float] | None:
+    """Return the cached vector for `key`, or None on miss / TTL expiry."""
+    entry = _embed_cache.get(key)
+    if entry is None:
+        return None
+    stored_at, vec = entry
+    if time.monotonic() - stored_at > _EMBED_CACHE_TTL_SECONDS:
+        _embed_cache.pop(key, None)
+        return None
+    return vec
+
+
+def _cache_set(key: str, vec: list[float]) -> None:
+    """Store a *copy* of `vec` under `key`, evicting the oldest entry when
+    over budget. Copying keeps callers who mutate their returned vector from
+    corrupting the shared cache entry."""
+    if len(_embed_cache) >= _EMBED_CACHE_MAX_ENTRIES:
+        _embed_cache.pop(next(iter(_embed_cache)), None)
+    _embed_cache[key] = (time.monotonic(), list(vec))
 
 
 async def _get_client(stage_config: StageConfig | None):
@@ -93,15 +146,21 @@ async def embed_text(
     if not text or not text.strip():
         raise ValueError("embed_text received empty input")
 
-    client = await _get_client(stage_config)
     model = _get_model(stage_config)
+    key = _embed_cache_key(text, model)
+    cached = _cache_get(key)
+    if cached is not None:
+        return list(cached)  # copy — callers must never mutate the shared vector
+
+    client = await _get_client(stage_config)
 
     # Don't pass `dimensions` — some providers (e.g. SiliconFlow BAAI/bge-m3)
     # reject it with code 20015. Let the API return its native dimension;
     # _maybe_truncate() adapts the vector to fit the pgvector column.
     resp = await client.embeddings.create(model=model, input=text)
-    vec = list(resp.data[0].embedding)
-    return _maybe_truncate(vec)
+    vec = _maybe_truncate(list(resp.data[0].embedding))
+    _cache_set(key, vec)
+    return vec
 
 
 async def embed_batch(
@@ -109,18 +168,31 @@ async def embed_batch(
     *,
     stage_config: StageConfig | None = None,
 ) -> list[list[float]]:
-    """Embed multiple texts in a single API call.
+    """Embed multiple texts, reusing cached embeddings per text.
 
-    Order is preserved. Empty strings are rejected with ValueError.
+    Order is preserved. Empty strings are rejected with ValueError. Only
+    texts that are not already cached are sent to the API (one call for the
+    miss set).
     """
     if not texts:
         return []
     if any(not t.strip() for t in texts):
         raise ValueError("embed_batch received empty string in list")
 
-    client = await _get_client(stage_config)
     model = _get_model(stage_config)
+    keys = [_embed_cache_key(t, model) for t in texts]
+    cached = [_cache_get(k) for k in keys]
 
-    resp = await client.embeddings.create(model=model, input=texts)
-    sorted_data = sorted(resp.data, key=lambda d: d.index)
-    return [_maybe_truncate(list(d.embedding)) for d in sorted_data]
+    miss_indices = [i for i, vec in enumerate(cached) if vec is None]
+    if miss_indices:
+        client = await _get_client(stage_config)
+        resp = await client.embeddings.create(
+            model=model, input=[texts[i] for i in miss_indices],
+        )
+        sorted_data = sorted(resp.data, key=lambda d: d.index)
+        miss_vecs = [_maybe_truncate(list(d.embedding)) for d in sorted_data]
+        for i, vec in zip(miss_indices, miss_vecs):
+            _cache_set(keys[i], vec)
+            cached[i] = vec
+
+    return [list(vec) for vec in cached]

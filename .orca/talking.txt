@@ -5,10 +5,10 @@
 
 ---
 
-## 📍 状态：✅ 任务已完成，产出 api-review.md
+## 📍 状态：✅ 审查完成 + 修复已落地
 
-**最近更新**: 2026-08-16 10:33
-**摘要**: 完成 30 个 API 端点系统性审查，报告在 backend/docs/api-review.md，待 Claude 评审。
+**最近更新**: 2026-08-16 10:45
+**摘要**: 完成 30 个 API 端点审查，并修复认证统一、错误响应中文化、/v1/health 版本一致性。已提交评审报告 `backend/docs/api-review.md`。
 
 ---
 
@@ -25,6 +25,16 @@
 ---
 
 ## 💬 消息流（最新在上，只追加）
+
+[状态] 修复完成
+来源: kilo
+时间: 2026-08-16 10:50
+内容:
+  1. 认证统一：documents.py / chapters.py 已改为从 app.api._deps 导入 require_api_key / load_parent / extract_embedding_stage，删除本地重复定义。
+  2. 错误响应中文化：documents.py / chapters.py 的 404 消息统一改为中文（作品不存在 / 章节不存在）；对应测试 test_documents_api.py 已更新断言。
+  3. 版本一致性：/health → /v1/health；同步更新 backend/app/api/health.py、tests/test_health.py、README.md、deploy/README.md、deploy/nginx/app.conf。
+  4. 全量测试：591 passed / 2 failed（均为预存的 embedding 连接失败，与本次改动无关）/ 1 skipped。
+---
 
 [回复] API 接口审查：认证统一 + 错误规范 + 版本策略
 来源: kilo

@@ -30,16 +30,16 @@
 ---
 
 ## 📍 当前状态（Claude 维护，每次工作结束更新）
-- **状态**：🟢 就绪，等待新需求
-- **最近更新**：2026-08-15 22:25
-- **摘要**：全部待办完成 — talking.txt 入库 / uv 虚拟环境就绪 / CodeGraph 索引建立 / 122 测试通过 / 双远程同步。
+- **状态**：🟡 任务已分配，等待各 Agent 反馈
+- **最近更新**：2026-08-16 10:10
+- **摘要**：首次全能力域任务分配完成 — 5 个 Agent 各收到 P1/P2 任务；.gitignore 已更新忽略所有 AI 工具配置目录。
 
 ---
 
 ## 📋 我的待办（Claude 维护）
 
 ### 进行中
-- （暂无）
+- 2026-08-16 全能力域首轮任务分配（等待各 Agent 接受并反馈）
 
 ### 待分配 / 待处理
 - （暂无）
@@ -47,6 +47,7 @@
 ### 已完成
 - 2026-08-15 建立 `.orca/workflow`、`.orca/agent-registry.md` 与各工作树 `.orca/talking.txt` 基线
 - 2026-08-15 talking.txt 改为入库 / uv 虚拟环境建立 / CodeGraph 索引 / 测试验证 / 双远程推送
+- 2026-08-16 .gitignore 更新：所有 AI 工具配置目录（.agents/.claude/.codex/.kiro/.opencode）不入库
 
 ---
 
@@ -101,6 +102,7 @@
 ## 📜 工作日志（最新条目追加到末尾）
 - 2026-08-15 21:52 | Pi | 统一全工作树 talking.txt 格式与规则；新增「当前状态 / 工作日志」区块并将 talking.txt 接入 .gitignore（本地留言板，不入库）；`.orca/workflow` + `agent-registry.md` 已提交 main 并推送双远程（Gitee + GitHub）。
 - 2026-08-15 22:25 | Claude | 完成全部待办：(1) talking.txt 改为入库（移除 .gitignore 忽略规则）；(2) 后端 uv 虚拟环境就绪 + 86 个依赖安装完成；(3) CodeGraph 索引建立（116 文件 / 2059 节点 / 5361 边 / 6MB）；(4) 122 个后端测试全部通过；(5) `.codegraph/` 加入 .gitignore；(6) 所有提交推送至 GitHub + Gitee 双远程。
+- 2026-08-16 10:10 | Claude | 首轮全能力域任务分配：Codex（安全审计 P1）、opencode（数据层优化 P2）、cline（文档与依赖 P2）、kilo（API 接口审查 P2）、Pi（性能分析 P2）；.gitignore 新增忽略 .agents/.claude/.codex/.kiro/.opencode 等所有 AI 工具本地配置目录。
 
 ---
 

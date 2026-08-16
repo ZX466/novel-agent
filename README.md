@@ -141,8 +141,8 @@ uv run alembic upgrade head
 
 ```powershell
 cd frontend
-# 创建 .env.local（后端地址）
-echo NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 > .env.local
+# 创建 .env.local（后端地址，用 127.0.0.1 而非 localhost，避免 IPv6 解析问题）
+echo NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8000 > .env.local
 npm install
 ```
 
@@ -299,7 +299,7 @@ uv sync              # 重新构建
 | 项 | 期望 |
 |---|---|
 | `docker compose -f docker-compose.local.yml ps` | 两个容器均 healthy |
-| `curl http://localhost:8000/health` | `{"status":"ok"}` |
+| `curl http://127.0.0.1:8000/health` | `{"status":"ok"}` |
 | 浏览器 http://localhost:7421 | 显示小说编辑器界面 |
 | 配置 BYOK → 测试连接 | 显示 ✅ 连接成功 |
 | 点击"续写" | ~1-2 秒后文字逐字出现，带闪烁光标 |

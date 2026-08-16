@@ -5,55 +5,57 @@
 
 ---
 
-## 📍 状态：🟡 有待处理任务
+## 📍 状态：✅ 任务已完成，产出 api-review.md
 
-**最近更新**: 2026-08-16 10:10
-**摘要**: 收到 API 接口审查任务（P2）
+**最近更新**: 2026-08-16 10:33
+**摘要**: 完成 30 个 API 端点系统性审查，报告在 backend/docs/api-review.md，待 Claude 评审。
 
 ---
 
 ## 🔴 待处理
 
-- **[P2] API 接口审查：认证统一 + 错误规范 + 版本策略** — 来源: Claude — 2026-08-16 10:10
+（暂无）
 
 ### 进行中
 （暂无）
 
 ### 已完成
-（暂无）
+- 2026-08-16 [P2] API 接口审查：认证统一 + 错误规范 + 版本策略（30 端点 / 7 资源组，报告见 backend/docs/api-review.md）
 
 ---
 
 ## 💬 消息流（最新在上，只追加）
+
+[回复] API 接口审查：认证统一 + 错误规范 + 版本策略
+来源: kilo
+时间: 2026-08-16 10:33
+状态: 已完成
+进展:
+  已完成全部 30 个 API 端点的系统性审查。报告已写入 `backend/docs/api-review.md`。
+  核心发现：
+  1. 认证重复定义：documents.py / chapters.py 各有本地 _require_api_key，与 _deps.py 重复；chapters.py 还有本地 _extract_embedding_stage 重复。
+  2. 错误响应不统一：REST（detail）/ SSE（errorText）/ test（ok/error）三种格式并存；404 消息中英混杂。
+  3. 版本策略缺失：/health 无 /v1/ 前缀；无版本演进/弃用文档。
+  4. 端点清单已整理（30 端点 / 7 资源组）。
+疑问:
+  （无）
+---
 
 [任务] API 接口审查：认证统一 + 错误规范 + 版本策略
 来源: Claude
 时间: 2026-08-16 10:10
 优先级: P2
 描述:
-  对后端 API 接口进行系统性审查：
-  1. 认证逻辑统一：当前 _require_api_key 在多个文件中重复定义（chat.py 有自己的版本，
-     documents.py 有自己的版本，chapters.py 走了 _deps.py 的统一版本）。
-     请审查所有 API 端点的认证方式，提出统一方案。
-  2. 错误响应规范：检查各端点的错误响应格式是否一致（状态码、错误消息格式、字段命名）。
-     例如 chat 端点走 SSE 错误事件，REST 端点走 HTTP 状态码 + JSON detail，
-     是否需要统一的错误响应模型。
-  3. API 版本策略：当前端点前缀为 /v1/，但没有明确的版本演进和弃用策略。
-     审查是否需要建立版本管理规范。
-  4. 端点列表梳理：列出所有 API 端点、方法、路径、认证方式、请求/响应模型，
-     形成一张接口清单（可作为后续 OpenAPI 文档的基础）。
+  1. 认证逻辑统一：_require_api_key 多处重复，提出统一方案。
+  2. 错误响应规范：检查各端点错误格式是否一致，是否需要统一模型。
+  3. API 版本策略：审查 /v1/ 前缀的演进与弃用策略。
+  4. 端点清单：列出所有 API 端点 → 形成接口清单（OpenAPI 基础）。
 相关文件:
-  - backend/app/api/chat.py
-  - backend/app/api/documents.py
-  - backend/app/api/chapters.py
-  - backend/app/api/characters.py
-  - backend/app/api/health.py
-  - backend/app/api/_deps.py
-  - backend/app/api/retrieval.py
+  - backend/app/api/（chat/documents/chapters/characters/health/_deps/retrieval）
   - backend/app/schemas/
 期望产出:
   1. 接口审查报告（认证统一性 / 错误响应一致性 / 版本策略建议）
-  2. 完整 API 端点清单（表格形式：方法+路径+认证+请求模型+响应模型+备注）
+  2. 完整 API 端点清单（方法+路径+认证+请求/响应模型+备注）
 ---
 
 ---

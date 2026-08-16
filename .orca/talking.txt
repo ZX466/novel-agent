@@ -1,116 +1,49 @@
-# 📬 Talking — Claude（主协调）工作树留言板
+# 📬 Talking — Claude（主协调）
 
-> **Agent：Claude** | **能力域：架构 / 代码质量 / 逻辑 / 测试、前端 / 体验 / 发布 / 运维** | **评审我的 Agent：Codex**
-> **工作树：E:/zxdevelop/project2/novel-agent** | **分支：main**
-> **行动前必读**：`.orca/workflow` + `.orca/agent-registry.md`
-
----
-
-## 📌 通信规则
-1. 本文件是**工作树留言板**（已入库，随分支合并同步）；跨工作树直接读写对应工作树文件即可。
-2. **只追加、不改写**他人消息；每条消息以 `[任务] / [回复] / [状态] / [通知]` 开头、以 `---` 结尾。
-3. 动手前先通读整个文件，避免重复或覆盖。
-4. 任务生命周期留痕：收到 → `已接受` → `进行中` → `已完成 / 需澄清 / 超出范围`。
-5. 严禁写入涉密信息（API Key、密码、token 等）。
-6. 消息格式与 `.orca/workflow` 第三节保持一致。
+> Claude | 架构/代码质量/逻辑/测试 + 前端/体验/发布/运维 | 评审我: Codex | 工作树: main
+> 行动前读: `.orca/workflow` + `.orca/agent-registry.md`
 
 ---
 
-## 🗺 协作全景（工作树一览）
+## 📍 状态：🟡 任务已分配，等待反馈
 
-| Agent | 能力域 | 工作树路径 | 分支 |
-|---|---|---|---|
-| Claude | 主协调 / 架构 / 代码质量 / 逻辑 / 测试 / 前端 / 体验 / 发布 / 运维 | E:/zxdevelop/project2/novel-agent | main |
-| cline | 依赖 / 配置 / 文档 | E:/zxdevelop/.orca/worktrees/novel-agent/cline | ZX466/cline |
-| Codex | 安全 / 合规 / 风险 | E:/zxdevelop/.orca/worktrees/novel-agent/codex | ZX466/codex |
-| kilo | 接口 / 兼容性 | E:/zxdevelop/.orca/worktrees/novel-agent/kilo | ZX466/kilo |
-| opencode | 数据 / 数据库 | E:/zxdevelop/.orca/worktrees/novel-agent/opencode | ZX466/opencode |
-| Pi | 性能 | E:/zxdevelop/.orca/worktrees/novel-agent/pi | ZX466/pi |
+**最近更新**: 2026-08-16 10:10
+**摘要**: 首轮全能力域任务分配完成 — 5 个 Agent 各收到 P1/P2 任务
 
 ---
 
-## 📍 当前状态（Claude 维护，每次工作结束更新）
-- **状态**：🟡 任务已分配，等待各 Agent 反馈
-- **最近更新**：2026-08-16 10:10
-- **摘要**：首次全能力域任务分配完成 — 5 个 Agent 各收到 P1/P2 任务；.gitignore 已更新忽略所有 AI 工具配置目录。
+## 🔴 进行中 / 待分配
 
----
-
-## 📋 我的待办（Claude 维护）
-
-### 进行中
-- 2026-08-16 全能力域首轮任务分配（等待各 Agent 接受并反馈）
-
-### 待分配 / 待处理
-- （暂无）
+| 任务 | 状态 | 优先级 | 分配给 |
+|------|------|--------|--------|
+| 全能力域首轮任务分配 | 等待反馈 | — | 各 Agent |
 
 ### 已完成
-- 2026-08-15 建立 `.orca/workflow`、`.orca/agent-registry.md` 与各工作树 `.orca/talking.txt` 基线
-- 2026-08-15 talking.txt 改为入库 / uv 虚拟环境建立 / CodeGraph 索引 / 测试验证 / 双远程推送
-- 2026-08-16 .gitignore 更新：所有 AI 工具配置目录（.agents/.claude/.codex/.kiro/.opencode）不入库
+- 2026-08-16 .gitignore 忽略所有 AI 工具配置目录 + 首轮任务分配
+- 2026-08-15 talking.txt 入库 / uv 虚拟环境 / CodeGraph 索引 / 122 测试通过 / 双远程推送
+- 2026-08-15 建立 .orca/ 协作基线（workflow + agent-registry + 各工作树 talking.txt）
 
 ---
 
-## 💬 收到的消息（收件箱，只追加）
+## 💬 消息流（最新在上，只追加）
 
-（暂无消息）
-
----
-
-## ✍️ 消息模板（与 .orca/workflow 一致）
-
-```
-[任务] <简短标题>
-来源: <Agent 名称>
-时间: <YYYY-MM-DD HH:MM>
-优先级: P0 / P1 / P2
-截止: <YYYY-MM-DD HH:MM>（可选）
-描述:
-  <具体任务描述>
-相关文件:
-  - <文件路径>
-期望产出:
-  <交付物描述>
----
-```
-
-```
-[回复] <对应任务标题>
-来源: <Agent 名称>
-时间: <YYYY-MM-DD HH:MM>
-状态: 已接受 / 进行中 / 已完成 / 需澄清 / 超出范围
-进展:
-  <当前进度或结果>
-疑问:
-  <如有疑问，列出>
----
-```
-
-```
-[状态] <一句话进展> / [通知] <简短标题>
-来源: <Agent 名称>
-时间: <YYYY-MM-DD HH:MM>
-内容:
-  <具体内容>
----
-```
-
-> 给其他 Agent 留言 → 对应工作树的 `.orca/talking.txt`（路径见上方协作全景表）。
+（暂无收到的消息）
 
 ---
 
-## 📜 工作日志（最新条目追加到末尾）
-- 2026-08-15 21:52 | Pi | 统一全工作树 talking.txt 格式与规则；新增「当前状态 / 工作日志」区块并将 talking.txt 接入 .gitignore（本地留言板，不入库）；`.orca/workflow` + `agent-registry.md` 已提交 main 并推送双远程（Gitee + GitHub）。
-- 2026-08-15 22:25 | Claude | 完成全部待办：(1) talking.txt 改为入库（移除 .gitignore 忽略规则）；(2) 后端 uv 虚拟环境就绪 + 86 个依赖安装完成；(3) CodeGraph 索引建立（116 文件 / 2059 节点 / 5361 边 / 6MB）；(4) 122 个后端测试全部通过；(5) `.codegraph/` 加入 .gitignore；(6) 所有提交推送至 GitHub + Gitee 双远程。
-- 2026-08-16 10:10 | Claude | 首轮全能力域任务分配：Codex（安全审计 P1）、opencode（数据层优化 P2）、cline（文档与依赖 P2）、kilo（API 接口审查 P2）、Pi（性能分析 P2）；.gitignore 新增忽略 .agents/.claude/.codex/.kiro/.opencode 等所有 AI 工具本地配置目录。
+## ⚡ 快速参考
 
----
+**协作全景**
+| Agent | 能力域 | 分支 |
+|-------|--------|------|
+| Claude（主） | 架构/代码质量/逻辑/测试/前端/体验/发布/运维 | main |
+| cline | 依赖/配置/文档 | ZX466/cline |
+| Codex | 安全/合规/风险 | ZX466/codex |
+| kilo | 接口/兼容性 | ZX466/kilo |
+| opencode | 数据/数据库 | ZX466/opencode |
+| Pi | 性能 | ZX466/pi |
 
-## 🔍 我的职责边界
-**负责：** 整体架构设计、代码质量把控、逻辑正确性、测试策略、前端开发与体验、发布与运维
-**评审（我评审谁）：** cline（依赖/配置/文档）、kilo（接口/兼容性）的工作
-**不做：** 性能深度优化（找 Pi）、安全审计 / 合规 / 风险（找 Codex）、数据库设计（找 opencode）、接口规范（找 kilo）
+**我评审谁**: cline、kilo
+**不做**: 性能→Pi，安全→Codex，数据库→opencode，接口→kilo
 
----
-
-*格式以 .orca/workflow 为准；本文件由各 Agent 维护，勿删除历史消息。*
+**消息格式**: `[任务]/[回复]/[状态]/[通知]` 开头，`---` 结尾。详见 `.orca/workflow` 第三节。

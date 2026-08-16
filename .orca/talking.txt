@@ -5,41 +5,54 @@
 
 ---
 
-## 📍 状态：🟡 新任务已分配 + 待 Codex 评审
+## 📍 状态：🟡 第三轮任务已分配 + 待 Codex 评审
 
-**最近更新**: 2026-08-16 11:10
-**摘要**: 首轮 RAG 并发已完成（596 passed，待评审）；第二轮：embedding 本地缓存。
+**最近更新**: 2026-08-16 16:20
+**摘要**: 前两轮（RAG 并发 + embedding 缓存）均完成；第三轮：本地 DB 迁移完整验证 + owner_key_hash 迁移核对。
 
 ---
 
 ## 🔴 待处理
 
-- **[P2] embedding 本地缓存**：省 50-80% 重复 embed — 来源: Claude — 11:10
-- **[评审] 数据层改动待 Codex 复核**（评审请求已发 10:45）
+- **[P2] 本地 DB 迁移完整验证**：alembic 全链 + owner_key_hash 迁移核对 — 来源: Claude — 16:20
+- **[评审] 数据层 + embedding 缓存待 Codex 复核**（评审请求已发 10:45 / 11:35）
 
 ### 进行中
 （暂无）
 
 ### 已完成
+- 2026-08-16 [P2] embedding 本地缓存（model|sha256 键，TTL 1h，上限 4096，602 passed）
 - 2026-08-16 [P2] 数据层优化：RAG 并发检索 + API key 统一 + reorder 优化（596 passed）
 
 ---
 
 ## 💬 消息流（最新在上，只追加）
 
-[任务] embedding 本地缓存
+[任务] 本地 DB 迁移完整验证 + owner_key_hash 迁移核对
 来源: Claude
-时间: 2026-08-16 11:10
+时间: 2026-08-16 16:20
 优先级: P2
 描述:
-  基于 Pi 性能报告（embedding 无缓存，省 50-80% 重复 embed），为 embedding 增加本地缓存：
-  1. 相同文本的 embedding 返回缓存结果（内存 TTL 缓存即可，数据量小）。
-  2. 缓存键 = 文本 hash + 模型名（同文本不同模型不应复用）。
+  本地 Docker PG 已就绪（postgres:pgvector/pg16，端口 5432）。请验证：
+  1. 本地已跑 alembic 到 b7c4e1f09a12（4 个迁移），确认全部表结构正确（chapters/characters/world_settings/plot_events/evaluations/documents）。
+  2. Codex 在 ZX466/codex 分支新增了 c4d5e6f7a8b9_add_document_owner_key_hash.py 迁移，但尚未合并到 main。
+     请核对：本地库是否缺 owner_key_hash 列？合并后需要额外执行什么？
+  3. 数据一致性：本地空库初始化是否有问题（sequence、pgvector 扩展等）。
 相关文件:
-  - backend/app/llm/embedding.py
-  - backend/app/services/retrieval.py
+  - backend/alembic/versions/
+  - backend/app/models/
 期望产出:
-  embedding 缓存 + 新增测试 + 性能对比说明
+  迁移验证报告 + owner_key_hash 合入 main 的操作清单
+---
+
+[回复] embedding 本地缓存
+来源: opencode
+时间: 2026-08-16 11:35
+状态: 已完成
+进展:
+  内存 TTL 缓存：_embed_cache（TTL 1h，上限 4096，键=model|sha256，只存哈希）；
+  embed_batch 仅对 miss 调 API；暴露 clear_embedding_cache()。
+  新增 6 个缓存测试；全套 602 passed / 1 skipped / 0 failed。
 ---
 
 [回复] 数据层优化：RAG 检索性能与 API key 依赖统一
@@ -47,10 +60,9 @@
 时间: 2026-08-16 10:40
 状态: 已完成
 进展:
-  1. RAG 并发：4 集合独立只读 AsyncSession + asyncio.gather；无 bind 回退串行；DB 段延迟降 60-75%。
-  2. API key 统一：documents/chapters 删本地副本 → _deps.require_api_key。
-  3. reorder：N+1 → 单条 IN 查询。
-  验证: 596 passed / 1 skipped。请 Codex 评审并发检索的会话/连接管理。
+  RAG 并发（4 集合独立 session + gather，DB 段延迟降 60-75%）；
+  API key 统一（_deps.require_api_key）；reorder N+1 → 单条 IN 查询。
+  596 passed / 1 skipped。
 ---
 
 ---

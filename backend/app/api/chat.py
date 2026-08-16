@@ -37,7 +37,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.session import get_db
-from app.llm.clients import _redact_key
+from app.api._deps import enforce_chat_rate_limit, enforce_chat_test_rate_limit
+from app.llm.clients import _redact_key, _validate_api_base
 from app.pipeline import stream_pipeline
 from app.schemas.chat import ProviderConfig
 
@@ -203,10 +204,10 @@ async def _extract_provider_config(
         data = json.loads(x_provider_config)
         return ProviderConfig.model_validate(data)
     except (json.JSONDecodeError, ValidationError) as e:
-        logger.warning("Invalid X-Provider-Config JSON: %s", _redact_key(str(e)))
+        logger.warning("Invalid X-Provider-Config header")
         raise HTTPException(
             status_code=422,
-            detail=f"Invalid X-Provider-Config header: {e}",
+            detail="Invalid X-Provider-Config header",
         )
 
 
@@ -291,7 +292,7 @@ async def _event_stream(
     except Exception as e:
         # Use logger.error (not exception) to avoid leaking sensitive data
         # (API keys, internal URLs) that may appear in stack traces.
-        logger.error("Pipeline failed mid-stream: %s: %s", type(e).__name__, e)
+        logger.error("Pipeline failed mid-stream: %s", type(e).__name__)
         if text_started:
             yield _encode_text_end()
         yield _encode_error("Pipeline 出错，请重试")
@@ -306,6 +307,7 @@ async def chat(
         ProviderConfig | None, Depends(_extract_provider_config)
     ],
     session: AsyncSession = Depends(get_db),
+    _api_key: str = Depends(enforce_chat_rate_limit),
 ) -> StreamingResponse:
     """Runs the three-stage pipeline and streams the final answer."""
     topic = _extract_topic(req.messages)
@@ -404,6 +406,7 @@ async def test_connection(
         ProviderConfig | None, Depends(_extract_provider_config)
     ],
     stage: str = "draft",
+    _api_key: str = Depends(enforce_chat_test_rate_limit),
 ) -> dict:
     """Test LLM connection for a specific stage. Returns success/error."""
     logger.info("TEST_CONNECTION: stage=%s, has_config=%s", stage, provider_config is not None)
@@ -418,6 +421,11 @@ async def test_connection(
         stage_cfg = getattr(provider_config, stage, None)
         if stage_cfg is None:
             return {"ok": False, "error": f"ProviderConfig 中缺少 {stage} 阶段配置"}
+
+    try:
+        _validate_api_base(stage_cfg.api_base)
+    except ValueError:
+        return {"ok": False, "error": "API Base URL 不被允许"}
 
     try:
         import openai as openai_lib
@@ -458,7 +466,7 @@ async def test_connection(
             # "Model does not exist" on /chat/completions — likely an embedding
             # model (frontend may have sent wrong stage). Fall back to /embeddings.
             if "does not exist" in str(chat_err).lower():
-                logger.info("TEST_CONNECTION: chat failed (%s), trying embeddings fallback", chat_err)
+                logger.info("TEST_CONNECTION: chat endpoint rejected model; trying embeddings fallback")
                 client = openai_lib.AsyncOpenAI(
                     api_key=stage_cfg.api_key, base_url=stage_cfg.api_base, timeout=30,
                 )
@@ -482,8 +490,8 @@ async def test_connection(
     except litellm.NotFoundError:
         return {"ok": False, "error": "模型不存在，请检查模型名称是否正确"}
     except Exception as e:
-        logger.error("Connection test failed: %s: %s", type(e).__name__, e)
-        return {"ok": False, "error": f"连接测试失败: {type(e).__name__}: {e}"}
+        logger.error("Connection test failed: %s", type(e).__name__)
+        return {"ok": False, "error": "连接测试失败，请检查网络、URL 和模型配置"}
 
 
 def _env_fallback_stage(stage: str) -> "StageConfig | None":

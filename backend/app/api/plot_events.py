@@ -18,7 +18,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api._deps import extract_embedding_stage, load_parent, require_api_key
+from app.api._deps import extract_embedding_stage, load_parent, owner_key_hash, require_api_key
 from app.db.session import get_db
 from app.schemas.chat import StageConfig
 from app.schemas.novel_memory import (
@@ -51,7 +51,7 @@ async def list_plot_events_endpoint(
     api_key: str = Depends(require_api_key),
 ) -> PlotEventListResponse:
     """List plot events of a document, ordered by chapter_index ascending."""
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     items, total = await list_plot_events(
         session, novel_id=doc_id, limit=limit, offset=offset, chapter_index=chapter_index
     )
@@ -76,7 +76,7 @@ async def create_plot_event_endpoint(
     When X-Provider-Config carries an ``embedding`` stage, it overrides
     .env EMBEDDING_* credentials for the auto-embedding of this plot event.
     """
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     payload = payload.model_copy(update={"novel_id": doc_id})
     pe = await create_plot_event(session, payload, stage_config=embedding_stage)
     response.headers["Location"] = f"/v1/documents/{doc_id}/plot-events/{pe.id}"
@@ -91,7 +91,7 @@ async def get_plot_event_endpoint(
     api_key: str = Depends(require_api_key),
 ) -> PlotEventRead:
     """Get a single plot event by id. 404 if missing or not in this document."""
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     try:
         pe = await get_plot_event(session, event_id)
     except PlotEventNotFound:
@@ -111,7 +111,7 @@ async def update_plot_event_endpoint(
     embedding_stage: StageConfig | None = Depends(extract_embedding_stage),
 ) -> PlotEventRead:
     """Partial update a plot event. 404 if missing."""
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     try:
         existing = await get_plot_event(session, event_id)
     except PlotEventNotFound:
@@ -132,7 +132,7 @@ async def delete_plot_event_endpoint(
     api_key: str = Depends(require_api_key),
 ) -> Response:
     """Delete a plot event. 204 on success."""
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     try:
         existing = await get_plot_event(session, event_id)
     except PlotEventNotFound:

@@ -18,7 +18,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api._deps import require_api_key, load_parent, extract_embedding_stage
+from app.api._deps import extract_embedding_stage, load_parent, owner_key_hash, require_api_key
 from app.db.session import get_db
 from app.schemas.chat import StageConfig
 from app.schemas.novel_memory import (
@@ -51,7 +51,7 @@ async def list_characters_endpoint(
     api_key: str = Depends(require_api_key),
 ) -> CharacterListResponse:
     """List characters of a document, ordered by name ascending."""
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     items, total = await list_characters(
         session, novel_id=doc_id, limit=limit, offset=offset
     )
@@ -76,7 +76,7 @@ async def create_character_endpoint(
     When X-Provider-Config carries an ``embedding`` stage, it overrides
     .env EMBEDDING_* credentials for the auto-embedding of this character.
     """
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     payload = payload.model_copy(update={"novel_id": doc_id})
     c = await create_character(session, payload, stage_config=embedding_stage)
     response.headers["Location"] = f"/v1/documents/{doc_id}/characters/{c.id}"
@@ -91,7 +91,7 @@ async def get_character_endpoint(
     api_key: str = Depends(require_api_key),
 ) -> CharacterRead:
     """Get a single character by ID. 404 if missing or belongs to another document."""
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     try:
         c = await get_character(session, char_id)
     except CharacterNotFound:
@@ -111,7 +111,7 @@ async def update_character_endpoint(
     embedding_stage: StageConfig | None = Depends(extract_embedding_stage),
 ) -> CharacterRead:
     """Partial update a character. 404 if missing or belongs to another document."""
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     try:
         c = await update_character(
             session, char_id, payload, stage_config=embedding_stage,
@@ -131,7 +131,7 @@ async def delete_character_endpoint(
     api_key: str = Depends(require_api_key),
 ) -> Response:
     """Delete a character. 204 on success."""
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     try:
         existing = await get_character(session, char_id)
     except CharacterNotFound:

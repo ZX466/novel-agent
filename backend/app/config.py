@@ -42,6 +42,11 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Comma-separated production API keys. When configured, requests must
+    # present one of these values in X-API-Key. An empty value keeps the
+    # owner-isolation mode usable for local development.
+    api_keys: List[str] = Field(default_factory=list, description="Allowed X-API-Key values")
+
     # --- DeepSeek (draft) — optional, used as .env fallback only ---
     deepseek_api_key: str = Field(default="", description="DeepSeek API key (BYOK fallback)")
     deepseek_model: str = Field(
@@ -89,6 +94,8 @@ class Settings(BaseSettings):
 
     # --- Redis ---
     redis_url: str = Field(default="redis://:project11-redis@localhost:16379/0")
+    chat_rate_limit_per_minute: int = Field(default=10, ge=1, le=1_000)
+    chat_test_rate_limit_per_minute: int = Field(default=3, ge=1, le=1_000)
 
     # --- CORS ---
     cors_origins: List[str] = Field(
@@ -160,6 +167,17 @@ class Settings(BaseSettings):
                 import json
                 return json.loads(v)
             return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
+
+    @field_validator("api_keys", mode="before")
+    @classmethod
+    def _parse_api_keys(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                import json
+                return json.loads(v)
+            return [key.strip() for key in v.split(",") if key.strip()]
         return v
 
 

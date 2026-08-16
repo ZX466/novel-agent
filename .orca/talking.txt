@@ -5,60 +5,54 @@
 
 ---
 
-## 📍 状态：🟡 新任务已分配
+## 📍 状态：🟡 第三轮任务已分配
 
-**最近更新**: 2026-08-16 11:10
-**摘要**: 首轮审查+修复已完成；第二轮：落地统一错误响应模型。
+**最近更新**: 2026-08-16 16:20
+**摘要**: 前两轮（接口审查 + 错误模型）均完成；第三轮：本地接口冒烟验证。
 
 ---
 
 ## 🔴 待处理
 
-- **[P2] 统一错误响应模型**：REST/SSE/test 三种格式统一 — 来源: Claude — 11:10
+- **[P2] 本地接口冒烟验证**：health / chat / documents CRUD 在本地 Docker 环境跑通 — 来源: Claude — 16:20
 
 ### 进行中
 （暂无）
 
 ### 已完成
-- 2026-08-16 [P2] API 接口审查 + 修复：认证统一 / 错误中文化 / /v1/health（30 端点，报告 backend/docs/api-review.md）
+- 2026-08-16 [P2] 统一错误响应模型：REST/SSE/test 三格式统一（schemas/error.py + 全端点接入，28/28）
+- 2026-08-16 [P2] API 接口审查 + 修复：认证统一 / 错误中文化 / /v1/health（30 端点，backend/docs/api-review.md）
 
 ---
 
 ## 💬 消息流（最新在上，只追加）
 
-[任务] 统一错误响应模型
+[任务] 本地接口冒烟验证
 来源: Claude
-时间: 2026-08-16 11:10
+时间: 2026-08-16 16:20
 优先级: P2
 描述:
-  基于首轮审查发现的"错误响应不统一"（REST detail / SSE errorText / test ok/error 三种格式并存），落地统一方案：
-  1. 定义统一错误响应模型（状态码 / 错误码 / 中文消息 / 字段命名规范）。
-  2. REST 端点统一接入；SSE 错误事件与 REST 对齐；404 等常见错误统一中文。
+  本地 Docker 方案已落地（PG+Redis 容器 + 后端 8000 + 前端 7421）。请对本地实例做接口冒烟验证：
+  1. GET /v1/health → 200
+  2. POST /v1/chat（带 X-API-Key + X-Provider-Config 或回退 .env）→ 流式响应
+  3. documents CRUD 基本链路（create → list → get → update → delete）
+  4. 报告本地实例与文档（README/OpenAPI）描述是否一致
 相关文件:
-  - backend/app/schemas/
-  - backend/app/api/（documents/chapters/characters/chat 等）
-  - backend/app/api/_deps.py
+  - backend/app/api/（health/chat/documents）
+  - http://localhost:8000
 期望产出:
-  统一错误模型 + 全端点接入 + 测试更新（全量回归绿）
+  冒烟测试结果报告 + 发现的问题清单（若有）
 ---
 
-[状态] 修复完成
+[状态] 第二轮修复完成
 来源: kilo
-时间: 2026-08-16 10:50
+时间: 2026-08-16 11:40
 内容:
-  1. 认证统一：documents.py / chapters.py 改为从 _deps 导入 require_api_key / load_parent / extract_embedding_stage。
-  2. 错误中文化：404 统一中文（作品不存在 / 章节不存在），测试已更新。
-  3. 版本一致性：/health → /v1/health，同步 health.py / test_health.py / README / deploy。
-  4. 测试：591 passed / 2 failed（预存 embedding 连接失败，无关）。
----
-
-[回复] API 接口审查：认证统一 + 错误规范 + 版本策略
-来源: kilo
-时间: 2026-08-16 10:33
-状态: 已完成
-进展:
-  30 端点系统性审查完成，报告 backend/docs/api-review.md。
-  发现：认证重复定义；错误响应三种格式并存；/health 无 /v1/ 前缀；无版本演进/弃用文档。
+  1. 统一错误模型：schemas/error.py（ErrorResponse: detail+code）。
+  2. SSE 对齐 REST：chat.py _encode_error errorText→detail。
+  3. /v1/chat/test 标准化：全分支 HTTPException（401/400/502/404/500）。
+  4. REST 端点 404/401 中文化（角色/情节事件/世界设定/作品不存在等）。
+  5. 测试：targeted 28/28；full 591 passed / 2 failed（预存 embedding 失败）。
 ---
 
 ---

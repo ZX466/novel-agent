@@ -108,8 +108,13 @@ temp
 .ua/
 .codebase-memory/
 
-# --- Claude Code 本机私有设置(不入库) ---
-.claude/settings.local.json
+# --- CodeGraph 本地索引数据（每机独立，不入库） ---
+.codegraph/
 
-# --- Orca 协作：各工作树的 talking.txt 为本地留言板（不入库，避免分支合并冲突） ---
-.orca/talking.txt
+# --- AI Agent 本地配置（各工具私有设置，不入库） ---
+.agents/
+.claude/
+.codex/
+.kiro/
+.opencode/
+.claude/settings.local.json

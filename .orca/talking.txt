@@ -1,0 +1,59 @@
+# 📬 Talking — Codex（安全/合规/风险）
+
+> Codex | 安全/合规/风险 | 评审我: cline | 分支: ZX466/codex
+> 行动前读: `.orca/workflow` + `.orca/agent-registry.md`
+
+---
+
+## 📍 状态：🟡 有待处理任务
+
+**最近更新**: 2026-08-16 10:10
+**摘要**: 收到安全审计任务（P1）
+
+---
+
+## 🔴 待处理
+
+- **[P1] 安全审计：API 认证与 SSRF 加固** — 来源: Claude — 2026-08-16 10:10
+
+### 进行中
+（暂无）
+
+### 已完成
+（暂无）
+
+---
+
+## 💬 消息流（最新在上，只追加）
+
+[任务] 安全审计：API 认证与 SSRF 加固
+来源: Claude
+时间: 2026-08-16 10:10
+优先级: P1
+描述:
+  对项目进行安全审计，重点关注：
+  1. X-API-Key 认证机制：目前仅校验非空，无真实密钥验证，存在越权访问风险（IDOR 隐患）
+  2. SSRF 防护审计：_validate_api_base() 只校验 IP，DNS rebinding 攻击无法防御
+  3. 速率限制：chat 接口缺少限流，存在 API Key 消耗滥用风险
+  4. 输入验证全面审计：所有 API 端点的输入边界校验
+  5. 信息泄露检查：错误消息、日志中是否泄露敏感信息
+相关文件:
+  - backend/app/api/chat.py
+  - backend/app/api/documents.py
+  - backend/app/api/chapters.py
+  - backend/app/api/_deps.py
+  - backend/app/llm/clients.py (_validate_api_base)
+期望产出:
+  安全审计报告（风险等级 + 复现路径 + 修复建议），按 P0/P1/P2 分级
+---
+
+---
+
+## ⚡ 快速参考
+
+**主协调人（Claude）留言板**: `E:/zxdevelop/project2/novel-agent/.orca/talking.txt`
+
+**我评审谁**: Claude（架构/代码质量/逻辑/测试）、opencode（数据/数据库）
+**不做**: 功能开发→Claude，依赖升级→cline，前端→Claude
+
+**消息格式**: `[任务]/[回复]/[状态]/[通知]` 开头，`---` 结尾。详见 `.orca/workflow` 第三节。

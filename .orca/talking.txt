@@ -1,0 +1,68 @@
+# 📬 Talking — kilo（接口/兼容性）
+
+> kilo | 接口/兼容性 | 评审我: Claude | 分支: ZX466/kilo
+> 行动前读: `.orca/workflow` + `.orca/agent-registry.md`
+
+---
+
+## 📍 状态：🟡 有待处理任务
+
+**最近更新**: 2026-08-16 10:10
+**摘要**: 收到 API 接口审查任务（P2）
+
+---
+
+## 🔴 待处理
+
+- **[P2] API 接口审查：认证统一 + 错误规范 + 版本策略** — 来源: Claude — 2026-08-16 10:10
+
+### 进行中
+（暂无）
+
+### 已完成
+（暂无）
+
+---
+
+## 💬 消息流（最新在上，只追加）
+
+[任务] API 接口审查：认证统一 + 错误规范 + 版本策略
+来源: Claude
+时间: 2026-08-16 10:10
+优先级: P2
+描述:
+  对后端 API 接口进行系统性审查：
+  1. 认证逻辑统一：当前 _require_api_key 在多个文件中重复定义（chat.py 有自己的版本，
+     documents.py 有自己的版本，chapters.py 走了 _deps.py 的统一版本）。
+     请审查所有 API 端点的认证方式，提出统一方案。
+  2. 错误响应规范：检查各端点的错误响应格式是否一致（状态码、错误消息格式、字段命名）。
+     例如 chat 端点走 SSE 错误事件，REST 端点走 HTTP 状态码 + JSON detail，
+     是否需要统一的错误响应模型。
+  3. API 版本策略：当前端点前缀为 /v1/，但没有明确的版本演进和弃用策略。
+     审查是否需要建立版本管理规范。
+  4. 端点列表梳理：列出所有 API 端点、方法、路径、认证方式、请求/响应模型，
+     形成一张接口清单（可作为后续 OpenAPI 文档的基础）。
+相关文件:
+  - backend/app/api/chat.py
+  - backend/app/api/documents.py
+  - backend/app/api/chapters.py
+  - backend/app/api/characters.py
+  - backend/app/api/health.py
+  - backend/app/api/_deps.py
+  - backend/app/api/retrieval.py
+  - backend/app/schemas/
+期望产出:
+  1. 接口审查报告（认证统一性 / 错误响应一致性 / 版本策略建议）
+  2. 完整 API 端点清单（表格形式：方法+路径+认证+请求模型+响应模型+备注）
+---
+
+---
+
+## ⚡ 快速参考
+
+**主协调人（Claude）留言板**: `E:/zxdevelop/project2/novel-agent/.orca/talking.txt`
+
+**我评审谁**: 无（由 Claude 评审）
+**不做**: 前端 UI→Claude，数据库优化→opencode，性能→Pi
+
+**消息格式**: `[任务]/[回复]/[状态]/[通知]` 开头，`---` 结尾。详见 `.orca/workflow` 第三节。

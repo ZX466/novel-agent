@@ -1,4 +1,4 @@
-# Project11
+# Project11 — AI 小说创作平台
 
 AI 小说创作平台：三阶段 LLM 流水线（草稿 → 精修 → 评估）+ 实时流式输出 + BYOK 多 provider + RAG 记忆检索 + 多 Agent 系统。
 
@@ -8,11 +8,13 @@ AI 小说创作平台：三阶段 LLM 流水线（草稿 → 精修 → 评估�
 |---|---|
 | 后端 | Python 3.11 + FastAPI + LangGraph + LiteLLM |
 | LLM | DeepSeek-V4-Flash (草稿) → Qwen-Max (精修) → Claude Sonnet (评估)，用户可 BYOK 自选 |
-| 数据库 | PostgreSQL 16 + pgvector + Redis（部署在腾讯云） |
+| 数据库 | PostgreSQL 16 + pgvector + Redis（**本地 Docker 容器**） |
 | 前端 | Next.js 14 + TailwindCSS + Tiptap + Vercel AI SDK v5 |
-| 部署 | Docker Compose（仅腾讯云服务器） |
+| 依赖管理 | **uv**（Python 虚拟环境 + 依赖锁定） |
+| 部署 | 本地：直接进程运行 + Docker 容器（仅数据库）；服务器：见 [deploy/README.md](deploy/README.md) |
 
-> **本机不要跑 `docker compose`。** Docker 只部署在腾讯云服务器上。本地开发用直接进程运行（uvicorn + next dev）。
+> **本地环境**：PostgreSQL 16 + Redis 通过 `docker-compose.local.yml` 跑在 Docker 容器里（仅 2 个容器，轻量）。后端和前端用本地进程运行。
+> **Python 环境**：全部通过 `uv` 管理（`backend/pyproject.toml`），虚拟环境在 `backend/.venv`。
 
 ## 核心特性
 
@@ -54,75 +56,92 @@ AI 小说创作平台：三阶段 LLM 流水线（草稿 → 精修 → 评估�
 
 ```
 project11/
-├── backend/       # FastAPI + LangGraph 后端
-│   ├── alembic/   # 数据库迁移
+├── backend/              # FastAPI + LangGraph 后端
+│   ├── alembic/          # 数据库迁移
 │   ├── app/
-│   │   ├── agents/      # 角色化 Agent（Plotter/Character/Editor/Safety）
-│   │   ├── api/         # REST 端点（chat/documents/chapters/...）
-│   │   ├── eval/        # 多维度评估矩阵
-│   │   ├── llm/         # LLM 客户端（litellm 封装 + embedding）
-│   │   ├── models/      # SQLAlchemy ORM
-│   │   ├── pipeline/    # LangGraph 三阶段流水线（核心）
-│   │   ├── planner/     # DAG 编排器 + 任务模板
-│   │   ├── safety/      # 内容安全规则引擎
-│   │   ├── schemas/     # Pydantic 模型
-│   │   ├── services/    # 业务逻辑层
-│   │   └── tools/       # Agent 工具注册表
+│   │   ├── agents/       # 角色化 Agent（Plotter/Character/Editor/Safety）
+│   │   ├── api/          # REST 端点（chat/documents/chapters/...）
+│   │   ├── eval/         # 多维度评估矩阵
+│   │   ├── llm/          # LLM 客户端（litellm 封装 + embedding）
+│   │   ├── models/       # SQLAlchemy ORM
+│   │   ├── pipeline/     # LangGraph 三阶段流水线（核心）
+│   │   ├── planner/      # DAG 编排器 + 任务模板
+│   │   ├── safety/       # 内容安全规则引擎
+│   │   ├── schemas/      # Pydantic 模型
+│   │   ├── services/     # 业务逻辑层
+│   │   └── tools/        # Agent 工具注册表
 │   ├── tests/
-│   └── requirements.txt
-├── frontend/      # Next.js 14 前端
+│   ├── pyproject.toml    # uv 依赖声明（唯一权威）
+│   └── requirements.txt  # 兼容旧工具（内容与 pyproject.toml 同步）
+├── frontend/             # Next.js 14 前端
 │   └── src/
-│       ├── app/         # 页面路由
-│       ├── components/  # UI 组件
-│       ├── hooks/       # React hooks
-│       └── lib/         # 工具函数 + 类型定义
-├── deploy/        # 服务器部署配置
-└── docker-compose.yml   # 仅腾讯云服务器用
+│       ├── app/          # 页面路由
+│       ├── components/   # UI 组件
+│       ├── hooks/        # React hooks
+│       └── lib/          # 工具函数 + 类型定义
+├── deploy/               # 服务器部署配置
+├── docker-compose.yml    # 服务器全栈（含 nginx）
+└── docker-compose.local.yml  # 本地仅数据库（PG + Redis）
 ```
 
 ---
 
 ## 一、首次配置（从零开始）
 
-> 假设：Windows 本地开发，PostgreSQL 16 + Redis 已在腾讯云服务器上跑起来。
+> 假设：Windows 本地开发。需要 [uv](https://docs.astral.sh/uv/) 和 [Docker Desktop](https://www.docker.com/products/docker-desktop/)（WSL2 后端，用于跑 PG/Redis 容器）。
 
-### 步骤 1：SSH 隧道
+### 前置检查
 
 ```powershell
-ssh -N -L 5432:localhost:5432 -L 16379:localhost:16379 user@your-tencent-cloud-ip
+uv --version        # 应有输出，如 uv 0.x.x
+docker info         # 应显示 Server 信息（Docker Desktop 已启动）
 ```
 
-### 步骤 2：初始化数据库
+### 步骤 1：启动本地数据库（Docker 容器）
 
-```sql
-CREATE DATABASE project11;
-\c project11
-CREATE EXTENSION IF NOT EXISTS vector;
+```powershell
+# 在项目根目录，启动 PostgreSQL 16 + pgvector 和 Redis 两个容器
+docker compose -f docker-compose.local.yml up -d
+
+# 验证两个容器都 healthy
+docker ps
+# 期望看到 project11-postgres-local 和 project11-redis-local 均 (healthy)
 ```
 
-### 步骤 3：配置后端
+> 首次启动会自动拉取镜像（如网络慢，可配置 Docker 镜像加速器）。数据持久化在 Docker 卷 `pg_data` / `redis_data`，删除容器不丢数据。
+
+### 步骤 2：配置后端环境
 
 ```powershell
 cd backend
 Copy-Item .env.example .env
-# 编辑 .env 填入真实值（详见 .env.example 中的注释）
+# 编辑 .env 填入真实 API Key（详见 .env.example 注释）
+# DATABASE_URL 和 REDIS_URL 已默认指向 localhost:5432 / 16379，无需修改
 ```
 
-### 步骤 4：安装后端
+### 步骤 3：用 uv 构建后端虚拟环境并安装
 
 ```powershell
 cd backend
-uv venv .venv --python 3.11
-.\.venv\Scripts\Activate.ps1
-uv pip install -r requirements.txt
-alembic upgrade head
+uv sync            # 创建 .venv 虚拟环境 + 按 pyproject.toml 安装全部依赖 + 生成 uv.lock
 ```
+
+> `uv sync` 是 uv 的标准工作流：自动创建 `backend/.venv`，安装 pyproject.toml 声明的依赖（含 dev 组测试依赖），并锁定版本到 `uv.lock`。之后日常都用 `uv sync` / `uv run`，无需手动激活虚拟环境。
+
+### 步骤 4：初始化数据库（迁移）
+
+```powershell
+cd backend
+uv run alembic upgrade head
+```
+
+> `uv run` 会在虚拟环境中执行命令，无需手动 activate。
 
 ### 步骤 5：配置前端
 
 ```powershell
 cd frontend
-# 创建 .env.local
+# 创建 .env.local（后端地址）
 echo NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 > .env.local
 npm install
 ```
@@ -130,8 +149,8 @@ npm install
 ### 步骤 6：启动
 
 ```powershell
-# 终端 1: 后端
-cd backend && uvicorn app.main:app --reload --port 8000
+# 终端 1: 后端（uv 虚拟环境中运行）
+cd backend && uv run uvicorn app.main:app --reload --port 8000
 
 # 终端 2: 前端
 cd frontend && npm run dev
@@ -141,7 +160,35 @@ cd frontend && npm run dev
 
 ---
 
-## 二、BYOK 配置指南
+## 二、日常启动
+
+```powershell
+# 终端 0（如容器已停止）: 启动数据库
+docker compose -f docker-compose.local.yml up -d
+
+# 终端 1: 后端（uv 虚拟环境中运行，--reload 自动重载）
+cd backend && uv run uvicorn app.main:app --reload --port 8000
+
+# 终端 2: 前端
+cd frontend && npm run dev
+```
+
+**停止数据库**：
+```powershell
+docker compose -f docker-compose.local.yml down    # 停止并删除容器（数据卷保留）
+docker compose -f docker-compose.local.yml down -v # 连数据卷一起删（彻底重置）
+```
+
+**清理虚拟环境重装**：
+```powershell
+cd backend
+rm -r .venv          # 删除虚拟环境
+uv sync              # 重新构建
+```
+
+---
+
+## 三、BYOK 配置指南
 
 ### 快速配置（推荐新用户）
 
@@ -164,7 +211,7 @@ cd frontend && npm run dev
 
 ---
 
-## 三、AI 工具使用
+## 四、AI 工具使用
 
 编辑器右侧提供 6 个 AI 工具：
 
@@ -189,13 +236,11 @@ cd frontend && npm run dev
 3. 自动提取角色、世界观、剧情事件（通过独立的 `extract` 任务）
 4. 清除 AI 面板状态，防止残留文本被误插入正文
 
-**选中文字操作**：在编辑器中选中文字后点击扩写/重写/降AI，AI 将只处理选中的内容。
-
 ---
 
-## 四、架构设计
+## 五、架构设计
 
-### 4.1 Pipeline 架构
+### 5.1 Pipeline 架构
 
 ```
 用户输入 → task_type 路由
@@ -212,15 +257,15 @@ cd frontend && npm run dev
 
 **Prompt 上下文注入**：`buildPrompt()` 根据工具类型动态组装上下文（小说标题、大纲内容、章节文本、选中文字），`_extract_topic()` 在传给 LLM 前剥离内部路由标签 `[novel:N]` 和 `[task:TYPE]`。
 
-### 4.2 BYOK 三阶段独立凭证
+### 5.2 BYOK 三阶段独立凭证
 
 前端通过 `X-Provider-Config` 头部上传 `ProviderConfig { draft, refine, evaluate, embedding? }`，每个 StageConfig 各自携带 `api_base / api_key / model / extra_headers`。后端 SSRF 校验 api_base，key 在日志中脱敏。
 
-### 4.3 RAG 记忆检索
+### 5.3 RAG 记忆检索
 
 四个记忆集合（章节/角色/世界观/剧情事件）均带 pgvector 向量列。retrieval_node 在 draft 前执行语义检索，结果注入 draft_node 和 refine_node 的系统提示词。
 
-### 4.4 多 Agent 系统
+### 5.4 多 Agent 系统
 
 | 模块 | 职责 |
 |------|------|
@@ -233,7 +278,7 @@ cd frontend && npm run dev
 
 ---
 
-## 五、API 端点
+## 六、API 端点
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -249,25 +294,11 @@ cd frontend && npm run dev
 
 ---
 
-## 六、日常启动
-
-```powershell
-# 终端 1: SSH 隧道
-ssh -N -L 5432:localhost:5432 -L 16379:localhost:16379 user@your-ip
-
-# 终端 2: 后端
-cd backend && .\.venv\Scripts\Activate.ps1 && uvicorn app.main:app --reload --port 8000
-
-# 终端 3: 前端
-cd frontend && npm run dev
-```
-
----
-
 ## 七、验证清单
 
 | 项 | 期望 |
 |---|---|
+| `docker compose -f docker-compose.local.yml ps` | 两个容器均 healthy |
 | `curl http://localhost:8000/health` | `{"status":"ok"}` |
 | 浏览器 http://localhost:7421 | 显示小说编辑器界面 |
 | 配置 BYOK → 测试连接 | 显示 ✅ 连接成功 |
@@ -282,6 +313,12 @@ cd frontend && npm run dev
 
 ## 八、常见问题
 
+**Q: `docker compose` 拉取镜像失败？**
+A: 国内网络需配置 Docker 镜像加速器（Docker Desktop → Settings → Docker Engine 加 `registry-mirrors`）。
+
+**Q: 后端启动报 Redis 连接失败？**
+A: 确认容器在跑：`docker compose -f docker-compose.local.yml ps`。如容器已停，先 `up -d`。
+
 **Q: 续写还是白屏很久？**
 A: 检查 task_type 是否正确传递。续写应走 `continue` 路由（仅 draft + safety），不走完整 pipeline。
 
@@ -295,10 +332,13 @@ A: 检查 `backend/.env` 的 `CORS_ORIGINS` 是否包含 `http://localhost:7421`
 A: 每个评估维度有 30 秒超时保护。超时的维度返回 0.5 分 fallback，不影响其他维度。
 
 **Q: 生成正文时 AI 不按大纲写？**
-A: 确认已先点击"应用大纲"保存大纲。生成正文时会自动从文档 metadata 读取大纲作为参考上下文。如果大纲未保存，AI 只能凭当前编辑器内容猜测。
+A: 确认已先点击"应用大纲"保存大纲。生成正文时会自动从文档 metadata 读取大纲作为参考上下文。
 
 **Q: `litellm` 安装失败？**
-A: 确认 `requirements.txt` 中 `litellm<1.91`。1.91+ 引入 Rust 组件。
+A: 确认 `pyproject.toml` 中 `litellm<1.91`。1.91+ 引入 Rust 组件。
+
+**Q: 怎么重建虚拟环境？**
+A: `cd backend && rm -r .venv && uv sync`。
 
 ---
 
@@ -307,10 +347,10 @@ A: 确认 `requirements.txt` 中 `litellm<1.91`。1.91+ 引入 Rust 组件。
 - **AGENTS.md**：AI 协作原则见 [AGENTS.md](AGENTS.md)
 - **提交规范**：Conventional Commits（`feat:` / `fix:` / `refactor:` / `docs:`）
 - **测试要求**：新增功能必须带测试，覆盖率 ≥ 80%
-- **关键约束**：不换框架、LiteLLM 是唯一 LLM 入口、`litellm<1.91` 硬性 pin
+- **关键约束**：不换框架、LiteLLM 是唯一 LLM 入口、`litellm<1.91` 硬性 pin、Python 依赖用 uv 管理
 
 ---
 
 ## 十、服务器部署
 
-见 [deploy/README.md](deploy/README.md)。
+见 [deploy/README.md](deploy/README.md)（仅腾讯云服务器，本地开发不涉及）。

@@ -183,7 +183,7 @@ def _encode_finish() -> str:
 
 
 def _encode_error(message: str) -> str:
-    return _sse({"type": "error", "errorText": message})
+    return _sse({"type": "error", "detail": message})
 
 
 async def _extract_provider_config(
@@ -206,7 +206,7 @@ async def _extract_provider_config(
         logger.warning("Invalid X-Provider-Config JSON: %s", _redact_key(str(e)))
         raise HTTPException(
             status_code=422,
-            detail=f"Invalid X-Provider-Config header: {e}",
+            detail=f"X-Provider-Config 头格式无效: {e}",
         )
 
 
@@ -409,15 +409,23 @@ async def test_connection(
     logger.info("TEST_CONNECTION: stage=%s, has_config=%s", stage, provider_config is not None)
     if provider_config is None:
         if not settings.byok_fallback_to_env:
-            return {"ok": False, "error": "请先配置 API Key"}
-        # Build a StageConfig from env fallback for the requested stage
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="请先配置 API Key",
+            )
         stage_cfg = _env_fallback_stage(stage)
         if not stage_cfg:
-            return {"ok": False, "error": f"未知阶段: {stage}"}
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"未知阶段: {stage}",
+            )
     else:
         stage_cfg = getattr(provider_config, stage, None)
         if stage_cfg is None:
-            return {"ok": False, "error": f"ProviderConfig 中缺少 {stage} 阶段配置"}
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"ProviderConfig 中缺少 {stage} 阶段配置",
+            )
 
     try:
         import openai as openai_lib
@@ -476,14 +484,26 @@ async def test_connection(
                 }
             raise
     except litellm.AuthenticationError:
-        return {"ok": False, "error": "API Key 无效，请检查配置中对应阶段的 Key 是否正确"}
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API Key 无效，请检查配置中对应阶段的 Key 是否正确",
+        )
     except litellm.APIConnectionError:
-        return {"ok": False, "error": "无法连接到 API Base URL，请检查网络和 URL 配置"}
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="无法连接到 API Base URL，请检查网络和 URL 配置",
+        )
     except litellm.NotFoundError:
-        return {"ok": False, "error": "模型不存在，请检查模型名称是否正确"}
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="模型不存在，请检查模型名称是否正确",
+        )
     except Exception as e:
         logger.error("Connection test failed: %s: %s", type(e).__name__, e)
-        return {"ok": False, "error": f"连接测试失败: {type(e).__name__}: {e}"}
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"连接测试失败: {type(e).__name__}: {e}",
+        )
 
 
 def _env_fallback_stage(stage: str) -> "StageConfig | None":

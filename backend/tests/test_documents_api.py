@@ -105,7 +105,7 @@ def test_get_returns_404_for_missing(app_client: TestClient) -> None:
     ):
         r = app_client.get("/v1/documents/99", headers=_AUTH)
     assert r.status_code == 404
-    assert r.json()["detail"] == "Document not found"
+    assert r.json()["detail"] == "作品不存在"
 
 
 def test_get_returns_full_document(app_client: TestClient) -> None:
@@ -178,4 +178,4 @@ def test_blank_api_key_returns_401(app_client: TestClient, blank: str) -> None:
     with patch("app.api.documents.list_documents", new=AsyncMock(return_value=([], 0))):
         r = app_client.get("/v1/documents", headers={"X-API-Key": blank})
     assert r.status_code == 401
-    assert r.json()["detail"] == "Missing or empty X-API-Key header"
+    assert r.json()["detail"] == "缺少或空的 X-API-Key 头"

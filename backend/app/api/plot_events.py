@@ -95,9 +95,9 @@ async def get_plot_event_endpoint(
     try:
         pe = await get_plot_event(session, event_id)
     except PlotEventNotFound:
-        raise HTTPException(status_code=404, detail="Plot event not found")
+        raise HTTPException(status_code=404, detail="情节事件不存在")
     if pe.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="Plot event not found")
+        raise HTTPException(status_code=404, detail="情节事件不存在")
     return pe  # type: ignore[return-value]
 
 
@@ -115,9 +115,9 @@ async def update_plot_event_endpoint(
     try:
         existing = await get_plot_event(session, event_id)
     except PlotEventNotFound:
-        raise HTTPException(status_code=404, detail="Plot event not found")
+        raise HTTPException(status_code=404, detail="情节事件不存在")
     if existing.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="Plot event not found")
+        raise HTTPException(status_code=404, detail="情节事件不存在")
     pe = await update_plot_event(
         session, event_id, payload, stage_config=embedding_stage,
     )
@@ -136,8 +136,8 @@ async def delete_plot_event_endpoint(
     try:
         existing = await get_plot_event(session, event_id)
     except PlotEventNotFound:
-        raise HTTPException(status_code=404, detail="Plot event not found")
+        raise HTTPException(status_code=404, detail="情节事件不存在")
     if existing.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="Plot event not found")
+        raise HTTPException(status_code=404, detail="情节事件不存在")
     await delete_plot_event(session, event_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

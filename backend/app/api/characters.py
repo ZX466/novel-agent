@@ -95,9 +95,9 @@ async def get_character_endpoint(
     try:
         c = await get_character(session, char_id)
     except CharacterNotFound:
-        raise HTTPException(status_code=404, detail="Character not found")
+        raise HTTPException(status_code=404, detail="角色不存在")
     if c.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="Character not found")
+        raise HTTPException(status_code=404, detail="角色不存在")
     return c  # type: ignore[return-value]
 
 
@@ -117,9 +117,9 @@ async def update_character_endpoint(
             session, char_id, payload, stage_config=embedding_stage,
         )
     except CharacterNotFound:
-        raise HTTPException(status_code=404, detail="Character not found")
+        raise HTTPException(status_code=404, detail="角色不存在")
     if c.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="Character not found")
+        raise HTTPException(status_code=404, detail="角色不存在")
     return c  # type: ignore[return-value]
 
 
@@ -135,8 +135,8 @@ async def delete_character_endpoint(
     try:
         existing = await get_character(session, char_id)
     except CharacterNotFound:
-        raise HTTPException(status_code=404, detail="Character not found")
+        raise HTTPException(status_code=404, detail="角色不存在")
     if existing.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="Character not found")
+        raise HTTPException(status_code=404, detail="角色不存在")
     await delete_character(session, char_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

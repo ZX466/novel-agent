@@ -13,12 +13,12 @@ embedding BYOK stage into auto-embedding on create/update.
 """
 from __future__ import annotations
 
-import json
 import logging
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api._deps import extract_embedding_stage, load_parent, require_api_key
 from app.db.session import get_db
 from app.schemas.chat import ProviderConfig, StageConfig
 from app.schemas.document import ChapterReorderRequest
@@ -37,54 +37,10 @@ from app.services.chapter import (
     reorder_chapters,
     update_chapter,
 )
-from app.services.document import DocumentNotFound, get_document
 
 router = APIRouter(prefix="/v1/documents/{doc_id}/chapters", tags=["chapters"])
 
 logger = logging.getLogger(__name__)
-
-
-async def _extract_embedding_stage(
-    x_provider_config: str | None = Header(None, alias="X-Provider-Config"),
-) -> StageConfig | None:
-    """Extract the embedding BYOK stage from X-Provider-Config header, if any.
-
-    Returns None when the header is absent, malformed, or has no embedding
-    stage configured — callers then fall back to .env EMBEDDING_* creds.
-    """
-    if not x_provider_config:
-        return None
-    try:
-        data = json.loads(x_provider_config)
-        emb = data.get("embedding")
-        if emb and isinstance(emb, dict) and emb.get("api_base") and emb.get("api_key") and emb.get("model"):
-            return StageConfig(**emb)
-    except (json.JSONDecodeError, Exception):
-        logger.debug("chapters: malformed X-Provider-Config header, ignoring")
-    return None
-
-
-async def _require_api_key(
-    x_api_key: str = Header(..., alias="X-API-Key"),
-) -> str:
-    if not x_api_key.strip():
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or empty X-API-Key header",
-        )
-    return x_api_key.strip()
-
-
-async def _load_parent(session: AsyncSession, doc_id: int) -> None:
-    """Ensure the parent document exists and is not soft-deleted.
-
-    Chapter operations are blocked on a deleted work to avoid silent edits
-    to 回收站 items. Raises 404 if missing or deleted.
-    """
-    try:
-        await get_document(session, doc_id)
-    except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
 
 
 @router.get("", response_model=ChapterListResponse)
@@ -93,10 +49,10 @@ async def list_chapters_endpoint(
     limit: int = Query(200, ge=1, le=500),
     offset: int = Query(0, ge=0, le=10000),
     session: AsyncSession = Depends(get_db),
-    api_key: str = Depends(_require_api_key),
+    api_key: str = Depends(require_api_key),
 ) -> ChapterListResponse:
     """List chapters of a document, ordered by chapter_index ascending."""
-    await _load_parent(session, doc_id)
+    await load_parent(session, doc_id)
     items, total = await list_chapters(
         session, novel_id=doc_id, limit=limit, offset=offset
     )
@@ -113,8 +69,8 @@ async def create_chapter_endpoint(
     payload: ChapterCreate,
     response: Response,
     session: AsyncSession = Depends(get_db),
-    api_key: str = Depends(_require_api_key),
-    embedding_stage: StageConfig | None = Depends(_extract_embedding_stage),
+    api_key: str = Depends(require_api_key),
+    embedding_stage: StageConfig | None = Depends(extract_embedding_stage),
 ) -> ChapterRead:
     """Create a chapter under the document. Forces novel_id = doc_id.
 
@@ -124,7 +80,7 @@ async def create_chapter_endpoint(
     When X-Provider-Config carries an ``embedding`` stage, it overrides
     .env EMBEDDING_* credentials for the auto-embedding of this chapter.
     """
-    await _load_parent(session, doc_id)
+    await load_parent(session, doc_id)
     payload = payload.model_copy(update={"novel_id": doc_id})
     ch = await create_chapter(session, payload, stage_config=embedding_stage)
     response.headers["Location"] = f"/v1/documents/{doc_id}/chapters/{ch.id}"
@@ -137,19 +93,19 @@ async def update_chapter_endpoint(
     chapter_id: int,
     payload: ChapterUpdate,
     session: AsyncSession = Depends(get_db),
-    api_key: str = Depends(_require_api_key),
-    embedding_stage: StageConfig | None = Depends(_extract_embedding_stage),
+    api_key: str = Depends(require_api_key),
+    embedding_stage: StageConfig | None = Depends(extract_embedding_stage),
 ) -> ChapterRead:
     """Partial update a chapter. 404 if missing."""
-    await _load_parent(session, doc_id)
+    await load_parent(session, doc_id)
     try:
         ch = await update_chapter(
             session, chapter_id, payload, stage_config=embedding_stage,
         )
     except ChapterNotFound:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+        raise HTTPException(status_code=404, detail="章节不存在")
     if ch.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+        raise HTTPException(status_code=404, detail="章节不存在")
     return ch  # type: ignore[return-value]
 
 
@@ -158,16 +114,16 @@ async def delete_chapter_endpoint(
     doc_id: int,
     chapter_id: int,
     session: AsyncSession = Depends(get_db),
-    api_key: str = Depends(_require_api_key),
+    api_key: str = Depends(require_api_key),
 ) -> Response:
     """Delete a chapter. 204 on success."""
-    await _load_parent(session, doc_id)
+    await load_parent(session, doc_id)
     try:
         existing = await get_chapter(session, chapter_id)
     except ChapterNotFound:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+        raise HTTPException(status_code=404, detail="章节不存在")
     if existing.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+        raise HTTPException(status_code=404, detail="章节不存在")
     await delete_chapter(session, chapter_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -177,7 +133,7 @@ async def reorder_chapters_endpoint(
     doc_id: int,
     payload: ChapterReorderRequest,
     session: AsyncSession = Depends(get_db),
-    api_key: str = Depends(_require_api_key),
+    api_key: str = Depends(require_api_key),
 ) -> ChapterListResponse:
     """Reorder chapters via drag-and-drop.
 
@@ -185,10 +141,10 @@ async def reorder_chapters_endpoint(
     index to each chapter (within this document only) and returns the full
     re-ordered list.
     """
-    await _load_parent(session, doc_id)
+    await load_parent(session, doc_id)
     ordered = [(item.id, item.chapter_index) for item in payload.chapters]
     try:
         items = await reorder_chapters(session, novel_id=doc_id, ordered=ordered)
     except ChapterNotFound:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+        raise HTTPException(status_code=404, detail="章节不存在")
     return ChapterListResponse(items=items, total=len(items))  # type: ignore[arg-type]

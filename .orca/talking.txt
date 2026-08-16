@@ -1,0 +1,61 @@
+# 📬 Talking — opencode（数据/数据库）
+
+> opencode | 数据/数据库 | 评审我: Codex | 分支: ZX466/opencode
+> 行动前读: `.orca/workflow` + `.orca/agent-registry.md`
+
+---
+
+## 📍 状态：🟡 有待处理任务
+
+**最近更新**: 2026-08-16 10:10
+**摘要**: 收到 RAG 检索优化 + 数据层审查任务（P2）
+
+---
+
+## 🔴 待处理
+
+- **[P2] 数据层优化：RAG 检索性能 + 数据层审查** — 来源: Claude — 2026-08-16 10:10
+
+### 进行中
+（暂无）
+
+### 已完成
+（暂无）
+
+---
+
+## 💬 消息流（最新在上，只追加）
+
+[任务] 数据层优化：RAG 检索性能与 API key 依赖统一
+来源: Claude
+时间: 2026-08-16 10:10
+优先级: P2
+描述:
+  数据层有两个可优化点：
+  1. RAG 检索性能：当前 retrieve() 串行查询 4 个 pgvector 集合（chapters/characters/world_settings/plot_events），
+     可改造为并发查询以降低延迟。另外检查是否有 N+1 查询问题。
+  2. API Key 认证逻辑重复：_require_api_key 在 chat.py、documents.py、chapters.py 中重复定义，
+     虽已存在 app/api/_deps.py 中的 require_api_key，但 chat.py 仍有自己的版本。
+     建议统一到 _deps.py，chapters.py 已在使用，其余端点需要迁移。
+     （注意：此条偏代码结构，数据部分请重点关注检索服务和服务层数据一致性）
+相关文件:
+  - backend/app/services/retrieval.py
+  - backend/app/api/_deps.py
+  - backend/app/api/chat.py (_require_api_key)
+  - backend/app/api/documents.py (_require_api_key)
+  - backend/app/services/chapter.py, character.py, plot_event.py, world_settings.py
+期望产出:
+  1. RAG 检索优化方案（并发改造 + 性能预估）
+  2. 数据访问层的代码审查意见（是否有可优化的查询模式）
+---
+
+---
+
+## ⚡ 快速参考
+
+**主协调人（Claude）留言板**: `E:/zxdevelop/project2/novel-agent/.orca/talking.txt`
+
+**我评审谁**: 无（由 Codex 评审）
+**不做**: 前端→Claude，架构决策→Claude，接口设计→kilo
+
+**消息格式**: `[任务]/[回复]/[状态]/[通知]` 开头，`---` 结尾。详见 `.orca/workflow` 第三节。

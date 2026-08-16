@@ -55,16 +55,26 @@ async def _search_one(
     ORM instance must have `embedding`, `id`, and `novel_id` columns.
 
     The score is `(1 - cosine_distance)` clamped to [0, 1].
+
+    The `max_distance` filter is pushed down into the SQL WHERE clause
+    (pgvector supports `embedding <=> :q < :max` with HNSW index) so the
+    database scans only relevant rows before applying `LIMIT k`. Filtering
+    only in Python after `LIMIT k` could drop rows and return fewer than
+    `k` results.
+
+    A Python-side distance check is retained as a defensive backstop: it
+    guards against non-pgvector sessions / in-memory mocks that cannot
+    enforce the SQL predicate, while real PostgreSQL enforces it in SQL
+    and never returns out-of-range rows in the first place.
     """
     distance_expr = model.embedding.cosine_distance(query_embedding).label("distance")
-    stmt = (
-        select(model, distance_expr)
-        .where(model.embedding.is_not(None))
-        .order_by(distance_expr.asc())
-        .limit(k)
+    stmt = select(model, distance_expr).where(
+        model.embedding.is_not(None),
+        distance_expr < max_distance,
     )
     if novel_id is not None:
         stmt = stmt.where(model.novel_id == novel_id)
+    stmt = stmt.order_by(distance_expr.asc()).limit(k)
     result = await session.execute(stmt)
     hits: list[tuple[Any, float]] = []
     for row in result.all():
@@ -72,6 +82,8 @@ async def _search_one(
         if distance is None:
             continue
         if distance > max_distance:
+            # Defense in depth for non-pgvector sessions; real pgvector
+            # already excluded these rows in SQL.
             continue
         score = max(0.0, min(1.0, 1.0 - float(distance)))
         hits.append((instance, score))

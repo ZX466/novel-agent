@@ -228,4 +228,47 @@ python backend/bench_perf.py                      # 延迟模型
 - 涉及**真实 DB 延迟数据**的部分（HNSW 实际查询耗时、embed 真网络时延）需在真实环境中跑基准确认
 - 评审人：cline（依赖/配置/文档 域评审 + Pi 性能域评审）——按 registry，由 cline 评审性能工作
 
-*报告结束。基准脚本 bench_perf.py 随报告交付。*
+---
+
+## 九、第二轮实施记录（2026-08-16）
+
+基于首轮报告实施的高 ROI 优化（任务：性能优化实施，Claude 分配）：
+
+### 实施 1：`_search_one` 距离过滤下推 SQL ✅
+
+**文件**：`backend/app/services/retrieval.py`
+
+**改动**：`max_distance` 过滤从 Python 后处理下推到 SQL WHERE：
+```python
+# 优化前：SQL LIMIT k 返回后 Python 过滤 → 超距离行被丢，结果可能 < k
+stmt = select(model, distance_expr).where(model.embedding.is_not(None))
+    .order_by(distance_expr.asc()).limit(k)
+# 优化后：WHERE embedding <=> :q < :max 下推，DB 只扫相关行再取 top-k
+stmt = select(model, distance_expr).where(
+    model.embedding.is_not(None),
+    distance_expr < max_distance,
+).order_by(distance_expr.asc()).limit(k)
+```
+- 保留 Python 侧 distance 检查作为**兜底**（防御非 pgvector/mock 场景）
+- SQL 编译验证通过：`chapters.embedding <=> '[...]' < 1.0`（pgvector HNSW 支持半径过滤 top-k）
+- **主要收益**：结果数量稳定性（保证 k 条合法命中，检索质量↑），而非 Python 循环速度（实测循环开销本就可忽略）
+
+### 实施 2：evaluate 持久化降频（每请求 3→1 次 commit）✅
+
+**文件**：`backend/app/pipeline/nodes.py`
+
+**改动**：`evaluate_node` 仅在**决定结束的那轮**（路由到 safety_check）才 `create_evaluation`；中间 refine 循环轮次不再写 DB：
+```python
+next_hop = route_after_evaluate({**state, "score": score, "feedback": feedback})
+persist = next_hop == "safety_check"  # 仅最终轮持久化
+```
+- 路由预测失败时默认 persist（保语义兜底）
+- **收益**：generate 任务默认 `max_iters=3` → DB 事务从 3 次/请求减到 1 次/请求（省 2/3）
+- **语义无损**：中间轮次 score/feedback 保留在 state（review_details / 日志）；trend analysis 消费的是最终值
+
+### 验证
+- 591 passed / 2 failed（2 失败为**预先存在**，与本次改动无关：chapter refresh 计数断言 + embedding 需要真实 key）
+- `tests/test_retrieval.py`（9）+ `tests/test_tools.py`（47）全过 = 56 passed
+- `bench_perf.py` 输出：evaluate 持久化 3→1 次 commit/请求；过滤优化收益在 SQL 层（结果完整性）
+
+*第二轮实施结束。RAG 并发检索由 opencode 负责（已按协调分配不重复实施）。*

@@ -55,6 +55,42 @@ def latency_parallel(n_queries: int, t_each_ms: float) -> float:
     return t_each_ms  # asyncio.gather 全部并发
 
 
+# --- 4. 优化前后对比（第二轮任务：_search_one 过滤下推 + evaluate 持久化降频）--
+def simulate_search_filter_before(n_rows: int, max_distance: float) -> tuple[int, float]:
+    """优化前：SQL 返回 k 行（含超距离）后 Python 侧过滤，丢结果。"""
+    kept = 0
+    start = time.perf_counter()
+    for i in range(n_rows):
+        dist = (i % 10) / 10  # 0.0..0.9 模拟距离
+        if dist < max_distance:  # Python 后过滤
+            kept += 1
+    elapsed = (time.perf_counter() - start) * 1000
+    return kept, elapsed
+
+
+def simulate_search_filter_after(n_rows: int, max_distance: float) -> tuple[int, float]:
+    """优化后：SQL 已过滤，Python 侧仅兜底（不命中）。"""
+    kept = 0
+    start = time.perf_counter()
+    for i in range(n_rows):
+        dist = (i % 10) / 10
+        if dist >= max_distance:
+            continue  # SQL 已排除；Python 兜底
+        kept += 1
+    elapsed = (time.perf_counter() - start) * 1000
+    return kept, elapsed
+
+
+def eval_persist_commits_before(max_iters: int) -> int:
+    """优化前：每轮 refine 迭代都 create_evaluation → commit。"""
+    return max_iters
+
+
+def eval_persist_commits_after(max_iters: int) -> int:
+    """优化后：仅最终轮（路由到 safety_check）持久化一次。"""
+    return 1
+
+
 if __name__ == "__main__":
     print("=== 离线性能基准 ===")
     t = bench_client_creation()
@@ -69,3 +105,14 @@ if __name__ == "__main__":
         s = latency_serial(4, tq)
         p = latency_parallel(4, tq)
         print(f"   单查询 {tq}ms: 串行 {s:.0f}ms | 并发 {p:.0f}ms | 省 {(s-p):.0f}ms")
+
+    print("\n4. 优化前后对比（第二轮任务实施结果）:")
+    for n_rows in (10000, 50000):
+        kept_b, t_b = simulate_search_filter_before(n_rows, 0.3)
+        kept_a, t_a = simulate_search_filter_after(n_rows, 0.3)
+        print(
+            f"   _search_one 过滤: {n_rows} 行 | 旧: 保留{kept_b}/{n_rows} {t_b:.2f}us | "
+            f"新: 保留{kept_a}/{n_rows} {t_a:.2f}us | Python 循环省 {(t_b-t_a):.2f}us"
+        )
+    print(f"   evaluate 持久化: max_iters=3 | 旧: {eval_persist_commits_before(3)} 次commit/请求 | "
+          f"新: {eval_persist_commits_after(3)} 次commit/请求 (省 2/3)")

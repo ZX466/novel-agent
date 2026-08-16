@@ -26,7 +26,13 @@ from app.services.chapter import (
 
 
 @pytest.mark.asyncio
-async def test_create_chapter_auto_computes_word_count(mock_session):
+async def test_create_chapter_auto_computes_word_count(mock_session, monkeypatch):
+    # Stub auto-embedding — the test targets CRUD, not the embedding API.
+    async def _noop_embed(*args, **kwargs):
+        return [0.0] * 8
+
+    monkeypatch.setattr("app.llm.embedding.embed_text", _noop_embed)
+
     payload = ChapterCreate(
         chapter_index=1,
         title="第一章",
@@ -37,7 +43,9 @@ async def test_create_chapter_auto_computes_word_count(mock_session):
     assert ch.status == "draft"
     assert mock_session.added == [ch]
     assert mock_session.commits == 1
-    assert mock_session.refreshes == 1
+    # create_chapter refreshes twice: once after flush, once post-commit
+    # (re-loads after the embedding flush expires updated_at).
+    assert mock_session.refreshes == 2
 
 
 @pytest.mark.asyncio
@@ -118,7 +126,13 @@ async def test_update_chapter_applies_sent_fields_only(mock_session):
 
 
 @pytest.mark.asyncio
-async def test_update_chapter_auto_updates_word_count_on_content_change(mock_session):
+async def test_update_chapter_auto_updates_word_count_on_content_change(mock_session, monkeypatch):
+    # Stub auto-embedding — the test targets word_count logic, not the API.
+    async def _noop_embed(*args, **kwargs):
+        return [0.0] * 8
+
+    monkeypatch.setattr("app.llm.embedding.embed_text", _noop_embed)
+
     ch = Chapter(id=1, chapter_index=1, title="x", content_text="abc", word_count=3)
     mock_session.set_scalar_results([ch])
 

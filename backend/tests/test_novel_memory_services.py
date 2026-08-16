@@ -50,13 +50,21 @@ from tests.conftest import _FakeResult
 
 
 @pytest.mark.asyncio
-async def test_create_character_commits_and_refreshes(mock_session):
+async def test_create_character_commits_and_refreshes(mock_session, monkeypatch):
+    # Stub auto-embedding — the test targets CRUD, not the embedding API.
+    async def _noop_embed(*args, **kwargs):
+        return [0.0] * 8
+
+    monkeypatch.setattr("app.llm.embedding.embed_text", _noop_embed)
+
     payload = CharacterCreate(name="Alice", role="主角")
     c = await create_character(mock_session, payload)
     assert c.name == "Alice"
     assert mock_session.added == [c]
     assert mock_session.commits == 1
-    assert mock_session.refreshes == 1
+    # create_character refreshes twice: once after flush, once post-commit
+    # (re-loads after the embedding flush expires updated_at).
+    assert mock_session.refreshes == 2
 
 
 @pytest.mark.asyncio
@@ -119,7 +127,13 @@ async def test_delete_character_raises_not_found(mock_session):
 
 
 @pytest.mark.asyncio
-async def test_create_world_setting_commits(mock_session):
+async def test_create_world_setting_commits(mock_session, monkeypatch):
+    # Stub auto-embedding — the test targets CRUD, not the embedding API.
+    async def _noop_embed(*args, **kwargs):
+        return [0.0] * 8
+
+    monkeypatch.setattr("app.llm.embedding.embed_text", _noop_embed)
+
     payload = WorldSettingCreate(title="魔法系统", category="magic")
     ws = await create_world_setting(mock_session, payload)
     assert ws.title == "魔法系统"
@@ -188,7 +202,13 @@ async def test_delete_world_setting_raises_not_found(mock_session):
 
 
 @pytest.mark.asyncio
-async def test_create_plot_event_commits(mock_session):
+async def test_create_plot_event_commits(mock_session, monkeypatch):
+    # Stub auto-embedding — the test targets CRUD, not the embedding API.
+    async def _noop_embed(*args, **kwargs):
+        return [0.0] * 8
+
+    monkeypatch.setattr("app.llm.embedding.embed_text", _noop_embed)
+
     payload = PlotEventCreate(summary="主角发现宝剑", event_type="revelation")
     pe = await create_plot_event(mock_session, payload)
     assert pe.summary == "主角发现宝剑"

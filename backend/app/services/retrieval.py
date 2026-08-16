@@ -15,11 +15,12 @@ sensitive (may contain story premises, character secrets).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.llm.embedding import embed_text
 from app.models.chapter import Chapter
@@ -142,22 +143,49 @@ async def retrieve(
         )
     query_embedding = await embed_text(query, stage_config=stage_config)
 
-    chapter_hits = await _search_one(
-        session, Chapter, query_embedding,
-        novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
-    )
-    character_hits = await _search_one(
-        session, Character, query_embedding,
-        novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
-    )
-    world_hits = await _search_one(
-        session, WorldSetting, query_embedding,
-        novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
-    )
-    event_hits = await _search_one(
-        session, PlotEvent, query_embedding,
-        novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
-    )
+    # Run the four collection searches. When the caller's session is bound to
+    # a real engine, each collection search opens its own short-lived
+    # read-only session and all four run concurrently. asyncpg cannot have two
+    # queries in flight on a single connection, so sharing the caller's one
+    # session would serialize the searches (or raise InterfaceError). Falls
+    # back to sequential on the caller's session when `bind` is unavailable
+    # (e.g. unit-test doubles without an engine).
+    bind = getattr(session, "bind", None)
+    if bind is not None:
+        maker = async_sessionmaker(
+            bind=bind, class_=AsyncSession,
+            expire_on_commit=False, autoflush=False,
+        )
+
+        async def _search(model: type) -> list[tuple[Any, float]]:
+            async with maker() as s:
+                return await _search_one(
+                    s, model, query_embedding,
+                    novel_id=novel_id, k=k_per_collection,
+                    max_distance=max_distance,
+                )
+
+        chapter_hits, character_hits, world_hits, event_hits = await asyncio.gather(
+            _search(Chapter), _search(Character),
+            _search(WorldSetting), _search(PlotEvent),
+        )
+    else:
+        chapter_hits = await _search_one(
+            session, Chapter, query_embedding,
+            novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
+        )
+        character_hits = await _search_one(
+            session, Character, query_embedding,
+            novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
+        )
+        world_hits = await _search_one(
+            session, WorldSetting, query_embedding,
+            novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
+        )
+        event_hits = await _search_one(
+            session, PlotEvent, query_embedding,
+            novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
+        )
 
     all_hits: list[RetrievalHit] = []
     for ch, score in chapter_hits:

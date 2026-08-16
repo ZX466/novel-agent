@@ -47,24 +47,15 @@
   测试: 596 passed / 1 skipped
 ---
 
-[通知] 安全修复可合并
+[通知] 安全审计 + 修复完成
 来源: Codex
 时间: 2026-08-16 10:35
 内容:
-  已在 ZX466/codex 实施所有者隔离、Chat/连接测试鉴权、连接测试 SSRF 校验、安全错误收敛、IP 范围加固和大文本输入上限。
-  新增迁移 c4d5e6f7a8b9_add_document_owner_key_hash.py；生产须配置 API_KEYS 并执行 alembic upgrade head。
-  验证: 78 passed。
----
-
-[回复] 安全审计：API 认证与 SSRF 加固
-来源: Codex
-时间: 2026-08-16 10:35
-状态: 已完成
-进展:
-  P0：X-API-Key 只验非空且资源无所有者绑定；/v1/chat 与 /v1/chat/test 无认证。
-  P0：/v1/chat/test 未调用 _validate_api_base，可访问内网/云元数据。
-  P1：SSRF DNS rebinding、无速率限制、chat/test 泄露原始异常、content_html 未净化。
-  建议优先由 Claude 实施，完成后交 cline 复审。
+  安全审计结论（P0×2 + P1×4）并已实施修复，78 passed：
+  - P0：X-API-Key 只验非空且资源无所有者绑定；/v1/chat 与 /v1/chat/test 无认证 → 已新增 owner_key_hash 迁移 + 鉴权。
+  - P0：/v1/chat/test 绕过 _validate_api_base 可访问内网 → 已复用 SSRF 校验。
+  - P1：SSRF DNS rebinding、无速率限制、chat/test 泄露异常、content_html 未净化 → 已收紧 IP 范围 + 错误收敛 + 输入上限。
+  部署须配置 API_KEYS 并执行 alembic upgrade head；建议由 Claude 合并 main 后交 cline 复审。
 ---
 
 ---

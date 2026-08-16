@@ -7,6 +7,34 @@
 - Python 3.11+、Node 18+、[uv](https://docs.astral.sh/uv/)
 - PostgreSQL 16（含 pgvector 扩展）+ Redis（部署在腾讯云服务器，本地走 SSH 隧道）
 
+## 0. 数据库准备（二选一）
+
+### 方式 A：SSH 隧道直连腾讯云（推荐，依赖服务器在线）
+
+```powershell
+ssh -N -L 5432:localhost:5432 -L 16379:localhost:16379 user@<服务器IP>
+```
+
+### 方式 B：本地 Docker 起 PG + Redis（服务器到期/离线时）
+
+只用 `docker-compose.local.yml`，**仅包含 PG + Redis 两个容器**，前后端仍用本地进程（uvicorn + next dev）。该文件维护在 main 分支，从工作树或克隆仓库根目录取：
+
+```powershell
+cd 项目根目录
+docker compose -f docker-compose.local.yml up -d        # 起容器
+docker compose -f docker-compose.local.yml ps           # 确认 healthy
+docker compose -f docker-compose.local.yml down         # 停止（数据保存在卷中）
+```
+
+后端 `.env` 指向本机即可：
+
+```ini
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/project11
+REDIS_URL=redis://:project11-redis@localhost:16379/0
+```
+
+> 生产/默认方式是方式 A。方式 B 是腾讯云到期或断网时的本地兜底，保证开发不中断。
+
 ## 1. 开 SSH 隧道（连接云端 DB/Redis）
 
 ```powershell
@@ -50,5 +78,5 @@ npm run dev
 
 - **`litellm` 安装失败**：requirements.txt 已 pin `litellm<1.91`（1.91+ 引入 Rust 组件），不要手动升级。
 - **CORS 报错**：检查 `backend/.env` 的 `CORS_ORIGINS` 是否含 `http://localhost:7421`。
-- **本机不要跑 `docker compose`**：Docker 仅部署在腾讯云服务器，本地用 uvicorn + next dev 直跑。
+- **本机 Docker 只用于"数据库容器"**：`docker-compose.local.yml`（本地 PG+Redis）可跑；不要跑 `docker-compose.yml`（那是腾讯云服务器全栈部署专用）。
 - **流式不实时**：确认走的是 SSE 且后端使用 `on_token` 回调（详见 README §4.1）。

@@ -89,6 +89,27 @@ class Settings(BaseSettings):
         description="Embedding dimension. MUST match the vector(N) column in migrations.",
     )
 
+    # --- Knowledge base (F4) upload controls ---
+    knowledge_upload_extensions: List[str] = Field(
+        default_factory=lambda: ["md", "markdown", "txt"],
+        description=(
+            "Allowed file extensions for knowledge-base uploads (lowercase, "
+            "no leading dot). Only plain-text formats are accepted — binary "
+            "or HTML files are rejected to keep the retrieval index safe."
+        ),
+    )
+    knowledge_upload_max_bytes: int = Field(
+        default=2 * 1024 * 1024,
+        ge=1024,
+        description="Maximum accepted knowledge-base upload size in bytes.",
+    )
+    knowledge_chunk_size: int = Field(
+        default=800,
+        ge=100,
+        le=4000,
+        description="Target chunk length (characters) when splitting uploaded text.",
+    )
+
     # --- Database ---
     database_url: str = Field(..., description="postgresql+asyncpg://...")
 

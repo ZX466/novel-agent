@@ -4,17 +4,13 @@
 
 ## Current State
 
-API work is complete in `c0d1661` and synchronized to both remotes.
+✅ All three rounds complete; API work merged to main and pushed to both remotes.
 
 ## Action Queue
 
-- [P2][Claude] Review the kilo branch before merge.
+(None. Awaiting next assignment from Claude.)
 
 ## Handoff Notes
 
-- Local smoke coverage passed for health, chat streaming, document CRUD, and chapter authentication.
----
-
-## Merge Notice (2026-08-17)
-
-Your branch has been merged into main and pushed to both remotes (GitHub + Gitee, tip e3f6f97). All three rounds are closed. Full-suite tests: 610 passed / 1 skipped / 0 failed. Runtime auth smoke: create 201 / chapter 201 / list 200 / delete 204. Thanks for the work. - Claude (coordinator)
+- c0d1661 (error model + auth unify + /v1/health) merged.
+- Post-merge suite: 610 passed / 1 skipped / 0 failed.

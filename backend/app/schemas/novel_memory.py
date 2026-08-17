@@ -25,8 +25,8 @@ class ChapterBase(BaseModel):
     novel_id: int = Field(default=0, ge=0)
     chapter_index: int = Field(..., ge=0)
     title: str = Field(..., min_length=1, max_length=500)
-    content_text: str = Field(default="")
-    summary: str = Field(default="")
+    content_text: str = Field(default="", max_length=1_000_000)
+    summary: str = Field(default="", max_length=100_000)
     word_count: int = Field(default=0, ge=0)
     status: str = Field(default="draft", max_length=32)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
@@ -39,8 +39,8 @@ class ChapterCreate(ChapterBase):
 class ChapterUpdate(BaseModel):
     chapter_index: int | None = Field(default=None, ge=0)
     title: str | None = Field(default=None, min_length=1, max_length=500)
-    content_text: str | None = None
-    summary: str | None = None
+    content_text: str | None = Field(default=None, max_length=1_000_000)
+    summary: str | None = Field(default=None, max_length=100_000)
     word_count: int | None = Field(default=None, ge=0)
     status: str | None = Field(default=None, max_length=32)
     metadata_json: dict[str, Any] | None = None
@@ -83,9 +83,9 @@ class CharacterBase(BaseModel):
     novel_id: int = Field(default=0, ge=0)
     name: str = Field(..., min_length=1, max_length=200)
     role: str = Field(default="配角", max_length=64)
-    description: str = Field(default="")
+    description: str = Field(default="", max_length=100_000)
     attributes: dict[str, Any] = Field(default_factory=dict)
-    arc_summary: str = Field(default="")
+    arc_summary: str = Field(default="", max_length=100_000)
 
 
 class CharacterCreate(CharacterBase):
@@ -95,9 +95,9 @@ class CharacterCreate(CharacterBase):
 class CharacterUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     role: str | None = Field(default=None, max_length=64)
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=100_000)
     attributes: dict[str, Any] | None = None
-    arc_summary: str | None = None
+    arc_summary: str | None = Field(default=None, max_length=100_000)
 
 
 class CharacterRead(CharacterBase):
@@ -131,7 +131,7 @@ class WorldSettingBase(BaseModel):
     novel_id: int = Field(default=0, ge=0)
     category: str = Field(default="misc", max_length=64)
     title: str = Field(..., min_length=1, max_length=500)
-    content_text: str = Field(default="")
+    content_text: str = Field(default="", max_length=1_000_000)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -142,7 +142,7 @@ class WorldSettingCreate(WorldSettingBase):
 class WorldSettingUpdate(BaseModel):
     category: str | None = Field(default=None, max_length=64)
     title: str | None = Field(default=None, min_length=1, max_length=500)
-    content_text: str | None = None
+    content_text: str | None = Field(default=None, max_length=1_000_000)
     metadata_json: dict[str, Any] | None = None
 
 
@@ -178,7 +178,7 @@ class PlotEventBase(BaseModel):
     chapter_id: int | None = Field(default=None, ge=1)
     chapter_index: int | None = Field(default=None, ge=0)
     event_type: str = Field(default="beat", max_length=64)
-    summary: str = Field(..., min_length=1)
+    summary: str = Field(..., min_length=1, max_length=100_000)
     involved_character_ids: list[int] = Field(default_factory=list)
 
 
@@ -190,7 +190,7 @@ class PlotEventUpdate(BaseModel):
     chapter_id: int | None = Field(default=None, ge=1)
     chapter_index: int | None = Field(default=None, ge=0)
     event_type: str | None = Field(default=None, max_length=64)
-    summary: str | None = None
+    summary: str | None = Field(default=None, max_length=100_000)
     involved_character_ids: list[int] | None = None
 
 

@@ -19,11 +19,31 @@ import os
 # backend/DB.
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://stub:stub@localhost/stub")
 os.environ.setdefault("REDIS_URL", "redis://localhost:16379/0")
+os.environ.setdefault("API_KEYS", '["test-key"]')
 
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+
+
+@pytest.fixture(autouse=True)
+def fake_chat_rate_limit_redis(monkeypatch):
+    """Keep API tests independent from the external Redis deployment."""
+    class FakeRedis:
+        def __init__(self) -> None:
+            self.counts: dict[str, int] = {}
+
+        async def incr(self, key: str) -> int:
+            self.counts[key] = self.counts.get(key, 0) + 1
+            return self.counts[key]
+
+        async def expire(self, key: str, seconds: int) -> None:
+            return None
+
+    fake = FakeRedis()
+    monkeypatch.setattr("app.api._deps.get_redis", lambda: fake)
+    return fake
 
 
 @pytest.fixture(scope="session")
@@ -50,7 +70,11 @@ async def async_app_client() -> AsyncClient:
     from app.main import app
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"X-API-Key": "test-key"},
+    ) as c:
         yield c
 
 

@@ -19,7 +19,7 @@ import logging
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api._deps import owner_key_hash, require_api_key as _require_api_key
+from app.api._deps import owner_key_hash, require_api_key
 from app.db.session import get_db
 from app.schemas.chat import StageConfig
 from app.schemas.document import ChapterReorderRequest

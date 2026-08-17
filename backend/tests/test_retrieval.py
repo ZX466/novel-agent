@@ -41,9 +41,10 @@ NOVEL_ID = 42
 
 @pytest.mark.asyncio
 async def test_retrieve_merges_and_sorts_by_score_desc(mock_session):
-    """4 collections, each returning one row. Verify merged + sorted."""
+    """5 collections, each returning one row. Verify merged + sorted."""
     # Distances: chapter=0.1 (score=0.9), character=0.5 (score=0.5),
-    # world=0.3 (score=0.7), plot=0.2 (score=0.8).
+    # world=0.3 (score=0.7→0.75 boosted), plot=0.2 (score=0.8),
+    # knowledge=0.3 (score=0.7→0.75 boosted).
     mock_session.set_execute_results([
         _FakeResult(rows=[_ch_row(1, 0.1)]),       # chapters
         _FakeResult(rows=[_c_row(2, 0.5)]),         # characters
@@ -57,12 +58,16 @@ async def test_retrieve_merges_and_sorts_by_score_desc(mock_session):
                               "summary": "s",
                               "involved_character_ids": []})(), 0.2),
         ]),
+        _FakeResult(rows=[                                          # knowledge_docs
+            (type("KD", (), {"id": 5, "title": "lore.md", "chunk_index": 0,
+                              "content": "y"})(), 0.3),
+        ]),
     ])
 
     with patch.object(retrieval, "embed_text", AsyncMock(return_value=[0.0] * 1536)):
         hits = await retrieval.retrieve(mock_session, "query", novel_id=NOVEL_ID)
 
-    assert len(hits) == 4
+    assert len(hits) == 5
     assert all(isinstance(h, RetrievalHit) for h in hits)
     # Sorted descending by score.
     scores = [h.score for h in hits]
@@ -71,6 +76,13 @@ async def test_retrieve_merges_and_sorts_by_score_desc(mock_session):
     assert hits[0].entity_type == "chapter"
     assert hits[0].entity_id == 1
     assert pytest.approx(hits[0].score, abs=1e-6) == 0.9
+    # World-building sources get the setting-priority boost.
+    ws = next(h for h in hits if h.entity_type == "world_setting")
+    kd = next(h for h in hits if h.entity_type == "knowledge_doc")
+    assert pytest.approx(ws.score, abs=1e-6) == 0.75
+    assert pytest.approx(kd.score, abs=1e-6) == 0.75
+    assert kd.entity_id == 5
+    assert kd.payload["title"] == "lore.md"
 
 
 @pytest.mark.asyncio
@@ -82,6 +94,7 @@ async def test_retrieve_drops_hits_beyond_max_distance(mock_session):
         _FakeResult(rows=[]),                        # characters
         _FakeResult(rows=[]),                        # world_settings
         _FakeResult(rows=[]),                        # plot_events
+        _FakeResult(rows=[]),                        # knowledge_docs
     ])
     with patch.object(retrieval, "embed_text", AsyncMock(return_value=[0.0] * 1536)):
         hits = await retrieval.retrieve(mock_session, "q", novel_id=NOVEL_ID)
@@ -94,6 +107,7 @@ async def test_retrieve_score_clamped_to_zero_at_distance_one(mock_session):
     # Only chapters collection has a hit; others return empty.
     mock_session.set_execute_results([
         _FakeResult(rows=[_ch_row(1, 1.0)]),
+        _FakeResult(rows=[]),
         _FakeResult(rows=[]),
         _FakeResult(rows=[]),
         _FakeResult(rows=[]),
@@ -162,7 +176,7 @@ async def test_retrieve_plot_events_single_collection(mock_session):
 
 @pytest.mark.asyncio
 async def test_retrieve_runs_searches_concurrently_when_bound(mock_session):
-    """When the session exposes a `bind`, the 4 collections are searched on
+    """When the session exposes a `bind`, the 5 collections are searched on
     dedicated short-lived sessions (concurrently) instead of the caller's."""
     from unittest.mock import AsyncMock, patch
 
@@ -192,14 +206,19 @@ async def test_retrieve_runs_searches_concurrently_when_bound(mock_session):
         def __call__(self):
             return _FakeSession()
 
+    async def _fake_search_kn(session, *a, **k):
+        used_sessions.append(session)
+        return []
+
     with patch.object(retrieval, "embed_text", AsyncMock(return_value=[0.0] * 1536)), \
             patch.object(retrieval, "_search_one", side_effect=_fake_search_one), \
+            patch.object(retrieval, "_search_knowledge", side_effect=_fake_search_kn), \
             patch.object(retrieval, "async_sessionmaker", _FakeMaker):
         hits = await retrieval.retrieve(mock_session, "q", novel_id=NOVEL_ID)
 
     assert hits == []
-    # All 4 searches used fresh sessions, never the caller's mock_session.
-    assert len(used_sessions) == 4
+    # All 5 searches used fresh sessions, never the caller's mock_session.
+    assert len(used_sessions) == 5
     assert all(s is not mock_session for s in used_sessions)
 
 

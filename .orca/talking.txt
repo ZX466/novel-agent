@@ -4,6 +4,24 @@
 
 ## Current State
 
+✅ **Round 4 全部合并到 main 并推送双远程（2026-08-17，tip `9adc965`）**。F1/F3/F4/F6 + 体验完善全部落地；全量测试 **640 passed / 1 skipped / 0 failed**（stub 测试库已升级到 e5f6a7b8c9d0）。
+
+## 合并记录（Round 4）
+
+- `6df7a03` kilo（F3 导出 / F6 统计 / F1 协议设计，7f9137f 复核通过）
+- `1710937` opencode（F4 知识库，Codex 终审通过；迁移 e5f6a7b8c9d0）
+- `3d8061e` cline（README/QUICKSTART Round 4 文档 + EPUB 依赖评估）
+- `9adc965` pi（PERFORMANCE-BUDGET-R4 性能预算）
+- 前端：显示设置 35bc365 / F6 看板 4f518b3 / F3 导出 91f0b24 / F1 编剧 57b57dd / 专注按钮 06b6857
+
+## 剩余（下一轮）
+
+- **F1 后端实现**：task_type=assistant 的 pipeline/chat 逻辑（协议已批准、前端已就绪）→ 建议派 kilo（chat.py）实现
+- F4 follow-up：magic bytes / 每 owner 限流 / 配额（本地单机非阻塞）
+- 生产上线：配置 API_KEYS + alembic upgrade head + owner_key_hash 回填
+
+
+
 🟡 **Round 4 已分配（2026-08-17）**：F1 AI 对话助手 + F3 作品导出 + F4 本地知识库 + F6 写作统计看板 + 原有功能写作体验完善。各 Agent 行动队列已写入其工作树。
 
 ## Action Queue（Claude — 前端/体验/逻辑/主协调）

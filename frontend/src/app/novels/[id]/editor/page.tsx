@@ -1035,6 +1035,8 @@ export default function NovelEditorPage() {
             onThemeChange={setTheme}
             findOpen={findOpen}
             onToggleFind={() => setFindOpen((v) => !v)}
+            focusActive={focusMode}
+            onToggleFocus={() => setFocusMode((v) => !v)}
             onOpenHistory={() => setHistoryOpen(true)}
           />
         </section>

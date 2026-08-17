@@ -12,6 +12,9 @@ interface EditorToolbarProps {
   /** Show/hide the find & replace panel. */
   findOpen: boolean;
   onToggleFind: () => void;
+  /** Focus mode (hide sidebars) state + toggle. */
+  focusActive: boolean;
+  onToggleFocus: () => void;
   /** Version history button. */
   onOpenHistory: () => void;
 }
@@ -23,6 +26,8 @@ export function EditorToolbar({
   onThemeChange,
   findOpen,
   onToggleFind,
+  focusActive,
+  onToggleFocus,
   onOpenHistory,
 }: EditorToolbarProps) {
   return (
@@ -48,6 +53,21 @@ export function EditorToolbar({
 
       {/* Theme selector */}
       <ThemeSwitcher theme={theme} onChange={onThemeChange} />
+
+      {/* Focus mode */}
+      <ToolbarIcon
+        icon={
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 3h6l-2 2-2 2" />
+            <path d="M21 3h-6l2 2 2 2" />
+            <path d="M3 21h6l-2-2-2-2" />
+            <path d="M21 21h-6l2-2 2-2" />
+          </svg>
+        }
+        active={focusActive}
+        onClick={onToggleFocus}
+        title="专注模式 (Ctrl+Shift+F)"
+      />
 
       {/* Find & replace */}
       <ToolbarIcon

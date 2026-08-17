@@ -21,6 +21,16 @@ import { WorldSettingPanel } from "@/components/WorldSettingPanel";
 import PlotEventPanel from "@/components/PlotEventPanel";
 import { AIToolPanel } from "@/components/AIToolPanel";
 import { FormatToolbar } from "@/components/FormatToolbar";
+import {
+  DEFAULT_DISPLAY,
+  DISPLAY_FONT_SIZES,
+  DISPLAY_LINE_HEIGHTS,
+  DISPLAY_WIDTHS,
+  EditorDisplaySettings,
+  loadDisplay,
+  saveDisplay,
+  type EditorDisplay,
+} from "@/components/EditorDisplaySettings";
 import { EditorToolbar, FindReplaceBar } from "@/components/EditorToolbar";
 import { VersionHistoryDialog, saveSnapshot } from "@/components/VersionHistoryDialog";
 import { extractEntitiesFromOutline } from "@/lib/extract-entities";
@@ -67,6 +77,15 @@ export default function NovelEditorPage() {
     if (typeof window === "undefined") return "dark";
     return (localStorage.getItem("project11:theme") as "dark" | "light" | "eye-care") || "dark";
   });
+  // Editor display comfort settings (font size / line height / width).
+  // Deterministic default for SSR; the stored value is loaded after mount.
+  const [display, setDisplay] = useState<EditorDisplay>(DEFAULT_DISPLAY);
+  useEffect(() => {
+    setDisplay(loadDisplay());
+  }, []);
+  useEffect(() => {
+    saveDisplay(display);
+  }, [display]);
   const [findOpen, setFindOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -895,10 +914,20 @@ export default function NovelEditorPage() {
           {editor && (activeChapter || chapters.length > 0) && (
             <>
               <FormatToolbar editor={editor} />
-              <div className="flex-1 overflow-y-auto px-sp-8 py-sp-6" style={{ background: "var(--bg-warm)" }}>
+              <div className="flex-1 overflow-y-auto px-sp-8 py-sp-6 relative" style={{ background: "var(--bg-warm)" }}>
+                {/* Display comfort settings (font / line-height / width) */}
+                <div className="absolute top-sp-2 right-sp-3 z-20">
+                  <EditorDisplaySettings display={display} onChange={setDisplay} />
+                </div>
                 <div
-                  className="mx-auto font-editor text-[17px] leading-[1.8] max-w-[680px]"
-                  style={{ color: "var(--fg-secondary)", caretColor: "var(--accent)" }}
+                  className="mx-auto font-editor"
+                  style={{
+                    color: "var(--fg-secondary)",
+                    caretColor: "var(--accent)",
+                    fontSize: DISPLAY_FONT_SIZES[display.fontSize],
+                    lineHeight: DISPLAY_LINE_HEIGHTS[display.lineHeight],
+                    maxWidth: DISPLAY_WIDTHS[display.width],
+                  }}
                 >
                   <EditorContent editor={editor} />
                 </div>

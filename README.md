@@ -103,7 +103,10 @@ docker info         # 应显示 Server 信息（Docker Desktop 已启动）
 ### 步骤 1：启动本地数据库（Docker 容器）
 
 ```powershell
-# 在项目根目录，启动 PostgreSQL 16 + pgvector 和 Redis 两个容器
+# 在项目根目录，首次先创建容器密钥（强密码，.env 不入库）
+Copy-Item .env.example .env
+
+# 启动 PostgreSQL 16 + pgvector 和 Redis 两个容器
 docker compose -f docker-compose.local.yml up -d
 
 # 验证两个容器都 healthy
@@ -112,6 +115,7 @@ docker ps
 ```
 
 > 首次启动会自动拉取镜像（如网络慢，可配置 Docker 镜像加速器）。数据持久化在 Docker 卷 `pg_data` / `redis_data`，删除容器不丢数据。
+> **安全**：容器密码必须来自根目录 `.env`（≥20 字符，无默认弱密码，缺失即启动失败）；端口仅绑定 `127.0.0.1`（防局域网暴露）。后端 `.env` 的 `DATABASE_URL`/`REDIS_URL` 须使用与根目录 `.env` 相同的密码。
 
 ### 步骤 2：配置后端环境
 

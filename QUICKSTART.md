@@ -21,16 +21,19 @@ ssh -N -L 5432:localhost:5432 -L 16379:localhost:16379 user@<服务器IP>
 
 ```powershell
 cd 项目根目录
+Copy-Item .env.example .env         # 首用：创建容器密钥（强密码，.env 不入库）
 docker compose -f docker-compose.local.yml up -d        # 起容器
 docker compose -f docker-compose.local.yml ps           # 确认 healthy
 docker compose -f docker-compose.local.yml down         # 停止（数据保存在卷中）
 ```
 
-后端 `.env` 指向本机即可：
+> 容器密码**必须**来自根目录 `.env`（`POSTGRES_PASSWORD` / `REDIS_PASSWORD`，≥20 字符），缺失时 compose 直接失败；端口仅绑定 127.0.0.1。
+
+后端 `.env` 用与根目录 `.env` 相同的密码指向本机即可：
 
 ```ini
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/project11
-REDIS_URL=redis://:project11-redis@localhost:16379/0
+DATABASE_URL=postgresql+asyncpg://postgres:<POSTGRES_PASSWORD>@localhost:5432/project11
+REDIS_URL=redis://:<REDIS_PASSWORD>@localhost:16379/0
 ```
 
 > 生产/默认方式是方式 A。方式 B 是腾讯云到期或断网时的本地兜底，保证开发不中断。

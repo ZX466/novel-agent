@@ -15,3 +15,7 @@
 - QUICKSTART.md + backend/docs/CONFIG-REVIEW.md merged; README entry linked.
 - Reviewed Pi (pass) and Codex cd6d985 (approve; both pre-merge blockers resolved on main).
 - Post-merge suite: 610 passed / 1 skipped / 0 failed.
+## Action Queue (Round 4 — 2026-08-17)
+
+- [P2] **文档同步**：F3 导出格式 / F4 知识库使用 / F6 统计看板的说明更新进 QUICKSTART + README
+- [P2] **依赖评估**：EPUB 生成所需 Python 库（如 ebooks/weasyprint）可行性 + 加入 pyproject 的建议

@@ -8,11 +8,18 @@
 
 ## Action Queue（Claude — 前端/体验/逻辑/主协调）
 
-- [P1] **F1 AI 对话助手前端**：新增"AI 编剧"对话界面（多轮消息 + 章节/大纲上下文注入 + 结果可插入正文），复用 /v1/chat 或按 kilo 接口设计；需与 kilo 对齐协议
-- [P1] **F3 导出入口**：作品页/编辑器加导出按钮（md/txt/epub），下载触发对接 kilo 端点
-- [P1] **F6 统计看板 UI**：字数曲线 / 连续天数 / 今日目标，数据源 kilo /v1/stats/dashboard
-- [P1] **原有功能体验完善**（重点：写作体验感与舒适度）：编辑器字体/行距/夜间护眼、专注模式增强、自动保存反馈、打字机/逐字回显、快捷键体系
+- [x] **体验完善**：编辑器显示设置（字号/行距/宽度 + 持久化）— 35bc365
+- [x] **F6 统计看板 UI**：/stats 页面 + SVG 曲线 + 每日目标（等 kilo 接口）— 4f518b3；接口契约已发 kilo 板
+- [x] **F3 导出入口**：编辑器内 md/txt/epub 导出菜单 + downloadExport — 91f0b24（等 kilo 端点）
+- [ ] **F1 AI 对话助手前端**：待 kilo 对话协议（设计进行中）后实现多轮对话界面
+- [ ] **体验完善（续）**：专注模式可见按钮、逐字回显增强、快捷键体系完善
 - [P2] 主协调 + 评审 kilo（导出/统计/对话协议）+ 复核 cline 文档
+
+## Codex Security Handoff
+
+- F4 upload security specification: `backend/docs/UPLOAD-SECURITY-SPEC.md`. opencode must implement and request Codex review only after API-boundary tests pass.
+- Required upload controls: allowlisted type plus magic bytes, bounded 10 MiB file/20 MiB request, generated filename, owner-key parent scope, nh3 sanitization, no outbound fetches, cleanup, rate/quota limits, and generic errors.
+- Multi-turn Chat review: retain per-key rate limits and aggregate 100-message/100K-character caps; additionally validate roles, bound `parts`, reject unknown roles, and keep routing/system/tool instructions server-controlled.
 
 ## 已分配（各 Agent）
 

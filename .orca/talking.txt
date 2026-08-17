@@ -4,26 +4,36 @@
 
 ## Current State
 
-Merge preparation. Codex security fixes (`cd6d985`) and opencode cache isolation review are complete and pushed to both remotes.
+✅ **全部 5 个分支已合并到 main 并推送双远程**（2026-08-17）。三轮任务 + 交叉评审 + 阻塞修复全部闭环，合并后全量测试 610 passed / 1 skipped / 0 failed，运行时冒烟通过（鉴权 201/201/200/204）。
 
-## Action Queue
+## 合并记录
 
-- [P1][Claude] Apply the compose security review: bind local PostgreSQL/Redis ports to `127.0.0.1`, require non-default secrets from `.env`, and update local deployment guidance.
-- [P1][Claude] Prepare the merge sequence: Codex -> opencode -> kilo -> Pi -> cline. Resolve the Alembic head before merging: `c4d5e6f7a8b9` must be rebased from `a1b2c3d4e5f6` to `b7c4e1f09a12`, or merged explicitly.
-- [P2][Claude] Review kilo (`c0d1661`) and cline documentation deliverables.
-- [x] [P2][cline] Review Codex security commit `cd6d985`; report the conclusion here and in the Codex board. DONE — verdict: approve with 2 blockers.
-- [x] [P1][Claude] BLOCKER B frontend X-API-Key 兼容 — RESOLVED（见下，浏览器实测 200）。
-- [ ] [P1][Claude] BLOCKER A Alembic 双头修复（c4d5e6f7a8b9 down_revision -> b7c4e1f09a12）+ owner_key_hash 回填。
-- [ ] [P1][Claude] compose 安全落地（端口绑 127.0.0.1 + .env 强密码）。
+- `9c3882e` Merge ZX466/codex（安全修复 + owner_key_hash 迁移）
+- `e1b4d89` Merge ZX466/opencode（RAG 并发 + 缓存隔离）
+- `96bcfac` Merge ZX466/kilo（错误模型统一 + /v1/health）
+- `9c8be45` Merge ZX466/pi（过滤下推 + 降频）
+- `52ee7b7` Merge ZX466/cline（QUICKSTART + CONFIG-REVIEW）
+- `e3f6f97` fix: 合并后修复（alembic 双头 down_revision -> b7c4e1f09a12 / chapters import / nh3 依赖）
+- `2f86dd1` fix: 前端 X-API-Key owner 鉴权头 + 设置字段（BLOCKER B）
+- 推送：origin (GitHub) + gitee 均至 `e3f6f97`
 
-## cline Review Findings on Codex `cd6d985` (for merge decision)
+## Action Queue（全部完成）
 
-- **BLOCKER A (Alembic double-head)** — confirmed via `alembic heads`: `c4d5e6f7a8b9` sits on `a1b2c3d4e5f6` while current head is `b7c4e1f09a12`. Already tracked above; must be resolved before merge.
-- **BLOCKER B (frontend auth compatibility)** — RESOLVED (2026-08-16, Claude frontend domain): SettingsDialog 新增「网站鉴权 Key」字段（localStorage `novel-agent.api-key`）；Chat / AIToolPanel / extract-entities / documents / chapters / characters / plot-events / world-settings 全部请求自动携带 `X-API-Key`（`ownerAuthHeaders()`）。已通过浏览器实测：/v1/documents 带 `x-api-key` 头 -> 后端 200。顺带修复 frontend/.env.local UTF-16 编码导致 NEXT_PUBLIC_BACKEND_URL 失效的问题。
-- Non-blocking: limiter bursts 2x at window edges; Redis outage fail-closes chat (acceptable); consider adding `CHAT_RATE_LIMIT_PER_MINUTE` examples to `.env.example`.
+- [x] [P1] BLOCKER B 前端 X-API-Key -- 已解决，实测 200
+- [x] [P1] BLOCKER A Alembic 双头 -- 已解决（down_revision -> b7c4e1f09a12，`alembic heads` 单一）
+- [x] [P1] 合并序列 codex -> opencode -> kilo -> Pi -> cline -- 全部完成
+- [x] [P1] 双远程推送 -- GitHub + Gitee 均成功
+- [x] [P2] 评审 kilo（c0d1661 已并入，测试通过）+ 复核 cline 交付物（QUICKSTART/CONFIG-REVIEW 已并入）
+- [ ] [P2] compose 安全落地（127.0.0.1 端口绑定 + .env 强密码）-- 待下轮（Codex 审查意见）
+- [ ] [P2] owner_key_hash 数据回填说明 -- 生产上线时按清单执行
+
+## 运维要点
+
+- 生产部署须配置 `API_KEYS`（JSON 数组）+ `alembic upgrade head`
+- 本地开发：`.env` 已加 `API_KEYS=["local-dev-key"]`（不入库）
+- owner_key_hash 回填：`UPDATE documents SET owner_key_hash = encode(sha256('<api_key>'),'hex') WHERE <归属条件>;`
 
 ## Merge Notes
 
-- Production requires `API_KEYS` and `alembic upgrade head`.
-- Existing documents require an owner-key-hash backfill before tenant-scoped access can be restored.
-- Opencode embedding cache isolation is approved. Non-blocking follow-up: encode cache identity with an unambiguous canonical representation and validate BYOK `api_base` before cache lookup.
+- Opencode embedding cache isolation approved（非阻塞 follow-up：缓存 identity 规范编码 + BYOK api_base 校验）
+- 限流窗口边缘 2x 突发可接受；Redis 故障 fail-closed 503（可接受）

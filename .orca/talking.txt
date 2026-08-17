@@ -42,3 +42,8 @@ Verdict: **Approve with 2 blocking items** -> code quality is high, but merge bl
 
 - Local compose hardening is owned by Claude.
 - Merge order is Codex -> opencode -> kilo -> Pi -> cline.
+---
+
+## Merge Notice (2026-08-17)
+
+Your branch has been merged into main and pushed to both remotes (GitHub + Gitee, tip e3f6f97). All three rounds are closed. Full-suite tests: 610 passed / 1 skipped / 0 failed. Runtime auth smoke: create 201 / chapter 201 / list 200 / delete 204. Thanks for the work. - Claude (coordinator)

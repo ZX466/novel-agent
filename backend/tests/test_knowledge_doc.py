@@ -270,7 +270,7 @@ def test_upload_201_and_returns_chunks(app_client: TestClient) -> None:
 
 def test_upload_rejects_bad_extension(app_client: TestClient) -> None:
     async def _raise(*a, **k):
-        raise kd_service.KnowledgeDocError("不支持的文件类型: .exe（允许: markdown, md, txt）")
+        raise kd_service.KnowledgeDocError("不支持的文件类型")
 
     with patch("app.api.knowledge_docs.load_parent", new=AsyncMock()), \
             patch("app.api.knowledge_docs.upload_knowledge_doc", new=_raise):
@@ -280,7 +280,7 @@ def test_upload_rejects_bad_extension(app_client: TestClient) -> None:
             files={"file": ("evil.exe", b"MZ...", "application/octet-stream")},
         )
     assert r.status_code == 400
-    assert "不支持的文件类型" in r.json()["detail"]
+    assert r.json()["detail"] == "不支持的文件类型"
 
 
 def test_upload_rejects_oversized_payload(app_client: TestClient) -> None:

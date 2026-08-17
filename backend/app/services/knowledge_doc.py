@@ -115,9 +115,9 @@ async def upload_knowledge_doc(
     dot = filename.rfind(".")
     ext = filename[dot + 1 :].lower() if dot != -1 else ""
     if ext not in allowed:
-        raise KnowledgeDocError(
-            f"不支持的文件类型: .{ext or '无扩展名'}（允许: {', '.join(sorted(allowed))}）"
-        )
+        # Generic client message — never disclose the allowlist or the
+        # rejected extension (info-leak hygiene, Codex F4 review).
+        raise KnowledgeDocError("不支持的文件类型")
 
     if len(content) > settings.knowledge_upload_max_bytes:
         raise KnowledgeDocError(

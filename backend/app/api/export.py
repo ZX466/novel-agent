@@ -23,6 +23,15 @@ logger = logging.getLogger(__name__)
 _MIMETYPE = "application/epub+zip"
 
 
+def _xml_escape(value: str) -> str:
+    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&apos;")
+
+
+def _safe_chapter_filename(index: int, title: str) -> str:
+    safe = _xml_escape(title.strip()).replace("/", "-").replace("\\", "-")[:64] or f"chapter-{index:03d}"
+    return f"chapter-{index:03d}-{safe}.xhtml"
+
+
 def _build_markdown(doc_title: str, chapters: list[ChapterListItem]) -> str:
     lines: list[str] = [f"# {doc_title}", ""]
     for ch in chapters:
@@ -82,12 +91,13 @@ p { text-indent: 2em; margin: 0; }
 
         for idx, ch in enumerate(chapters, start=1):
             file_id = f"chapter-{idx:03d}"
-            file_name = _chapter_filename(idx, ch.title)
+            file_name = _safe_chapter_filename(idx, ch.title)
+            escaped_title = _xml_escape(ch.title)
             manifest_items.append(f'    <item id="{file_id}" href="{file_name}" media-type="application/xhtml+xml"/>')
             spine_items.append(f'    <itemref idref="{file_id}"/>')
-            toc_points.append(f'      <navPoint id="{file_id}" playOrder="{idx}"><navLabel><text>{ch.title}</text></navLabel><content src="{file_name}"/></navPoint>')
+            toc_points.append(f'      <navPoint id="{file_id}" playOrder="{idx}"><navLabel><text>{escaped_title}</text></navLabel><content src="{file_name}"/></navPoint>')
 
-            body_parts = [f"<h1>{ch.title}</h1>"]
+            body_parts = [f"<h1>{escaped_title}</h1>"]
             if ch.content_text:
                 for paragraph in ch.content_text.split("\n"):
                     escaped = paragraph.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -101,7 +111,7 @@ p { text-indent: 2em; margin: 0; }
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
   <link rel="stylesheet" type="text/css" href="styles.css"/>
-  <title>{ch.title}</title>
+  <title>{escaped_title}</title>
 </head>
 <body>
 {chr(10).join(body_parts)}
@@ -110,11 +120,12 @@ p { text-indent: 2em; margin: 0; }
 """
             zf.writestr(f"OEBPS/{file_name}", xhtml.encode("utf-8"))
 
+        escaped_doc_title = _xml_escape(doc_title)
         content_opf = f"""<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="book-id">novel-export</dc:identifier>
-    <dc:title>{doc_title}</dc:title>
+    <dc:title>{escaped_doc_title}</dc:title>
     <dc:language>zh</dc:language>
     <meta property="dcterms:modified">2026-01-01T00:00:00Z</meta>
   </metadata>
@@ -141,7 +152,7 @@ p { text-indent: 2em; margin: 0; }
     <meta name="dtb:totalPageCount" content="0"/>
     <meta name="dtb:maxPageNumber" content="0"/>
   </head>
-  <docTitle><text>{doc_title}</text></docTitle>
+  <docTitle><text>{escaped_doc_title}</text></docTitle>
   <navMap>
 {chr(10).join(toc_points)}
   </navMap>

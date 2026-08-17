@@ -7,6 +7,7 @@ from sqlalchemy import cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.document import Document
+from app.models.chapter import Chapter
 
 
 async def get_dashboard_stats(session: AsyncSession) -> dict:
@@ -19,30 +20,48 @@ async def get_dashboard_stats(session: AsyncSession) -> dict:
 
     daily_stmt = (
         select(
-            cast(Document.updated_at, Date).label("day"),
+            cast(Document.updated_at, date).label("day"),
             func.sum(Document.word_count).label("word_count"),
         )
         .where(
             Document.updated_at >= thirty_days_ago,
             Document.status == "active",
         )
-        .group_by(cast(Document.updated_at, Date))
+        .group_by(cast(Document.updated_at, date))
     )
     result = await session.execute(daily_stmt)
     daily_map = {row.day: int(row.word_count or 0) for row in result.all()}
 
-    curve: list[dict] = []
+    daily_words: list[dict] = []
     for i in range(29, -1, -1):
         d = today - timedelta(days=i)
-        curve.append({"date": d.isoformat(), "word_count": daily_map.get(d, 0)})
+        daily_words.append({"date": d.isoformat(), "words": daily_map.get(d, 0)})
 
-    today_word_count = daily_map.get(today, 0)
-    consecutive_days = _compute_consecutive_days(daily_map.keys(), today)
+    today_words = daily_map.get(today, 0)
+    streak_days = _compute_consecutive_days(daily_map.keys(), today)
+
+    totals = await session.execute(
+        select(
+            func.count(Document.id).label("docs"),
+            func.count(Chapter.id).label("chapters"),
+            func.coalesce(func.sum(Document.word_count), 0).label("words"),
+        )
+        .select_from(Document)
+        .outerjoin(Chapter, Chapter.novel_id == Document.id)
+        .where(Document.status == "active")
+    )
+    totals_row = totals.one()
+    total_documents = int(totals_row.docs or 0)
+    total_chapters = int(totals_row.chapters or 0)
+    total_words = int(totals_row.words or 0)
 
     return {
-        "today_word_count": today_word_count,
-        "consecutive_days": consecutive_days,
-        "curve": curve,
+        "total_documents": total_documents,
+        "total_chapters": total_chapters,
+        "total_words": total_words,
+        "streak_days": streak_days,
+        "today_words": today_words,
+        "daily_words": daily_words,
     }
 
 

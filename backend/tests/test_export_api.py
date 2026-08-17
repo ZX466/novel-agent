@@ -92,3 +92,35 @@ def test_export_epub_zip_container(app_client: TestClient) -> None:
 def test_export_requires_api_key(app_client: TestClient) -> None:
     r = app_client.get("/v1/documents/1/export", params={"format": "md"})
     assert r.status_code == 422
+
+
+def test_export_epub_escapes_special_chars_in_titles(app_client: TestClient) -> None:
+    create = app_client.post(
+        "/v1/documents",
+        json={"title": 'A & B <C> "D" \'E\''},
+        headers=_AUTH,
+    )
+    assert create.status_code == 201
+    doc_id = create.json()["id"]
+
+    app_client.post(
+        f"/v1/documents/{doc_id}/chapters",
+        json={"chapter_index": 0, "title": 'Ch & <X> "Y" \'Z\'' , "content_text": "body"},
+        headers=_AUTH,
+    )
+
+    r = app_client.get(f"/v1/documents/{doc_id}/export", params={"format": "epub"}, headers=_AUTH)
+    assert r.status_code == 200
+
+    data = BytesIO(r.content)
+    with zipfile.ZipFile(data) as zf:
+        opf = zf.read("OEBPS/content.opf").decode("utf-8")
+        assert "<dc:title>A &amp; B &lt;C&gt; &quot;D&quot; &apos;E&apos;</dc:title>" in opf
+
+        toc = zf.read("OEBPS/toc.ncx").decode("utf-8")
+        assert "<text>A &amp; B &lt;C&gt; &quot;D&quot; &apos;E&apos;</text>" in toc
+
+        chapter_name = [n for n in zf.namelist() if n.startswith("OEBPS/chapter-") and n.endswith(".xhtml")][0]
+        chapter_xml = zf.read(chapter_name).decode("utf-8")
+        assert "<h1>Ch &amp; &lt;X&gt; &quot;Y&quot; &apos;Z&apos;</h1>" in chapter_xml
+        assert "<title>Ch &amp; &lt;X&gt; &quot;Y&quot; &apos;Z&apos;</title>" in chapter_xml

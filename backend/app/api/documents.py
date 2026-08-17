@@ -38,6 +38,7 @@ from app.services.document import (
     restore_document,
     update_document,
 )
+from app.api._deps import owner_key_hash, require_api_key as _require_api_key
 
 router = APIRouter(prefix="/v1/documents", tags=["documents"])
 
@@ -69,6 +70,7 @@ async def get_documents(
         category=category,
         search=search,
         status=status_filter,
+        owner_key_hash=owner_key_hash(api_key),
     )
     return DocumentListResponse(items=items, total=total)  # type: ignore[arg-type]
 
@@ -85,7 +87,7 @@ async def post_document(
     api_key: str = Depends(require_api_key),
 ) -> DocumentRead:
     """Create a new document. Returns 201 with Location header."""
-    doc = await create_document(session, payload)
+    doc = await create_document(session, payload, owner_key_hash=owner_key_hash(api_key))
     response.headers["Location"] = f"/v1/documents/{doc.id}"
     return doc  # type: ignore[return-value]
 
@@ -98,9 +100,9 @@ async def get_document_endpoint(
 ) -> DocumentRead:
     """Return full document by ID. 404 if missing (or soft-deleted)."""
     try:
-        return await get_document(session, doc_id)  # type: ignore[return-value]
+        return await get_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))  # type: ignore[return-value]
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
 
 
 @router.patch("/{doc_id}", response_model=DocumentRead)
@@ -112,9 +114,9 @@ async def patch_document_endpoint(
 ) -> DocumentRead:
     """Partial update. Bumps version. 404 if missing."""
     try:
-        return await update_document(session, doc_id, payload)  # type: ignore[return-value]
+        return await update_document(session, doc_id, payload, owner_key_hash=owner_key_hash(api_key))  # type: ignore[return-value]
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
 
 
 @router.delete("/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -125,9 +127,9 @@ async def delete_document_endpoint(
 ) -> Response:
     """Soft-delete by ID (moves to 回收站, recoverable). 204 on success."""
     try:
-        await delete_document(session, doc_id)
+        await delete_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -139,9 +141,9 @@ async def restore_document_endpoint(
 ) -> DocumentRead:
     """Restore a soft-deleted document from the 回收站."""
     try:
-        return await restore_document(session, doc_id)  # type: ignore[return-value]
+        return await restore_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))  # type: ignore[return-value]
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
 
 
 @router.delete(
@@ -155,7 +157,7 @@ async def permanent_delete_document_endpoint(
 ) -> Response:
     """Permanently remove the document. Irreversible."""
     try:
-        await permanent_delete_document(session, doc_id)
+        await permanent_delete_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

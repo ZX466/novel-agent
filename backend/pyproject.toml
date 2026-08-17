@@ -1,0 +1,37 @@
+[project]
+name = "project11-backend"
+version = "0.1.0"
+description = "Project11 AI 小说创作平台后端 — 三阶段 LLM 流水线 + BYOK + RAG"
+requires-python = ">=3.11"
+dependencies = [
+    # Web framework
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    # LLM orchestration
+    "langgraph>=0.6",
+    "litellm<1.91",
+    # Database
+    "sqlalchemy[asyncio]>=2.0.30",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
+    "pgvector>=0.3",
+    # Cache / queue
+    "redis>=5.0",
+    # Config
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    # HTTP client (used by litellm + tests)
+    "httpx>=0.27",
+    # HTML sanitization (nh3) for content_html
+    "nh3>=0.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.uv]
+package = false

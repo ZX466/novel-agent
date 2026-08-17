@@ -19,7 +19,7 @@ import logging
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api._deps import require_api_key
+from app.api._deps import owner_key_hash, require_api_key
 from app.db.session import get_db
 from app.schemas.chat import StageConfig
 from app.schemas.document import ChapterReorderRequest
@@ -65,14 +65,14 @@ async def _extract_embedding_stage(
     return None
 
 
-async def _load_parent(session: AsyncSession, doc_id: int) -> None:
+async def _load_parent(session: AsyncSession, doc_id: int, api_key: str) -> None:
     """Ensure the parent document exists and is not soft-deleted.
 
     Chapter operations are blocked on a deleted work to avoid silent edits
     to 回收站 items. Raises 404 if missing or deleted.
     """
     try:
-        await get_document(session, doc_id)
+        await get_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))
     except DocumentNotFound:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -86,7 +86,7 @@ async def list_chapters_endpoint(
     api_key: str = Depends(require_api_key),
 ) -> ChapterListResponse:
     """List chapters of a document, ordered by chapter_index ascending."""
-    await _load_parent(session, doc_id)
+    await _load_parent(session, doc_id, api_key)
     items, total = await list_chapters(
         session, novel_id=doc_id, limit=limit, offset=offset
     )
@@ -114,7 +114,7 @@ async def create_chapter_endpoint(
     When X-Provider-Config carries an ``embedding`` stage, it overrides
     .env EMBEDDING_* credentials for the auto-embedding of this chapter.
     """
-    await _load_parent(session, doc_id)
+    await _load_parent(session, doc_id, api_key)
     payload = payload.model_copy(update={"novel_id": doc_id})
     ch = await create_chapter(session, payload, stage_config=embedding_stage)
     response.headers["Location"] = f"/v1/documents/{doc_id}/chapters/{ch.id}"
@@ -131,7 +131,7 @@ async def update_chapter_endpoint(
     embedding_stage: StageConfig | None = Depends(_extract_embedding_stage),
 ) -> ChapterRead:
     """Partial update a chapter. 404 if missing."""
-    await _load_parent(session, doc_id)
+    await _load_parent(session, doc_id, api_key)
     try:
         ch = await update_chapter(
             session, chapter_id, payload, stage_config=embedding_stage,
@@ -151,7 +151,7 @@ async def delete_chapter_endpoint(
     api_key: str = Depends(require_api_key),
 ) -> Response:
     """Delete a chapter. 204 on success."""
-    await _load_parent(session, doc_id)
+    await _load_parent(session, doc_id, api_key)
     try:
         existing = await get_chapter(session, chapter_id)
     except ChapterNotFound:
@@ -175,7 +175,7 @@ async def reorder_chapters_endpoint(
     index to each chapter (within this document only) and returns the full
     re-ordered list.
     """
-    await _load_parent(session, doc_id)
+    await _load_parent(session, doc_id, api_key)
     ordered = [(item.id, item.chapter_index) for item in payload.chapters]
     try:
         items = await reorder_chapters(session, novel_id=doc_id, ordered=ordered)

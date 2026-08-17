@@ -24,6 +24,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.document import Document, STATUS_ACTIVE, STATUS_DELETED
 from app.schemas.document import DocumentCreate, DocumentUpdate
 
+_ALLOWED_HTML_TAGS = {
+    "a", "blockquote", "br", "code", "del", "em", "h1", "h2", "h3",
+    "h4", "h5", "h6", "hr", "img", "li", "ol", "p", "pre", "s",
+    "span", "strong", "sub", "sup", "table", "tbody", "td", "th",
+    "thead", "tr", "u", "ul",
+}
+_ALLOWED_HTML_ATTRIBUTES = {
+    "a": {"href", "target", "title"},
+    "img": {"alt", "height", "src", "title", "width"},
+    "span": {"class"},
+    "table": {"class"},
+    "td": {"colspan", "rowspan"},
+    "th": {"colspan", "rowspan"},
+}
+
+
+def sanitize_content_html(content_html: str) -> str:
+    """Persist only safe rich-text markup; remove scripts, handlers and unsafe URLs."""
+    import nh3
+
+    return nh3.clean(
+        content_html,
+        tags=_ALLOWED_HTML_TAGS,
+        attributes=_ALLOWED_HTML_ATTRIBUTES,
+        url_schemes={"http", "https", "mailto"},
+    )
+
 
 _CJK_RE = re.compile(r"[一-鿿㐀-䶿豈-﫿]")
 
@@ -60,6 +87,7 @@ async def list_documents(
     category: str | None = None,
     search: str | None = None,
     status: str | None = None,
+    owner_key_hash: str | None = None,
 ) -> tuple[list[Document], int]:
     """Returns (items, total_count) ordered by most-recently-updated first.
 
@@ -72,6 +100,8 @@ async def list_documents(
     effective_status = status or STATUS_ACTIVE
 
     conditions = []
+    if owner_key_hash is not None:
+        conditions.append(Document.owner_key_hash == owner_key_hash)
     if doc_type:
         conditions.append(Document.doc_type == doc_type)
     if category:
@@ -94,7 +124,8 @@ async def list_documents(
 
 
 async def get_document(
-    session: AsyncSession, doc_id: int, *, include_deleted: bool = False
+    session: AsyncSession, doc_id: int, *, include_deleted: bool = False,
+    owner_key_hash: str | None = None,
 ) -> Document:
     """Returns the document or raises DocumentNotFound.
 
@@ -102,6 +133,8 @@ async def get_document(
     the caller explicitly asks for it (e.g. restore preview).
     """
     stmt = select(Document).where(Document.id == doc_id)
+    if owner_key_hash is not None:
+        stmt = stmt.where(Document.owner_key_hash == owner_key_hash)
     if not include_deleted:
         stmt = stmt.where(Document.status == STATUS_ACTIVE)
     doc = await session.scalar(stmt)
@@ -111,12 +144,13 @@ async def get_document(
 
 
 async def create_document(
-    session: AsyncSession, payload: DocumentCreate
+    session: AsyncSession, payload: DocumentCreate, *, owner_key_hash: str = ""
 ) -> Document:
     """Creates a new document. Commits."""
     doc = Document(
+        owner_key_hash=owner_key_hash,
         title=payload.title,
-        content_html=payload.content_html,
+        content_html=sanitize_content_html(payload.content_html),
         content_text=payload.content_text,
         doc_type=payload.doc_type,
         category=payload.category,
@@ -132,15 +166,18 @@ async def create_document(
 
 
 async def update_document(
-    session: AsyncSession, doc_id: int, payload: DocumentUpdate
+    session: AsyncSession, doc_id: int, payload: DocumentUpdate,
+    *, owner_key_hash: str | None = None,
 ) -> Document:
     """Partial update via model_dump(exclude_unset=True). Bumps version.
     Commits. Raises DocumentNotFound if missing.
 
     Recomputes word_count when content_text changes.
     """
-    doc = await get_document(session, doc_id)
+    doc = await get_document(session, doc_id, owner_key_hash=owner_key_hash)
     updates = payload.model_dump(exclude_unset=True)
+    if "content_html" in updates and updates["content_html"] is not None:
+        updates["content_html"] = sanitize_content_html(updates["content_html"])
     content_changed = "content_text" in updates
     for field, value in updates.items():
         setattr(doc, field, value)
@@ -153,29 +190,29 @@ async def update_document(
     return doc
 
 
-async def delete_document(session: AsyncSession, doc_id: int) -> None:
+async def delete_document(session: AsyncSession, doc_id: int, *, owner_key_hash: str | None = None) -> None:
     """Soft-deletes the document (status='deleted'). Commits.
 
     Idempotent: if already deleted, this is a no-op. Raises
     DocumentNotFound if the id does not exist at all.
     """
-    doc = await get_document(session, doc_id, include_deleted=True)
+    doc = await get_document(session, doc_id, include_deleted=True, owner_key_hash=owner_key_hash)
     if doc.status != STATUS_DELETED:
         doc.status = STATUS_DELETED
         await session.commit()
 
 
-async def restore_document(session: AsyncSession, doc_id: int) -> Document:
+async def restore_document(session: AsyncSession, doc_id: int, *, owner_key_hash: str | None = None) -> Document:
     """Restores a soft-deleted document. Commits. Raises DocumentNotFound."""
-    doc = await get_document(session, doc_id, include_deleted=True)
+    doc = await get_document(session, doc_id, include_deleted=True, owner_key_hash=owner_key_hash)
     doc.status = STATUS_ACTIVE
     await session.commit()
     await session.refresh(doc)
     return doc
 
 
-async def permanent_delete_document(session: AsyncSession, doc_id: int) -> None:
+async def permanent_delete_document(session: AsyncSession, doc_id: int, *, owner_key_hash: str | None = None) -> None:
     """Permanently removes the document row. Commits. Raises DocumentNotFound."""
-    doc = await get_document(session, doc_id, include_deleted=True)
+    doc = await get_document(session, doc_id, include_deleted=True, owner_key_hash=owner_key_hash)
     await session.delete(doc)
     await session.commit()

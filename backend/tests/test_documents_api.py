@@ -4,8 +4,8 @@ Service layer is mocked with AsyncMock — no database required. Verifies
 HTTP status codes, headers, response shape, and routing logic only; the
 real DB round-trip is covered by E2E manual testing (see plan).
 
-Every endpoint requires the `X-API-Key` header (see
-`app.api.documents._require_api_key`), so each request passes `headers=_AUTH`.
+Every endpoint requires the `X-API-Key` header (via the shared
+`app.api._deps.require_api_key` dependency), so each request passes `headers=_AUTH`.
 The header is deliberately NOT baked into the shared `app_client` fixture:
 that fixture is session-scoped and shared with other test modules, and a
 default header there would mask auth regressions.
@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 
 from app.services.document import DocumentNotFound
 
-# Any non-empty key is accepted by _require_api_key and used as the owner scope.
+# Any non-empty key is accepted by require_api_key and used as the owner scope.
 _AUTH = {"X-API-Key": "test-key"}
 
 
@@ -156,10 +156,10 @@ def test_delete_returns_404_for_missing(app_client: TestClient) -> None:
 
 
 # --- Auth contract -----------------------------------------------------------
-# These lock in the behavior of `app.api.documents._require_api_key`: the
-# header is declared `Header(...)` (required), so FastAPI rejects a missing
-# header during request validation, while a present-but-blank value reaches
-# the dependency body and is rejected as unauthorized.
+# These lock in the behavior of the shared `app.api._deps.require_api_key`
+# dependency: the header is declared `Header(...)` (required), so FastAPI
+# rejects a missing header during request validation, while a present-but-blank
+# value reaches the dependency body and is rejected as unauthorized.
 
 
 def test_missing_api_key_returns_422(app_client: TestClient) -> None:

@@ -20,6 +20,7 @@ from app.services.chapter import (
     get_chapter,
     get_chapter_by_index,
     list_chapters,
+    reorder_chapters,
     update_chapter,
     update_chapter_embedding,
 )
@@ -174,3 +175,31 @@ async def test_delete_chapter_raises_not_found(mock_session):
     mock_session.set_scalar_results([None])
     with pytest.raises(ChapterNotFound):
         await delete_chapter(mock_session, 1)
+
+
+@pytest.mark.asyncio
+async def test_reorder_chapters_single_query_and_sorts(mock_session):
+    """Reorder must load chapters with ONE query (IN clause), not one per row."""
+    from tests.conftest import _FakeResult
+
+    ch1 = Chapter(id=1, chapter_index=1, title="A", novel_id=5)
+    ch2 = Chapter(id=2, chapter_index=2, title="B", novel_id=5)
+    mock_session.set_execute_results([_FakeResult(scalars=[ch1, ch2])])
+
+    ordered = await reorder_chapters(
+        mock_session, novel_id=5, ordered=[(2, 1), (1, 2)]
+    )
+
+    assert mock_session._execute_idx == 1  # single IN query, no per-row fetch
+    assert mock_session.commits == 1
+    assert ordered[0].id == 2 and ordered[0].chapter_index == 1
+    assert ordered[1].id == 1 and ordered[1].chapter_index == 2
+
+
+@pytest.mark.asyncio
+async def test_reorder_chapters_raises_when_missing(mock_session):
+    from tests.conftest import _FakeResult
+
+    mock_session.set_execute_results([_FakeResult(scalars=[])])
+    with pytest.raises(ChapterNotFound):
+        await reorder_chapters(mock_session, novel_id=5, ordered=[(1, 1)])

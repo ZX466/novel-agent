@@ -49,7 +49,7 @@ async def retrieve_endpoint(
         if et not in _VALID_ENTITY_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid entity_type: {et}",
+                detail=f"无效的实体类型: {et}",
             )
 
     hits = await retrieve(

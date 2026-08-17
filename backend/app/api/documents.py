@@ -102,7 +102,7 @@ async def get_document_endpoint(
     try:
         return await get_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))  # type: ignore[return-value]
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
 
 
 @router.patch("/{doc_id}", response_model=DocumentRead)
@@ -116,7 +116,7 @@ async def patch_document_endpoint(
     try:
         return await update_document(session, doc_id, payload, owner_key_hash=owner_key_hash(api_key))  # type: ignore[return-value]
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
 
 
 @router.delete("/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -129,7 +129,7 @@ async def delete_document_endpoint(
     try:
         await delete_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -143,7 +143,7 @@ async def restore_document_endpoint(
     try:
         return await restore_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))  # type: ignore[return-value]
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
 
 
 @router.delete(
@@ -159,5 +159,5 @@ async def permanent_delete_document_endpoint(
     try:
         await permanent_delete_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

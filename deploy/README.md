@@ -36,7 +36,7 @@ docker compose exec postgres psql -U postgres -d project11 -c "CREATE EXTENSION 
 docker compose exec backend alembic upgrade head
 
 # 6. 验证
-curl http://localhost/health   # 应返回 {"status":"ok"}
+curl http://localhost/v1/health   # 应返回 {"status":"ok"}
 ```
 
 ## HTTPS（可选）

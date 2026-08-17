@@ -26,7 +26,7 @@ async def require_api_key(
     if not key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or empty X-API-Key header",
+            detail="缺少或空的 X-API-Key 头",
         )
     if not settings.api_keys:
         logger.error("X-API-Key authentication is not configured")
@@ -98,7 +98,7 @@ async def load_parent(session: AsyncSession, doc_id: int, *, owner_hash: str | N
     try:
         await get_document(session, doc_id, owner_key_hash=owner_hash)
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
 
 
 async def extract_embedding_stage(

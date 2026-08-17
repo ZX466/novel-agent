@@ -284,7 +284,7 @@ uv sync              # 重新构建
 |------|------|------|
 | POST | `/v1/chat` | 流式聊天（SSE），支持 task_type 路由 |
 | POST | `/v1/chat/test` | 连接测试，验证 API Key 和模型 |
-| GET | `/health` | 健康检查 |
+| GET | `/v1/health` | 健康检查 |
 | CRUD | `/v1/documents/...` | 文档管理 |
 | CRUD | `/v1/documents/{id}/chapters/...` | 章节管理 |
 | CRUD | `/v1/documents/{id}/characters/...` | 角色管理 |
@@ -299,7 +299,7 @@ uv sync              # 重新构建
 | 项 | 期望 |
 |---|---|
 | `docker compose -f docker-compose.local.yml ps` | 两个容器均 healthy |
-| `curl http://localhost:8000/health` | `{"status":"ok"}` |
+| `curl http://localhost:8000/v1/health` | `{"status":"ok"}` |
 | 浏览器 http://localhost:7421 | 显示小说编辑器界面 |
 | 配置 BYOK → 测试连接 | 显示 ✅ 连接成功 |
 | 点击"续写" | ~1-2 秒后文字逐字出现，带闪烁光标 |

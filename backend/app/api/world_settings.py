@@ -94,9 +94,9 @@ async def get_world_setting_endpoint(
     try:
         ws = await get_world_setting(session, ws_id)
     except WorldSettingNotFound:
-        raise HTTPException(status_code=404, detail="World setting not found")
+        raise HTTPException(status_code=404, detail="世界设定不存在")
     if ws.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="World setting not found")
+        raise HTTPException(status_code=404, detail="世界设定不存在")
     return ws  # type: ignore[return-value]
 
 
@@ -116,9 +116,9 @@ async def update_world_setting_endpoint(
             session, ws_id, payload, stage_config=embedding_stage,
         )
     except WorldSettingNotFound:
-        raise HTTPException(status_code=404, detail="World setting not found")
+        raise HTTPException(status_code=404, detail="世界设定不存在")
     if ws.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="World setting not found")
+        raise HTTPException(status_code=404, detail="世界设定不存在")
     return ws  # type: ignore[return-value]
 
 
@@ -134,8 +134,8 @@ async def delete_world_setting_endpoint(
     try:
         existing = await get_world_setting(session, ws_id)
     except WorldSettingNotFound:
-        raise HTTPException(status_code=404, detail="World setting not found")
+        raise HTTPException(status_code=404, detail="世界设定不存在")
     if existing.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="World setting not found")
+        raise HTTPException(status_code=404, detail="世界设定不存在")
     await delete_world_setting(session, ws_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

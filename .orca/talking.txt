@@ -4,19 +4,32 @@
 
 ## Current State
 
-✅ 三轮任务 + 合并 + 安全加固全部闭环（2026-08-17）。main 已推送双远程（tip `a71b9aa`），各 Agent 分支已提交并同步 gitee。全部工作树 talking.txt 已精简为待命状态。
+🟡 **Round 4 已分配（2026-08-17）**：F1 AI 对话助手 + F3 作品导出 + F4 本地知识库 + F6 写作统计看板 + 原有功能写作体验完善。各 Agent 行动队列已写入其工作树。
 
-## Action Queue
+## Action Queue（Claude — 前端/体验/逻辑/主协调）
 
-（无 — 等待下一轮任务分配）
+- [P1] **F1 AI 对话助手前端**：新增"AI 编剧"对话界面（多轮消息 + 章节/大纲上下文注入 + 结果可插入正文），复用 /v1/chat 或按 kilo 接口设计；需与 kilo 对齐协议
+- [P1] **F3 导出入口**：作品页/编辑器加导出按钮（md/txt/epub），下载触发对接 kilo 端点
+- [P1] **F6 统计看板 UI**：字数曲线 / 连续天数 / 今日目标，数据源 kilo /v1/stats/dashboard
+- [P1] **原有功能体验完善**（重点：写作体验感与舒适度）：编辑器字体/行距/夜间护眼、专注模式增强、自动保存反馈、打字机/逐字回显、快捷键体系
+- [P2] 主协调 + 评审 kilo（导出/统计/对话协议）+ 复核 cline 文档
+
+## 已分配（各 Agent）
+
+| Agent | 任务 |
+|-------|------|
+| **kilo** | F3 导出端点 / F6 统计接口 / F1 对话协议（评审: Claude） |
+| **opencode** | F4 知识库表+迁移+分块 embedding+检索合并+端点（评审: Codex） |
+| **Codex** | F4 上传安全规格+评审 opencode / 对话安全适配（评审: cline） |
+| **Pi** | F1/F6 性能预算 + 编辑器大文档流畅度建议 |
+| **cline** | 文档同步（导出/知识库/统计）+ EPUB 依赖评估 |
 
 ## 运维要点
 
-- 生产部署：配置 `API_KEYS`（JSON 数组）+ `alembic upgrade head` + owner_key_hash 数据回填
-- 本地容器：根目录 `.env` 提供强密码（≥20 字符，缺失即失败）；端口仅绑 127.0.0.1
-- 合并后测试：610 passed / 1 skipped / 0 failed
+- 生产部署：配置 `API_KEYS` + `alembic upgrade head` + owner_key_hash 回填
+- 本地容器：根目录 `.env` 强密码；端口仅绑 127.0.0.1
+- 测试基线：610 passed / 1 skipped / 0 failed
 
-## 合并记录（简）
+## 合并记录（前轮简）
 
-- 5 分支全部并入 main：codex `9c3882e` / opencode `e1b4d89` / kilo `96bcfac` / pi `9c8be45` / cline `52ee7b7`；修复 `e3f6f97`（alembic 双头 + nh3）；compose 加固 `643166a`；前端 X-API-Key `2f86dd1`
-- `70d5144` feat: 全局 NavBar night/light 背景切换（前端域）
+- 5 分支并入 main（codex/opencode/kilo/pi/cline）+ 修复 e3f6f97 + compose 643166a + X-API-Key 2f86dd1 + 主题切换 70d5144 + hydration 修复 5ede83d + 测试连接 8e0f4a9

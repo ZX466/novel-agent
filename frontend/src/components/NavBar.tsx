@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { SettingsDialog } from "@/components/SettingsDialog";
 
 const THEME_STORAGE_KEY = "project11:theme";
 
 function getStoredDark(): boolean {
-  if (typeof window === "undefined") return true;
   const t = window.localStorage.getItem(THEME_STORAGE_KEY);
   // Default (:root) is dark; eye-care is a light-toned theme.
   return t === null || t === "dark";
@@ -17,10 +16,8 @@ function getStoredDark(): boolean {
 
 function applyTheme(dark: boolean): void {
   const next = dark ? "dark" : "light";
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(THEME_STORAGE_KEY, next);
-    document.documentElement.dataset.theme = next;
-  }
+  window.localStorage.setItem(THEME_STORAGE_KEY, next);
+  document.documentElement.dataset.theme = next;
 }
 
 const NAV_ITEMS = [
@@ -31,7 +28,13 @@ const NAV_ITEMS = [
 export function NavBar() {
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [isDark, setIsDark] = useState<boolean>(getStoredDark);
+  // Deterministic initial value (matches SSR) to avoid hydration mismatch;
+  // the real stored theme is read after mount below.
+  const [isDark, setIsDark] = useState<boolean>(true);
+
+  useEffect(() => {
+    setIsDark(getStoredDark());
+  }, []);
 
   return (
     <nav

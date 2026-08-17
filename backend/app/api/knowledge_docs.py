@@ -12,6 +12,9 @@ it is never rendered as HTML.
 """
 from __future__ import annotations
 
+import logging
+from datetime import datetime, timezone
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -28,6 +31,7 @@ from app.api._deps import (
     owner_key_hash,
     require_api_key,
 )
+from app.core.redis import get_redis
 from app.db.session import get_db
 from app.config import settings
 from app.schemas.knowledge_doc import (
@@ -45,6 +49,48 @@ from app.services.knowledge_doc import (
 
 router = APIRouter(prefix="/v1/documents/{doc_id}/knowledge", tags=["knowledge"])
 
+logger = logging.getLogger(__name__)
+
+# Known binary signatures — plain-text knowledge uploads must never match
+# these (defense in depth beyond the extension whitelist, Codex F4 review).
+_BINARY_MAGIC_PREFIXES = (
+    b"%PDF",  # PDF
+    b"PK\x03\x04",  # ZIP / docx / epub
+    b"\x89PNG",  # PNG
+    b"\xff\xd8\xff",  # JPEG
+    b"GIF8",  # GIF
+    b"MZ",  # PE executable
+    b"\x7fELF",  # ELF
+    b"\x00\x00\x00\x18ftyp",  # MP4
+    b"ID3",  # MP3
+)
+
+
+def _looks_like_binary(content: bytes) -> bool:
+    """True if the payload starts with a known binary magic signature."""
+    head = content[:8]
+    return any(head.startswith(sig) for sig in _BINARY_MAGIC_PREFIXES)
+
+
+async def _enforce_upload_rate_limit(owner: str) -> None:
+    """Per-owner upload rate limit (Redis). Fail-open on Redis outage to keep
+    uploads usable locally, consistent with the chat limiter."""
+    window_seconds = 60
+    key = f"rate-limit:knowledge:{owner}:{int(datetime.now(timezone.utc).timestamp() // window_seconds)}"
+    try:
+        redis = get_redis()
+        count = await redis.incr(key)
+        if count == 1:
+            await redis.expire(key, window_seconds)
+    except Exception as exc:  # noqa: BLE001 — Redis down: fail-open
+        logger.error("Knowledge rate limiter unavailable: %s", type(exc).__name__)
+        return
+    if count > settings.knowledge_upload_rate_per_minute:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="上传过于频繁，请稍后再试",
+        )
+
 
 @router.post("", response_model=KnowledgeUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_knowledge(
@@ -57,12 +103,20 @@ async def upload_knowledge(
     """Upload a text file (md/markdown/txt) to the work's knowledge base."""
     await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
 
+    await _enforce_upload_rate_limit(owner_key_hash(api_key))
+
     max_bytes = settings.knowledge_upload_max_bytes
     content = await file.read(max_bytes + 1)
     if len(content) > max_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"文件过大（上限 {max_bytes} 字节）",
+        )
+    if _looks_like_binary(content):
+        # Generic message — never disclose what binary types are rejected.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不支持的文件类型",
         )
     filename = file.filename or ""
     try:

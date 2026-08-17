@@ -109,6 +109,17 @@ class Settings(BaseSettings):
         le=4000,
         description="Target chunk length (characters) when splitting uploaded text.",
     )
+    knowledge_upload_rate_per_minute: int = Field(
+        default=20,
+        ge=1,
+        le=10_000,
+        description="Per-owner knowledge uploads allowed per minute (Redis-backed).",
+    )
+    knowledge_quota_bytes: int = Field(
+        default=5 * 1024 * 1024,
+        ge=1024,
+        description="Maximum total knowledge bytes per novel (storage quota).",
+    )
 
     # --- Database ---
     database_url: str = Field(..., description="postgresql+asyncpg://...")

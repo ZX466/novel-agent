@@ -134,6 +134,19 @@ async def upload_knowledge_doc(
     if not chunks:
         raise KnowledgeDocError("文件内容为空")
 
+    # Storage quota (Codex F4 follow-up): reject uploads that would push the
+    # novel's knowledge base past the per-novel byte quota.
+    used_stmt = (
+        select(func.coalesce(func.sum(func.length(KnowledgeDoc.content)), 0))
+        .where(KnowledgeDoc.novel_id == novel_id)
+        .where(KnowledgeDoc.owner_key_hash == owner_key_hash)
+    )
+    used = (await session.execute(used_stmt)).scalar_one() or 0
+    if used + len(content) > settings.knowledge_quota_bytes:
+        raise KnowledgeDocError(
+            f"知识库容量已达上限（每作品 {settings.knowledge_quota_bytes} 字节）"
+        )
+
     vectors = await embed_batch(chunks, stage_config=stage_config)
     rows = [
         KnowledgeDoc(

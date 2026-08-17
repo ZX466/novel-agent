@@ -125,6 +125,10 @@ class _FakeResult:
             return self._rows
         return self._scalars
 
+    def scalar_one(self):
+        """Return the first scalar, or None when empty (for SUM/COUNT queries)."""
+        return self._scalars[0] if self._scalars else None
+
 
 class MockAsyncSession:
     """Minimal async-session double for service-layer tests.

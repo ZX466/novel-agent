@@ -132,6 +132,36 @@ async def test_upload_chunks_embeds_and_persists(mock_session, monkeypatch):
     assert len(mock_session.added) == 2
 
 
+@pytest.mark.asyncio
+async def test_upload_enforces_quota(mock_session, monkeypatch):
+    monkeypatch.setattr(settings, "knowledge_quota_bytes", 1000)
+    # Existing usage is already 900 bytes → a 200-byte file crosses the quota.
+    mock_session.set_execute_results([_FakeResult(scalars=[900])])
+    with pytest.raises(kd_service.KnowledgeDocError, match="容量已达上限"):
+        await kd_service.upload_knowledge_doc(
+            mock_session, novel_id=7, filename="lore.md",
+            content=("设定" * 100).encode("utf-8"), owner_key_hash="h",
+        )
+    assert mock_session.commits == 0  # nothing persisted on quota rejection
+
+
+# ===========================================================================
+# upload magic-byte sniff (API layer, Codex F4 follow-up)
+# ===========================================================================
+
+
+def test_looks_like_binary_rejects_known_magic():
+    from app.api.knowledge_docs import _looks_like_binary
+
+    assert _looks_like_binary(b"%PDF-1.7 ...") is True
+    assert _looks_like_binary(b"PK\x03\x04...zip") is True
+    assert _looks_like_binary(b"\x89PNG\r\n\x1a\n") is True
+    assert _looks_like_binary(b"MZ\x90\x00") is True
+    assert _looks_like_binary(b"hello world") is False
+    assert _looks_like_binary("第一章 设定".encode("utf-8")) is False
+
+
+
 # ===========================================================================
 # list / delete (service)
 # ===========================================================================

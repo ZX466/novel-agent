@@ -4,36 +4,18 @@
 
 ## Current State
 
-✅ **全部 5 个分支已合并到 main 并推送双远程**（2026-08-17）。三轮任务 + 交叉评审 + 阻塞修复全部闭环，合并后全量测试 610 passed / 1 skipped / 0 failed，运行时冒烟通过（鉴权 201/201/200/204）。
+✅ 三轮任务 + 合并 + 安全加固全部闭环（2026-08-17）。main 已推送双远程（tip `a71b9aa`），各 Agent 分支已提交并同步 gitee。全部工作树 talking.txt 已精简为待命状态。
 
-## 合并记录
+## Action Queue
 
-- `9c3882e` Merge ZX466/codex（安全修复 + owner_key_hash 迁移）
-- `e1b4d89` Merge ZX466/opencode（RAG 并发 + 缓存隔离）
-- `96bcfac` Merge ZX466/kilo（错误模型统一 + /v1/health）
-- `9c8be45` Merge ZX466/pi（过滤下推 + 降频）
-- `52ee7b7` Merge ZX466/cline（QUICKSTART + CONFIG-REVIEW）
-- `e3f6f97` fix: 合并后修复（alembic 双头 down_revision -> b7c4e1f09a12 / chapters import / nh3 依赖）
-- `2f86dd1` fix: 前端 X-API-Key owner 鉴权头 + 设置字段（BLOCKER B）
-- 推送：origin (GitHub) + gitee 均至 `e3f6f97`
-
-## Action Queue（全部完成）
-
-- [x] [P1] BLOCKER B 前端 X-API-Key -- 已解决，实测 200
-- [x] [P1] BLOCKER A Alembic 双头 -- 已解决（down_revision -> b7c4e1f09a12，`alembic heads` 单一）
-- [x] [P1] 合并序列 codex -> opencode -> kilo -> Pi -> cline -- 全部完成
-- [x] [P1] 双远程推送 -- GitHub + Gitee 均成功
-- [x] [P2] 评审 kilo（c0d1661 已并入，测试通过）+ 复核 cline 交付物（QUICKSTART/CONFIG-REVIEW 已并入）
-- [x] [P2] compose 安全落地 -- 已交付（643166a：127.0.0.1 绑定 + .env 强密码必填 + protected-mode + 资源限制；本地容器已重建、密码已 ALTER 同步、冒烟通过）
-- [ ] [P2] owner_key_hash 数据回填说明 -- 生产上线时按清单执行
+（无 — 等待下一轮任务分配）
 
 ## 运维要点
 
-- 生产部署须配置 `API_KEYS`（JSON 数组）+ `alembic upgrade head`
-- 本地开发：`.env` 已加 `API_KEYS=["local-dev-key"]`（不入库）
-- owner_key_hash 回填：`UPDATE documents SET owner_key_hash = encode(sha256('<api_key>'),'hex') WHERE <归属条件>;`
+- 生产部署：配置 `API_KEYS`（JSON 数组）+ `alembic upgrade head` + owner_key_hash 数据回填
+- 本地容器：根目录 `.env` 提供强密码（≥20 字符，缺失即失败）；端口仅绑 127.0.0.1
+- 合并后测试：610 passed / 1 skipped / 0 failed
 
-## Merge Notes
+## 合并记录（简）
 
-- Opencode embedding cache isolation approved（非阻塞 follow-up：缓存 identity 规范编码 + BYOK api_base 校验）
-- 限流窗口边缘 2x 突发可接受；Redis 故障 fail-closed 503（可接受）
+- 5 分支全部并入 main：codex `9c3882e` / opencode `e1b4d89` / kilo `96bcfac` / pi `9c8be45` / cline `52ee7b7`；修复 `e3f6f97`（alembic 双头 + nh3）；compose 加固 `643166a`；前端 X-API-Key `2f86dd1`

@@ -114,6 +114,8 @@ class _FakeResult:
         self._scalars = scalars or []
         # `None` means "not set" — distinguishes from "set to empty list".
         self._rows = rows
+        # DML results expose a rowcount; non-DML queries leave it None.
+        self.rowcount: int | None = None
 
     def scalars(self):
         return self
@@ -185,6 +187,9 @@ class MockAsyncSession:
 
     def add(self, obj):
         self.added.append(obj)
+
+    def add_all(self, objs):
+        self.added.extend(objs)
 
 
 @pytest.fixture

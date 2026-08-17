@@ -9,6 +9,7 @@ import {
   emptyProviderConfig,
   isStageComplete,
   loadApiKey,
+  ownerAuthHeaders,
   saveApiKey,
 } from "@/lib/settings";
 import {
@@ -30,6 +31,35 @@ interface SettingsDialogProps {
 }
 
 const RISK_WARNING = "API Key 仅存储在本机浏览器 localStorage，请勿在公共电脑使用。";
+
+/**
+ * Turn a FastAPI error body into a readable message.
+ * FastAPI returns `detail` as a string (HTTPException) OR an array of
+ * validation-error objects (422). Naive `${detail}` renders "[object Object]".
+ */
+function describeApiError(data: unknown): string {
+  if (data == null) return "";
+  if (typeof data === "string") return data;
+  if (typeof data !== "object") return String(data);
+  const detail = (data as { detail?: unknown }).detail;
+  if (detail == null) return JSON.stringify(data);
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          const loc = (item as { loc?: unknown[] }).loc?.join(".");
+          const msg = (item as { msg?: unknown }).msg;
+          return loc && msg ? `${loc}: ${msg}` : String(msg ?? "");
+        }
+        return String(item);
+      })
+      .filter(Boolean);
+    return parts.join("；") || "请求参数错误";
+  }
+  return JSON.stringify(detail);
+}
 
 interface StageFormState {
   api_base: string;
@@ -513,7 +543,10 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                               try {
                                 const res = await fetch(`${backendUrl}/v1/chat/models`, {
                                   method: "POST",
-                                  headers: { "Content-Type": "application/json" },
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                    ...ownerAuthHeaders(),
+                                  },
                                   body: JSON.stringify({
                                     api_base: stageForm.api_base.trim(),
                                     api_key: stageForm.api_key.trim(),
@@ -524,7 +557,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                                 });
                                 const data = await res.json();
                                 if (!res.ok) {
-                                  alert(`❌ 拉取失败: ${data.detail || data.error || `HTTP ${res.status}`}`);
+                                  alert(`❌ 拉取失败: ${describeApiError(data) || `HTTP ${res.status}`}`);
                                   return;
                                 }
                                 const list: string[] = data.models ?? [];
@@ -626,6 +659,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                               method: "POST",
                               headers: {
                                 "Content-Type": "application/json",
+                                ...ownerAuthHeaders(),
                                 "X-Provider-Config": JSON.stringify({
                                   draft: { api_base, api_key, model },
                                   refine: { api_base, api_key, model },
@@ -636,7 +670,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                               body: JSON.stringify({ stage: stageKey }),
                             });
                             const data = await res.json();
-                            if (data.ok) {
+                            if (res.ok && data.ok) {
                               let msg = `✅ 连接成功！模型: ${data.model || model}`;
                               if (data.detected_dim !== undefined) {
                                 msg += `\n向量维度: ${data.detected_dim}`;
@@ -646,7 +680,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                               }
                               alert(msg);
                             } else {
-                              alert(`❌ 连接失败: ${data.error || data.detail || "未知错误"}`);
+                              alert(`❌ 连接失败: ${describeApiError(data) || "未知错误"}`);
                             }
                           } catch (err) {
                             alert(`❌ 连接失败: ${err instanceof Error ? err.message : "网络错误"}`);

@@ -1,35 +1,20 @@
-# Talking - Claude (Coordinator)
+# Talking - opencode (Data and Database)
 
 > Read `.orca/workflow` and `.orca/agent-registry.md` before acting.
 
 ## Current State
 
-🟡 **Round 4 已分配（2026-08-17）**：F1 AI 对话助手 + F3 作品导出 + F4 本地知识库 + F6 写作统计看板 + 原有功能写作体验完善。各 Agent 行动队列已写入其工作树。
+🔴 **Round 4 in progress** — F4 本地知识库 [P1] 已接受，执行中。
 
-## Action Queue（Claude — 前端/体验/逻辑/主协调）
+## Action Queue
 
-- [P1] **F1 AI 对话助手前端**：新增"AI 编剧"对话界面（多轮消息 + 章节/大纲上下文注入 + 结果可插入正文），复用 /v1/chat 或按 kilo 接口设计；需与 kilo 对齐协议
-- [P1] **F3 导出入口**：作品页/编辑器加导出按钮（md/txt/epub），下载触发对接 kilo 端点
-- [P1] **F6 统计看板 UI**：字数曲线 / 连续天数 / 今日目标，数据源 kilo /v1/stats/dashboard
-- [P1] **原有功能体验完善**（重点：写作体验感与舒适度）：编辑器字体/行距/夜间护眼、专注模式增强、自动保存反馈、打字机/逐字回显、快捷键体系
-- [P2] 主协调 + 评审 kilo（导出/统计/对话协议）+ 复核 cline 文档
+- [P1] **F4 本地知识库**（已接受 2026-08-17）：knowledge_docs 表 + alembic 迁移；上传分块(~800字)+embedding 入库；RAG 合并检索（小说设定优先）；上传/列表/删除端点；文件白名单与大小上限按 Codex 安全规格。
 
-## 已分配（各 Agent）
+## Handoff Notes
 
-| Agent | 任务 |
-|-------|------|
-| **kilo** | F3 导出端点 / F6 统计接口 / F1 对话协议（评审: Claude） |
-| **opencode** | F4 知识库表+迁移+分块 embedding+检索合并+端点（评审: Codex） |
-| **Codex** | F4 上传安全规格+评审 opencode / 对话安全适配（评审: cline） |
-| **Pi** | F1/F6 性能预算 + 编辑器大文档流畅度建议 |
-| **cline** | 文档同步（导出/知识库/统计）+ EPUB 依赖评估 |
+- RAG parallelism + embedding cache tenant isolation merged (b95280e + fix).
+- Non-blocking follow-up: canonical cache identity encoding + validate BYOK api_base before cache lookup.
+- Post-merge suite: 610 passed / 1 skipped / 0 failed.
+## Action Queue (Round 4 — 2026-08-17)
 
-## 运维要点
-
-- 生产部署：配置 `API_KEYS` + `alembic upgrade head` + owner_key_hash 回填
-- 本地容器：根目录 `.env` 强密码；端口仅绑 127.0.0.1
-- 测试基线：610 passed / 1 skipped / 0 failed
-
-## 合并记录（前轮简）
-
-- 5 分支并入 main（codex/opencode/kilo/pi/cline）+ 修复 e3f6f97 + compose 643166a + X-API-Key 2f86dd1 + 主题切换 70d5144 + hydration 修复 5ede83d + 测试连接 8e0f4a9
+- [P1] **F4 本地知识库**：新增 `knowledge_docs` 表（novel_id/title/content/chunk/embedding）+ alembic 迁移；上传文件分块（~800 字）+ embedding 入库；RAG 检索合并（小说设定优先）；上传/列表/删除端点。文件类型白名单与大小上限配合 Codex 安全规格。评审: Codex

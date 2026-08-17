@@ -11,6 +11,7 @@ import json
 import logging
 from typing import AsyncIterator
 
+import httpx
 import litellm
 import pytest
 
@@ -489,3 +490,93 @@ async def test_provider_config_header_redacts_keys_in_logs(
         assert "sk-leaked-in-header-xyz" not in msg, (
             f"Raw API key leaked in log: {msg}"
         )
+
+
+# --- POST /v1/chat/models (provider model list) ----------------------------
+
+
+class _FakeModelsResponse:
+    """Minimal stand-in for httpx.Response in the models endpoint."""
+
+    def __init__(self, status_code: int = 200, json_body: dict | None = None):
+        self.status_code = status_code
+        self._json = json_body or {}
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise httpx.HTTPStatusError(
+                f"status {self.status_code}", request=None, response=self  # type: ignore[arg-type]
+            )
+
+    def json(self):
+        return self._json
+
+
+@pytest.mark.asyncio
+async def test_models_endpoint_returns_sorted_ids(async_app_client, monkeypatch):
+    """POST /v1/chat/models returns the provider's model list, sorted."""
+
+    async def _fake_get(self, url, **kwargs):
+        assert "api.stepfun.com" in url
+        assert kwargs["headers"]["Authorization"].startswith("Bearer ")
+        return _FakeModelsResponse(
+            200,
+            {"data": [{"id": "step-3.7-flash"}, {"id": "step-3.5-flash"}, {"id": "step-3.5-flash"}]},
+        )
+
+    monkeypatch.setattr("httpx.AsyncClient.get", _fake_get)
+
+    resp = await async_app_client.post(
+        "/v1/chat/models",
+        json={"api_base": "https://api.stepfun.com/step_plan/v1", "api_key": "sk-test"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["models"] == ["step-3.5-flash", "step-3.7-flash"]
+    assert body["total"] == 2
+
+
+@pytest.mark.asyncio
+async def test_models_endpoint_rejects_bad_key(async_app_client, monkeypatch):
+    """401 from provider surfaces as a friendly 401, not a raw 502."""
+
+    async def _fake_get(self, url, **kwargs):
+        return _FakeModelsResponse(401, {"error": {"message": "bad key"}})
+
+    monkeypatch.setattr("httpx.AsyncClient.get", _fake_get)
+
+    resp = await async_app_client.post(
+        "/v1/chat/models",
+        json={"api_base": "https://api.stepfun.com/step_plan/v1", "api_key": "sk-bad"},
+    )
+    assert resp.status_code == 401
+    assert "API Key 无效" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_models_endpoint_rejects_empty_list(async_app_client, monkeypatch):
+    """Provider returning no models → 502 with a clear message."""
+
+    async def _fake_get(self, url, **kwargs):
+        return _FakeModelsResponse(200, {"data": []})
+
+    monkeypatch.setattr("httpx.AsyncClient.get", _fake_get)
+
+    resp = await async_app_client.post(
+        "/v1/chat/models",
+        json={"api_base": "https://api.stepfun.com/step_plan/v1", "api_key": "sk-x"},
+    )
+    assert resp.status_code == 502
+    assert "模型列表为空" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_models_endpoint_validates_ssrf(async_app_client):
+    """Private/internal api_base must be rejected before any outbound call."""
+
+    resp = await async_app_client.post(
+        "/v1/chat/models",
+        json={"api_base": "http://169.254.169.254/latest/meta-data", "api_key": "sk-x"},
+    )
+    assert resp.status_code == 400
+    assert "Blocked" in resp.json()["detail"] or "不允许" in resp.json()["detail"]

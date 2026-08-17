@@ -20,13 +20,20 @@ from app.services.chapter import (
     get_chapter,
     get_chapter_by_index,
     list_chapters,
+    reorder_chapters,
     update_chapter,
     update_chapter_embedding,
 )
 
 
 @pytest.mark.asyncio
-async def test_create_chapter_auto_computes_word_count(mock_session):
+async def test_create_chapter_auto_computes_word_count(mock_session, monkeypatch):
+    # Stub auto-embedding — the test targets CRUD, not the embedding API.
+    async def _noop_embed(*args, **kwargs):
+        return [0.0] * 8
+
+    monkeypatch.setattr("app.llm.embedding.embed_text", _noop_embed)
+
     payload = ChapterCreate(
         chapter_index=1,
         title="第一章",
@@ -37,7 +44,9 @@ async def test_create_chapter_auto_computes_word_count(mock_session):
     assert ch.status == "draft"
     assert mock_session.added == [ch]
     assert mock_session.commits == 1
-    assert mock_session.refreshes == 1
+    # create_chapter refreshes twice: once after flush, once post-commit
+    # (re-loads after the embedding flush expires updated_at).
+    assert mock_session.refreshes == 2
 
 
 @pytest.mark.asyncio
@@ -118,7 +127,13 @@ async def test_update_chapter_applies_sent_fields_only(mock_session):
 
 
 @pytest.mark.asyncio
-async def test_update_chapter_auto_updates_word_count_on_content_change(mock_session):
+async def test_update_chapter_auto_updates_word_count_on_content_change(mock_session, monkeypatch):
+    # Stub auto-embedding — the test targets word_count logic, not the API.
+    async def _noop_embed(*args, **kwargs):
+        return [0.0] * 8
+
+    monkeypatch.setattr("app.llm.embedding.embed_text", _noop_embed)
+
     ch = Chapter(id=1, chapter_index=1, title="x", content_text="abc", word_count=3)
     mock_session.set_scalar_results([ch])
 
@@ -160,3 +175,31 @@ async def test_delete_chapter_raises_not_found(mock_session):
     mock_session.set_scalar_results([None])
     with pytest.raises(ChapterNotFound):
         await delete_chapter(mock_session, 1)
+
+
+@pytest.mark.asyncio
+async def test_reorder_chapters_single_query_and_sorts(mock_session):
+    """Reorder must load chapters with ONE query (IN clause), not one per row."""
+    from tests.conftest import _FakeResult
+
+    ch1 = Chapter(id=1, chapter_index=1, title="A", novel_id=5)
+    ch2 = Chapter(id=2, chapter_index=2, title="B", novel_id=5)
+    mock_session.set_execute_results([_FakeResult(scalars=[ch1, ch2])])
+
+    ordered = await reorder_chapters(
+        mock_session, novel_id=5, ordered=[(2, 1), (1, 2)]
+    )
+
+    assert mock_session._execute_idx == 1  # single IN query, no per-row fetch
+    assert mock_session.commits == 1
+    assert ordered[0].id == 2 and ordered[0].chapter_index == 1
+    assert ordered[1].id == 1 and ordered[1].chapter_index == 2
+
+
+@pytest.mark.asyncio
+async def test_reorder_chapters_raises_when_missing(mock_session):
+    from tests.conftest import _FakeResult
+
+    mock_session.set_execute_results([_FakeResult(scalars=[])])
+    with pytest.raises(ChapterNotFound):
+        await reorder_chapters(mock_session, novel_id=5, ordered=[(1, 1)])

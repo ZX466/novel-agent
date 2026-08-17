@@ -46,13 +46,6 @@ _RETRY_BASE_DELAY = 2.0  # seconds; exponential backoff: 2s, 4s, 8s, 16s
 
 # --- SSRF protection ---------------------------------------------------------
 
-_BLOCKED_NETWORKS = [
-    ipaddress.ip_network("169.254.0.0/16"),   # link-local (cloud metadata)
-    ipaddress.ip_network("10.0.0.0/8"),        # RFC1918
-    ipaddress.ip_network("172.16.0.0/12"),     # RFC1918
-    ipaddress.ip_network("192.168.0.0/16"),    # RFC1918
-]
-
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
@@ -76,12 +69,12 @@ def _validate_api_base(url: str) -> None:
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:
-        # Hostname (e.g. api.openai.com) — DNS resolves at request time,
-        # we cannot pre-check. Allow; the network layer handles routing.
+        # The HTTP clients may be configured with a corporate proxy, so
+        # resolving here can incorrectly produce the proxy's local address.
+        # Hostname pinning belongs in the outbound transport configuration.
         return
-    for net in _BLOCKED_NETWORKS:
-        if ip in net:
-            raise ValueError(f"Blocked internal address: {host}")
+    if not ip.is_global:
+        raise ValueError(f"Blocked internal address: {host}")
 
 
 # --- API key redaction for logs ---------------------------------------------

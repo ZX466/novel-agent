@@ -36,6 +36,9 @@ class Document(Base):
     __tablename__ = "documents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # SHA-256 fingerprint of the API key that created this document. The raw
+    # credential is never persisted, but the fingerprint provides tenant scope.
+    owner_key_hash: Mapped[str] = mapped_column(String(64), nullable=False, default="", index=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     content_html: Mapped[str] = mapped_column(Text, nullable=False, default="")
     content_text: Mapped[str] = mapped_column(Text, nullable=False, default="")

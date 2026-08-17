@@ -15,11 +15,12 @@ sensitive (may contain story premises, character secrets).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.llm.embedding import embed_text
 from app.models.chapter import Chapter
@@ -55,16 +56,26 @@ async def _search_one(
     ORM instance must have `embedding`, `id`, and `novel_id` columns.
 
     The score is `(1 - cosine_distance)` clamped to [0, 1].
+
+    The `max_distance` filter is pushed down into the SQL WHERE clause
+    (pgvector supports `embedding <=> :q < :max` with HNSW index) so the
+    database scans only relevant rows before applying `LIMIT k`. Filtering
+    only in Python after `LIMIT k` could drop rows and return fewer than
+    `k` results.
+
+    A Python-side distance check is retained as a defensive backstop: it
+    guards against non-pgvector sessions / in-memory mocks that cannot
+    enforce the SQL predicate, while real PostgreSQL enforces it in SQL
+    and never returns out-of-range rows in the first place.
     """
     distance_expr = model.embedding.cosine_distance(query_embedding).label("distance")
-    stmt = (
-        select(model, distance_expr)
-        .where(model.embedding.is_not(None))
-        .order_by(distance_expr.asc())
-        .limit(k)
+    stmt = select(model, distance_expr).where(
+        model.embedding.is_not(None),
+        distance_expr < max_distance,
     )
     if novel_id is not None:
         stmt = stmt.where(model.novel_id == novel_id)
+    stmt = stmt.order_by(distance_expr.asc()).limit(k)
     result = await session.execute(stmt)
     hits: list[tuple[Any, float]] = []
     for row in result.all():
@@ -72,6 +83,8 @@ async def _search_one(
         if distance is None:
             continue
         if distance > max_distance:
+            # Defense in depth for non-pgvector sessions; real pgvector
+            # already excluded these rows in SQL.
             continue
         score = max(0.0, min(1.0, 1.0 - float(distance)))
         hits.append((instance, score))
@@ -142,22 +155,49 @@ async def retrieve(
         )
     query_embedding = await embed_text(query, stage_config=stage_config)
 
-    chapter_hits = await _search_one(
-        session, Chapter, query_embedding,
-        novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
-    )
-    character_hits = await _search_one(
-        session, Character, query_embedding,
-        novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
-    )
-    world_hits = await _search_one(
-        session, WorldSetting, query_embedding,
-        novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
-    )
-    event_hits = await _search_one(
-        session, PlotEvent, query_embedding,
-        novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
-    )
+    # Run the four collection searches. When the caller's session is bound to
+    # a real engine, each collection search opens its own short-lived
+    # read-only session and all four run concurrently. asyncpg cannot have two
+    # queries in flight on a single connection, so sharing the caller's one
+    # session would serialize the searches (or raise InterfaceError). Falls
+    # back to sequential on the caller's session when `bind` is unavailable
+    # (e.g. unit-test doubles without an engine).
+    bind = getattr(session, "bind", None)
+    if bind is not None:
+        maker = async_sessionmaker(
+            bind=bind, class_=AsyncSession,
+            expire_on_commit=False, autoflush=False,
+        )
+
+        async def _search(model: type) -> list[tuple[Any, float]]:
+            async with maker() as s:
+                return await _search_one(
+                    s, model, query_embedding,
+                    novel_id=novel_id, k=k_per_collection,
+                    max_distance=max_distance,
+                )
+
+        chapter_hits, character_hits, world_hits, event_hits = await asyncio.gather(
+            _search(Chapter), _search(Character),
+            _search(WorldSetting), _search(PlotEvent),
+        )
+    else:
+        chapter_hits = await _search_one(
+            session, Chapter, query_embedding,
+            novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
+        )
+        character_hits = await _search_one(
+            session, Character, query_embedding,
+            novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
+        )
+        world_hits = await _search_one(
+            session, WorldSetting, query_embedding,
+            novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
+        )
+        event_hits = await _search_one(
+            session, PlotEvent, query_embedding,
+            novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
+        )
 
     all_hits: list[RetrievalHit] = []
     for ch, score in chapter_hits:

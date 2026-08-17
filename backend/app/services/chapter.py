@@ -168,25 +168,31 @@ async def reorder_chapters(
 ) -> list[Chapter]:
     """Reassign chapter_index for a batch of chapters within one novel.
 
-    `ordered` is a list of (chapter_id, new_index) pairs. Loads each chapter
-    by id, verifies it belongs to `novel_id` (prevents cross-novel tampering),
-    sets the new index, and commits in one transaction. Returns the updated
-    chapters ordered by their new index.
+    `ordered` is a list of (chapter_id, new_index) pairs. Loads all chapters
+    in a single ``IN`` query, verifies each belongs to `novel_id` (prevents
+    cross-novel tampering), sets the new indices, and commits in one
+    transaction. Returns the updated chapters ordered by their new index.
 
     Raises ChapterNotFound if any id is missing.
     """
-    updated: list[Chapter] = []
-    index_by_id: dict[int, int] = {}
+    ids = [ch_id for ch_id, _new_index in ordered]
+    result = await session.execute(
+        select(Chapter).where(Chapter.id.in_(ids))
+    )
+    by_id: dict[int, Chapter] = {ch.id: ch for ch in result.scalars().all()}
+    if len(by_id) != len(ids):
+        for ch_id in ids:
+            if ch_id not in by_id:
+                raise ChapterNotFound(ch_id)
     for ch_id, new_index in ordered:
-        ch = await get_chapter(session, ch_id)
+        ch = by_id[ch_id]
         if ch.novel_id != novel_id:
             # Chapter exists but belongs to a different novel — refuse to
             # move it across novels via a reorder call.
             raise ChapterNotFound(ch_id)
         ch.chapter_index = new_index
-        index_by_id[ch_id] = new_index
-        updated.append(ch)
     await session.commit()
+    updated = list(by_id.values())
     for ch in updated:
         await session.refresh(ch)
     updated.sort(key=lambda c: c.chapter_index)

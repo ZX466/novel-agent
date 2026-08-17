@@ -1,7 +1,8 @@
 """Semantic retrieval endpoints for novel memory collections.
 
-Provides vector similarity search across chapters, characters, world settings,
-and plot events, scoped to a single document (novel).
+Provides vector similarity search across chapters, characters, world
+settings, plot events, and knowledge-base docs, scoped to a single
+document (novel).
 """
 from __future__ import annotations
 
@@ -20,12 +21,14 @@ router = APIRouter(prefix="/v1/documents/{doc_id}/retrieve", tags=["retrieval"])
 
 logger = logging.getLogger(__name__)
 
-_VALID_ENTITY_TYPES = {"chapter", "character", "world_setting", "plot_event"}
+_VALID_ENTITY_TYPES = {
+    "chapter", "character", "world_setting", "plot_event", "knowledge_doc",
+}
 
 
 class RetrievalRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000)
-    entity_types: list[str] = Field(default_factory=lambda: ["chapter", "character", "world_setting", "plot_event"])
+    entity_types: list[str] = Field(default_factory=lambda: ["chapter", "character", "world_setting", "plot_event", "knowledge_doc"])
     top_k: int = Field(default=5, ge=1, le=20)
 
 

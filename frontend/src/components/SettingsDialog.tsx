@@ -4,7 +4,13 @@ import { useEffect, useRef, useState } from "react";
 
 import { backendUrl } from "@/lib/config";
 import { useProviderConfig } from "@/hooks/use-provider-config";
-import { emptyProviderConfig, isStageComplete } from "@/lib/settings";
+import {
+  clearApiKey,
+  emptyProviderConfig,
+  isStageComplete,
+  loadApiKey,
+  saveApiKey,
+} from "@/lib/settings";
 import {
   ALL_STAGE_KEYS,
   BYOK_PRESETS,
@@ -92,6 +98,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     embedding: stageToForm(null),
   });
   const [expandedStage, setExpandedStage] = useState<AllStageKey | null>("draft");
+  // Owner API key sent as X-API-Key on all protected requests (owner_key_hash scope).
+  const [apiKey, setApiKey] = useState("");
   const [parseErrors, setParseErrors] = useState<Record<AllStageKey, string | null>>({
     draft: null,
     refine: null,
@@ -109,6 +117,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   useEffect(() => {
     if (!open) return;
     const cfg = config ?? emptyProviderConfig();
+    setApiKey(loadApiKey());
     setForms({
       draft: stageToForm(cfg.draft),
       refine: stageToForm(cfg.refine),
@@ -189,11 +198,14 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       return;
     }
     save(next);
+    saveApiKey(apiKey);
     onClose();
   };
 
   const handleClear = () => {
     clear();
+    clearApiKey();
+    setApiKey("");
     const blank = stageToForm(null);
     setForms({ draft: blank, refine: blank, evaluate: blank, embedding: blank });
     setParseErrors({ draft: null, refine: null, evaluate: null, embedding: null });
@@ -307,6 +319,37 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
           <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
             三个聊天阶段为必填；Embedding 阶段为可选（留空则回退到后端 .env 默认配置）。
           </p>
+
+          {/* Owner API key (X-API-Key) — website-level auth, separate from provider keys */}
+          <div className="space-y-sp-2">
+            <span className="text-[11px] font-semibold" style={{ color: "var(--fg-secondary)" }}>
+              网站鉴权 Key（可选）
+            </span>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="对应后端 API_KEYS 中的任一 Key"
+              autoComplete="off"
+              className="w-full px-sp-3 py-sp-2 border rounded-sm text-[13px] font-mono outline-none transition-all"
+              style={{
+                background: "var(--bg)",
+                borderColor: "var(--border)",
+                color: "var(--fg)",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "var(--accent-muted)";
+                e.currentTarget.style.boxShadow = "0 0 0 2px var(--accent-glow)";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "var(--border)";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            />
+            <p className="text-[10px] leading-relaxed" style={{ color: "var(--muted)" }}>
+              所有受保护接口（作品/章节/角色/设定/检索）会自动携带 X-API-Key。未配置或后端为开放模式时留空即可。
+            </p>
+          </div>
 
           {/* Stage accordions */}
           <div className="space-y-sp-3">
@@ -506,7 +549,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                           </button>
                         </div>
                         <span className="text-[10px] mt-0.5 block" style={{ color: "var(--muted)" }}>
-                          填纯 model 名，不要带 provider 前缀。点击"拉取模型"可从 API 自动获取可用列表。
+                          填纯 model 名，不要带 provider 前缀。点击&ldquo;拉取模型&rdquo;可从 API 自动获取可用列表。
                           {stageKey === "embedding" && " 例如: text-embedding-v4 / text-embedding-3-small"}
                         </span>
                       </FieldGroup>

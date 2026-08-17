@@ -11,6 +11,7 @@ import type {
 import { ALL_STAGE_KEYS, STAGE_KEYS } from "@/lib/types";
 
 const STORAGE_KEY = "novel-agent.provider-config";
+const API_KEY_STORAGE_KEY = "novel-agent.api-key";
 
 // ---------------------------------------------------------------------------
 // Persistence
@@ -36,6 +37,44 @@ export function saveProviderConfig(cfg: ProviderConfig): void {
 export function clearProviderConfig(): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(STORAGE_KEY);
+}
+
+// ---------------------------------------------------------------------------
+// Owner API key (X-API-Key) persistence
+//
+// The backend scopes document/child-resource access to a non-empty X-API-Key
+// header (owner_key_hash). This key is the site operator's key from API_KEYS,
+// distinct from the per-stage BYOK provider keys stored above.
+// ---------------------------------------------------------------------------
+
+export function loadApiKey(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return (window.localStorage.getItem(API_KEY_STORAGE_KEY) ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+export function saveApiKey(key: string): void {
+  if (typeof window === "undefined") return;
+  const trimmed = key.trim();
+  if (trimmed) {
+    window.localStorage.setItem(API_KEY_STORAGE_KEY, trimmed);
+  } else {
+    window.localStorage.removeItem(API_KEY_STORAGE_KEY);
+  }
+}
+
+export function clearApiKey(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(API_KEY_STORAGE_KEY);
+}
+
+/** Headers that carry the owner API key, empty when none is stored. */
+export function ownerAuthHeaders(): Record<string, string> {
+  const key = loadApiKey();
+  return key ? { "X-API-Key": key } : {};
 }
 
 // ---------------------------------------------------------------------------
@@ -88,7 +127,10 @@ export function resolvedProviderConfig(
 export async function clearEmbeddingCache(): Promise<void> {
   try {
     const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-    await fetch(`${base}/v1/embedding/cache`, { method: "DELETE" });
+    await fetch(`${base}/v1/embedding/cache`, {
+      method: "DELETE",
+      headers: ownerAuthHeaders(),
+    });
   } catch {
     // Best-effort — the endpoint may not exist; cache invalidation is a hint.
   }

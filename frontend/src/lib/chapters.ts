@@ -8,12 +8,14 @@ import {
   type ChapterRead,
 } from "@/lib/types";
 import { backendUrl } from "@/lib/config";
+import { ownerAuthHeaders } from "@/lib/settings";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${backendUrl}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...ownerAuthHeaders(),
       ...(init?.headers ?? {}),
     },
   });

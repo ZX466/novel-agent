@@ -9,7 +9,7 @@ import {
   type TaskType,
 } from "@/lib/types";
 import { chatEndpoint } from "@/lib/config";
-import { loadProviderConfig } from "@/lib/settings";
+import { loadProviderConfig, ownerAuthHeaders } from "@/lib/settings";
 
 const EXTRACT_TASK: TaskType = "extract";
 
@@ -34,7 +34,10 @@ export async function extractEntitiesFromOutline(
   outlineText: string,
 ): Promise<ExtractEntitiesResult> {
   const cfg = loadProviderConfig();
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...ownerAuthHeaders(),
+  };
   if (cfg) headers["X-Provider-Config"] = JSON.stringify(cfg);
 
   const prompt = `[task:${EXTRACT_TASK}] 从以下小说大纲中提取角色、世界观设定和剧情事件。\n\n${outlineText}`;

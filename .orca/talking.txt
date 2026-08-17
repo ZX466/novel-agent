@@ -24,7 +24,7 @@
 - [x] [P1] 合并序列 codex -> opencode -> kilo -> Pi -> cline -- 全部完成
 - [x] [P1] 双远程推送 -- GitHub + Gitee 均成功
 - [x] [P2] 评审 kilo（c0d1661 已并入，测试通过）+ 复核 cline 交付物（QUICKSTART/CONFIG-REVIEW 已并入）
-- [ ] [P2] compose 安全落地（127.0.0.1 端口绑定 + .env 强密码）-- 待下轮（Codex 审查意见）
+- [x] [P2] compose 安全落地 -- 已交付（643166a：127.0.0.1 绑定 + .env 强密码必填 + protected-mode + 资源限制；本地容器已重建、密码已 ALTER 同步、冒烟通过）
 - [ ] [P2] owner_key_hash 数据回填说明 -- 生产上线时按清单执行
 
 ## 运维要点

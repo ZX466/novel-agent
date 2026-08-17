@@ -37,6 +37,7 @@ import { extractEntitiesFromOutline } from "@/lib/extract-entities";
 import { createCharacter } from "@/lib/characters";
 import { createWorldSetting } from "@/lib/world-settings";
 import { createPlotEvent } from "@/lib/plot-events";
+import { downloadExport, EXPORT_LABELS, type ExportFormat } from "@/lib/export";
 
 function countWords(text: string): number {
   if (!text) return 0;
@@ -86,6 +87,10 @@ export default function NovelEditorPage() {
   useEffect(() => {
     saveDisplay(display);
   }, [display]);
+
+  // Export menu state (F3).
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState<ExportFormat | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -915,8 +920,78 @@ export default function NovelEditorPage() {
             <>
               <FormatToolbar editor={editor} />
               <div className="flex-1 overflow-y-auto px-sp-8 py-sp-6 relative" style={{ background: "var(--bg-warm)" }}>
-                {/* Display comfort settings (font / line-height / width) */}
-                <div className="absolute top-sp-2 right-sp-3 z-20">
+                {/* Export (F3) + display comfort settings (font / line-height / width) */}
+                <div className="absolute top-sp-2 right-sp-3 z-20 flex items-center gap-sp-1">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setExportOpen((v) => !v)}
+                      title="导出作品（Markdown / TXT / EPUB）"
+                      aria-label="导出作品"
+                      aria-expanded={exportOpen}
+                      className="w-7 h-7 flex items-center justify-center rounded-sm transition-colors"
+                      style={{
+                        color: exportOpen ? "var(--accent)" : "var(--muted)",
+                        background: exportOpen ? "var(--accent-bg)" : "transparent",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!exportOpen) {
+                          e.currentTarget.style.background = "var(--surface-2)";
+                          e.currentTarget.style.color = "var(--fg)";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!exportOpen) {
+                          e.currentTarget.style.background = "transparent";
+                          e.currentTarget.style.color = "var(--muted)";
+                        }
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                    </button>
+                    {exportOpen && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setExportOpen(false)} />
+                        <div
+                          className="absolute right-0 top-9 z-40 py-sp-1 rounded-md border shadow-lg min-w-[140px]"
+                          style={{ background: "var(--surface)", borderColor: "var(--border-hairline)" }}
+                        >
+                          {(Object.keys(EXPORT_LABELS) as ExportFormat[]).map((fmt) => (
+                            <button
+                              key={fmt}
+                              type="button"
+                              disabled={exporting !== null}
+                              onClick={async () => {
+                                if (!doc) return;
+                                setExporting(fmt);
+                                try {
+                                  await downloadExport(doc.id, fmt);
+                                } catch (e) {
+                                  alert(`❌ 导出失败: ${e instanceof Error ? e.message : "未知错误"}`);
+                                } finally {
+                                  setExporting(null);
+                                  setExportOpen(false);
+                                }
+                              }}
+                              className="w-full px-sp-3 py-sp-1.5 flex items-center justify-between gap-sp-2 text-[12px] font-medium transition-colors disabled:opacity-40"
+                              style={{ color: "var(--fg-secondary)" }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-2)"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                            >
+                              <span>{EXPORT_LABELS[fmt]}</span>
+                              {exporting === fmt && (
+                                <span className="w-[4px] h-[4px] rounded-full" style={{ background: "var(--accent)", animation: "pulse 1.2s infinite" }} />
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
                   <EditorDisplaySettings display={display} onChange={setDisplay} />
                 </div>
                 <div

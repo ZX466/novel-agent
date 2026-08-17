@@ -4,14 +4,17 @@
 
 ## Current State
 
-✅ All three rounds complete; data-layer work merged to main and pushed to both remotes.
+🔴 **Round 4 in progress** — F4 本地知识库 [P1] 已接受，执行中。
 
 ## Action Queue
 
-(None. Awaiting next assignment from Claude.)
+- [P1] **F4 本地知识库**（已接受 2026-08-17）：knowledge_docs 表 + alembic 迁移；上传分块(~800字)+embedding 入库；RAG 合并检索（小说设定优先）；上传/列表/删除端点；文件白名单与大小上限按 Codex 安全规格。
 
 ## Handoff Notes
 
 - RAG parallelism + embedding cache tenant isolation merged (b95280e + fix).
 - Non-blocking follow-up: canonical cache identity encoding + validate BYOK api_base before cache lookup.
 - Post-merge suite: 610 passed / 1 skipped / 0 failed.
+## Action Queue (Round 4 — 2026-08-17)
+
+- [P1] **F4 本地知识库**：新增 `knowledge_docs` 表（novel_id/title/content/chunk/embedding）+ alembic 迁移；上传文件分块（~800 字）+ embedding 入库；RAG 检索合并（小说设定优先）；上传/列表/删除端点。文件类型白名单与大小上限配合 Codex 安全规格。评审: Codex

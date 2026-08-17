@@ -133,6 +133,13 @@ async def draft_node(state: PipelineState) -> dict:
             "第二章 首战告捷\n宗门大比中张三击败宿敌李四，初露锋芒，却引来暗处的觊觎。\n\n"
             "直接输出大纲内容，不要前后缀说明。"
         )
+    elif task_type == "assistant":
+        system_content = (
+            "你是一位小说创作 AI 编剧。对话最后一条 user 消息是当前问题，"
+            "前文为作品上下文与对话历史（角色 user/assistant 表示问答双方）。\n"
+            "请直接给出具体、可执行的创作建议（情节发展/人物刻画/对白/节奏/连贯性），"
+            "不要复述问题，不要输出与创作无关的内容。"
+        )
     else:
         system_content = "You are a concise drafting assistant. Write a first draft."
 

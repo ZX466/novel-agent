@@ -89,7 +89,9 @@ def _should_run_stage(task_type: str, stage: str) -> bool:
     - "outline": only draft + safety (structural output, evaluation not useful)
     - "extract": only draft (direct JSON extraction, no safety needed)
     """
-    if task_type == "continue":
+    if task_type in ("continue", "assistant"):
+        # continue: fast continuation (draft + safety)
+        # assistant: multi-turn creative chat (draft + safety, RAG useful)
         return stage in ("retrieval", "draft", "safety_check")
     if task_type in ("rewrite", "polish"):
         return stage in ("refine", "safety_check")

@@ -27,7 +27,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Annotated, Any, AsyncIterator, Dict, List
+from typing import Annotated, Any, AsyncIterator, Dict, List, Literal
 
 import litellm
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -88,7 +88,13 @@ class ChatRequest(BaseModel):
     temperature: float | None = None
     max_tokens: int | None = None
     stream: bool | None = None
-    task_type: str | None = None  # "generate" | "continue" | "rewrite" | "polish" | "outline"
+    task_type: str | None = None  # "generate" | "continue" | "rewrite" | "polish" | "outline" | "assistant"
+
+    # F1 assistant mode — work-context injection (used when task_type == "assistant").
+    context_doc_id: int | None = None
+    context_chapter_ids: list[int] | None = None
+    context_mode: Literal["outline", "selected", "full"] | None = None
+    context_max_chars: int | None = None
 
     model_config = {"extra": "ignore"}
 
@@ -131,6 +137,88 @@ def _extract_task_type(messages: List[ChatMessage], explicit: str | None = None)
             return m.group(1)
         break
     return "generate"
+
+
+# --- F1 assistant mode: server-controlled conversation + work-context ------
+#
+# `task_type="assistant"` runs a multi-turn creative-advice chat. The backend
+# (not the client) assembles the system instruction, the work context pulled
+# from the database, and the recent conversation history into the pipeline
+# topic. This keeps routing/system text server-controlled (per Codex review)
+# and lets the existing single-turn draft pipeline serve as a chat assistant.
+
+_ASSISTANT_MAX_TURNS = 12
+_ASSISTANT_CONTEXT_DEFAULT = 6000  # chars of work context by default
+_ASSISTANT_CONTEXT_HARD_CAP = 12000  # hard cap for injected context
+_ASSISTANT_PROMPT_HARD_CAP = 20000  # total assembled prompt cap
+
+
+def _strip_routing_tags(text: str) -> str:
+    """Strip internal [novel:N] / [task:TYPE] markers from user-visible text."""
+    text = re.sub(r"\[novel:\d+\]\s*", "", text)
+    text = re.sub(r"\[task:\w+\]\s*", "", text)
+    return text.strip()
+
+
+async def _load_work_context(session, req: "ChatRequest") -> str:
+    """Fetch the assistant's work context (outline or chapters) from the DB."""
+    from app.services.document import get_document
+    from app.services.chapter import list_chapters
+
+    if not req.context_doc_id:
+        return ""
+    max_chars = min(
+        req.context_max_chars or _ASSISTANT_CONTEXT_DEFAULT,
+        _ASSISTANT_CONTEXT_HARD_CAP,
+    )
+
+    if req.context_mode == "outline":
+        doc = await get_document(session, req.context_doc_id)
+        outline = (doc.metadata_json or {}).get("outline")
+        return str(outline or "")[:max_chars]
+
+    chapters, _ = await list_chapters(
+        session, novel_id=req.context_doc_id, limit=500, offset=0
+    )
+    if req.context_mode == "selected" and req.context_chapter_ids:
+        wanted = set(req.context_chapter_ids)
+        chapters = [c for c in chapters if c.id in wanted]
+
+    blocks = [f"[{c.title}]\n{c.content_text or ''}" for c in chapters]
+    return "\n\n".join(blocks)[:max_chars]
+
+
+async def _build_assistant_topic(
+    messages: List[ChatMessage],
+    session,
+    req: "ChatRequest",
+) -> str:
+    """Assemble conversation history + work context into the draft topic.
+
+    - Only known roles (user/assistant/system) are kept (security: unknown
+      roles rejected instead of being echoed into the prompt).
+    - Routing tags are stripped from every turn.
+    - History is capped to the most recent `_ASSISTANT_MAX_TURNS` turns.
+    """
+    turns: list[str] = []
+    for msg in messages[-_ASSISTANT_MAX_TURNS:]:
+        if msg.role not in ("user", "assistant", "system"):
+            continue
+        text = _strip_routing_tags(msg.content or "")
+        if not text:
+            continue
+        turns.append(f"{msg.role}: {text}")
+    if not turns:
+        return ""
+
+    context = await _load_work_context(session, req)
+
+    parts: list[str] = []
+    if context:
+        parts.append(f"[作品上下文]\n{context}")
+    parts.append("[对话历史]\n" + "\n".join(turns))
+    prompt = "\n\n".join(parts)
+    return prompt[:_ASSISTANT_PROMPT_HARD_CAP]
 
 
 # --- SSE encoding (AI SDK v5 UI Message Stream protocol) -------------------
@@ -310,7 +398,15 @@ async def chat(
     _api_key: str = Depends(enforce_chat_rate_limit),
 ) -> StreamingResponse:
     """Runs the three-stage pipeline and streams the final answer."""
-    topic = _extract_topic(req.messages)
+    novel_id = _extract_novel_id(req.messages) or req.context_doc_id
+    task_type = _extract_task_type(req.messages, req.task_type)
+
+    if task_type == "assistant":
+        # F1: server-assembled multi-turn prompt (conversation + work context).
+        topic = await _build_assistant_topic(req.messages, session, req)
+    else:
+        topic = _extract_topic(req.messages)
+
     if not topic:
         # Short-circuit: nothing to do.
         async def _empty() -> AsyncIterator[str]:
@@ -322,9 +418,6 @@ async def chat(
             media_type="text/event-stream",
             headers=_sse_headers(),
         )
-
-    novel_id = _extract_novel_id(req.messages)
-    task_type = _extract_task_type(req.messages, req.task_type)
 
     if provider_config is None and not settings.byok_fallback_to_env:
         # BYOK required but no credentials supplied.

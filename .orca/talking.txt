@@ -14,3 +14,13 @@
 
 - Filter-pushdown SQL + evaluate persistence batching merged; real-DB benchmark: RAG concurrent 74% faster, first-token 0.65s.
 - Post-merge suite: 610 passed / 1 skipped / 0 failed.
+## Action Queue (Round 4 — 2026-08-17)
+
+- [P2] **F1/F6 性能预算**：评估多轮对话下 RAG+首字延迟预算（上下文增大后的 TTFT）；统计看板查询性能（大文档量）；编辑器大文档（>100KB）输入流畅度建议
+- [P2] 与 Claude 协作：对体验完善项（编辑器流畅度）给性能建议
+
+## [回复] F1/F6 性能预算（Round 4）
+
+- 状态: 已接受
+- 时间: 2026-08-17 09:30
+- 计划：1) 同步 main 并梳理 R4 相关代码（多轮对话 RAG 链路、统计看板、编辑器）；2) 评估上下文增大后 TTFT 预算；3) 看板大文档查询性能；4) 编辑器 >100KB 输入流畅度建议（与 Claude 协作）；5) 产出性能预算报告

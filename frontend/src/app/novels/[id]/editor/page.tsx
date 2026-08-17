@@ -20,6 +20,7 @@ import { CharacterPanel } from "@/components/CharacterPanel";
 import { WorldSettingPanel } from "@/components/WorldSettingPanel";
 import PlotEventPanel from "@/components/PlotEventPanel";
 import { AIToolPanel } from "@/components/AIToolPanel";
+import { AssistantPanel } from "@/components/AssistantPanel";
 import { FormatToolbar } from "@/components/FormatToolbar";
 import {
   DEFAULT_DISPLAY,
@@ -91,6 +92,9 @@ export default function NovelEditorPage() {
   // Export menu state (F3).
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
+
+  // Right panel tab: AI 工具 (AIToolPanel) / AI 编剧 (AssistantPanel, F1).
+  const [rightTab, setRightTab] = useState<"tools" | "assistant">("tools");
   const [findOpen, setFindOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1035,19 +1039,60 @@ export default function NovelEditorPage() {
           />
         </section>
 
-        {/* Right: AI tool panel */}
+        {/* Right: AI tools / AI assistant */}
         {!focusMode && (
-          <AIToolPanel
-            onInsertIntoEditor={handleInsertIntoEditor}
-            onReplaceInEditor={handleReplaceInEditor}
-            onApplyOutline={handleApplyOutline}
-            editorText={currentText}
-            selectedText={selectedText}
-            chapterTitle={activeChapter?.title ?? ""}
-            novelId={docId}
-            novelTitle={title}
-            outlineText={((doc?.metadata_json as Record<string, unknown> | undefined)?.outline as string) ?? ""}
-          />
+          <div className="flex flex-col h-full min-h-0" style={{ background: "var(--bg)" }}>
+            {/* Tab switch */}
+            <div
+              className="flex shrink-0 border-b text-[11px]"
+              style={{ borderColor: "var(--border-subtle)" }}
+            >
+              {(
+                [
+                  { key: "tools" as const, label: "AI 工具", title: "写作工具" },
+                  { key: "assistant" as const, label: "AI 编剧", title: "对话助手" },
+                ]
+              ).map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setRightTab(t.key)}
+                  title={t.title}
+                  className="flex-1 py-sp-2 text-center transition-colors"
+                  style={{
+                    color: rightTab === t.key ? "var(--accent)" : "var(--muted)",
+                    borderBottom: rightTab === t.key ? "2px solid var(--accent)" : "2px solid transparent",
+                    background: rightTab === t.key ? "var(--bg)" : "transparent",
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {/* Panel body */}
+            <div className="flex-1 min-h-0">
+              {rightTab === "tools" ? (
+                <AIToolPanel
+                  onInsertIntoEditor={handleInsertIntoEditor}
+                  onReplaceInEditor={handleReplaceInEditor}
+                  onApplyOutline={handleApplyOutline}
+                  editorText={currentText}
+                  selectedText={selectedText}
+                  chapterTitle={activeChapter?.title ?? ""}
+                  novelId={docId}
+                  novelTitle={title}
+                  outlineText={((doc?.metadata_json as Record<string, unknown> | undefined)?.outline as string) ?? ""}
+                />
+              ) : (
+                <AssistantPanel
+                  onInsertIntoEditor={handleInsertIntoEditor}
+                  activeChapterId={activeChapter?.id ?? null}
+                  novelId={docId}
+                  chapterTitle={activeChapter?.title ?? ""}
+                />
+              )}
+            </div>
+          </div>
         )}
       </div>
 

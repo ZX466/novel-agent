@@ -161,6 +161,49 @@ async def test_retrieve_plot_events_single_collection(mock_session):
 
 
 @pytest.mark.asyncio
+async def test_retrieve_runs_searches_concurrently_when_bound(mock_session):
+    """When the session exposes a `bind`, the 4 collections are searched on
+    dedicated short-lived sessions (concurrently) instead of the caller's."""
+    from unittest.mock import AsyncMock, patch
+
+    from tests.conftest import _FakeResult
+
+    mock_session.bind = object()  # pretend a real engine bind
+    used_sessions = []
+
+    async def _fake_search_one(session, model, *a, **kw):
+        used_sessions.append(session)
+        return []
+
+    class _FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def execute(self, stmt):
+            return _FakeResult(rows=[])
+
+    class _FakeMaker:
+        def __init__(self, *a, **k):
+            pass
+
+        def __call__(self):
+            return _FakeSession()
+
+    with patch.object(retrieval, "embed_text", AsyncMock(return_value=[0.0] * 1536)), \
+            patch.object(retrieval, "_search_one", side_effect=_fake_search_one), \
+            patch.object(retrieval, "async_sessionmaker", _FakeMaker):
+        hits = await retrieval.retrieve(mock_session, "q", novel_id=NOVEL_ID)
+
+    assert hits == []
+    # All 4 searches used fresh sessions, never the caller's mock_session.
+    assert len(used_sessions) == 4
+    assert all(s is not mock_session for s in used_sessions)
+
+
+@pytest.mark.asyncio
 async def test_retrieve_propagates_embed_text_errors():
     """If embed_text raises (e.g. empty query), retrieve must propagate."""
     session = type("S", (), {"execute": AsyncMock()})()

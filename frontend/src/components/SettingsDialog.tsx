@@ -4,7 +4,14 @@ import { useEffect, useRef, useState } from "react";
 
 import { backendUrl } from "@/lib/config";
 import { useProviderConfig } from "@/hooks/use-provider-config";
-import { emptyProviderConfig, isStageComplete } from "@/lib/settings";
+import {
+  clearApiKey,
+  emptyProviderConfig,
+  isStageComplete,
+  loadApiKey,
+  ownerAuthHeaders,
+  saveApiKey,
+} from "@/lib/settings";
 import {
   ALL_STAGE_KEYS,
   BYOK_PRESETS,
@@ -24,6 +31,35 @@ interface SettingsDialogProps {
 }
 
 const RISK_WARNING = "API Key 仅存储在本机浏览器 localStorage，请勿在公共电脑使用。";
+
+/**
+ * Turn a FastAPI error body into a readable message.
+ * FastAPI returns `detail` as a string (HTTPException) OR an array of
+ * validation-error objects (422). Naive `${detail}` renders "[object Object]".
+ */
+function describeApiError(data: unknown): string {
+  if (data == null) return "";
+  if (typeof data === "string") return data;
+  if (typeof data !== "object") return String(data);
+  const detail = (data as { detail?: unknown }).detail;
+  if (detail == null) return JSON.stringify(data);
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          const loc = (item as { loc?: unknown[] }).loc?.join(".");
+          const msg = (item as { msg?: unknown }).msg;
+          return loc && msg ? `${loc}: ${msg}` : String(msg ?? "");
+        }
+        return String(item);
+      })
+      .filter(Boolean);
+    return parts.join("；") || "请求参数错误";
+  }
+  return JSON.stringify(detail);
+}
 
 interface StageFormState {
   api_base: string;
@@ -92,16 +128,26 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     embedding: stageToForm(null),
   });
   const [expandedStage, setExpandedStage] = useState<AllStageKey | null>("draft");
+  // Owner API key sent as X-API-Key on all protected requests (owner_key_hash scope).
+  const [apiKey, setApiKey] = useState("");
   const [parseErrors, setParseErrors] = useState<Record<AllStageKey, string | null>>({
     draft: null,
     refine: null,
     evaluate: null,
     embedding: null,
   });
+  // Provider-pulled model lists per stage (replaces hardcoded dropdown when non-empty).
+  const [fetchedModels, setFetchedModels] = useState<Record<AllStageKey, string[]>>({
+    draft: [],
+    refine: [],
+    evaluate: [],
+    embedding: [],
+  });
 
   useEffect(() => {
     if (!open) return;
     const cfg = config ?? emptyProviderConfig();
+    setApiKey(loadApiKey());
     setForms({
       draft: stageToForm(cfg.draft),
       refine: stageToForm(cfg.refine),
@@ -182,11 +228,14 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       return;
     }
     save(next);
+    saveApiKey(apiKey);
     onClose();
   };
 
   const handleClear = () => {
     clear();
+    clearApiKey();
+    setApiKey("");
     const blank = stageToForm(null);
     setForms({ draft: blank, refine: blank, evaluate: blank, embedding: blank });
     setParseErrors({ draft: null, refine: null, evaluate: null, embedding: null });
@@ -300,6 +349,37 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
           <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
             三个聊天阶段为必填；Embedding 阶段为可选（留空则回退到后端 .env 默认配置）。
           </p>
+
+          {/* Owner API key (X-API-Key) — website-level auth, separate from provider keys */}
+          <div className="space-y-sp-2">
+            <span className="text-[11px] font-semibold" style={{ color: "var(--fg-secondary)" }}>
+              网站鉴权 Key（可选）
+            </span>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="对应后端 API_KEYS 中的任一 Key"
+              autoComplete="off"
+              className="w-full px-sp-3 py-sp-2 border rounded-sm text-[13px] font-mono outline-none transition-all"
+              style={{
+                background: "var(--bg)",
+                borderColor: "var(--border)",
+                color: "var(--fg)",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "var(--accent-muted)";
+                e.currentTarget.style.boxShadow = "0 0 0 2px var(--accent-glow)";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "var(--border)";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            />
+            <p className="text-[10px] leading-relaxed" style={{ color: "var(--muted)" }}>
+              所有受保护接口（作品/章节/角色/设定/检索）会自动携带 X-API-Key。未配置或后端为开放模式时留空即可。
+            </p>
+          </div>
 
           {/* Stage accordions */}
           <div className="space-y-sp-3">
@@ -445,14 +525,64 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                             className="px-sp-2 py-sp-2 border rounded-sm text-[11px] outline-none"
                             style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--muted)", minWidth: "80px" }}
                           >
-                            <option value="">推荐↓</option>
-                            {(RECOMMENDED_MODELS[stageKey] || []).map((m) => (
+                            <option value="">{fetchedModels[stageKey].length ? "模型↓" : "推荐↓"}</option>
+                            {(fetchedModels[stageKey].length ? fetchedModels[stageKey] : RECOMMENDED_MODELS[stageKey] || []).map((m) => (
                               <option key={m} value={m}>{m}</option>
                             ))}
                           </select>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const stageForm = forms[stageKey];
+                              if (!stageForm.api_base || !stageForm.api_key) {
+                                alert("请先填写 API Base 和 API Key，再拉取模型");
+                                return;
+                              }
+                              const btn = document.getElementById(`fetch-models-${stageKey}`);
+                              if (btn) { btn.textContent = "拉取中..."; btn.setAttribute("disabled", "true"); }
+                              try {
+                                const res = await fetch(`${backendUrl}/v1/chat/models`, {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                    ...ownerAuthHeaders(),
+                                  },
+                                  body: JSON.stringify({
+                                    api_base: stageForm.api_base.trim(),
+                                    api_key: stageForm.api_key.trim(),
+                                    extra_headers: stageForm.extra_headers_json.trim()
+                                      ? (JSON.parse(stageForm.extra_headers_json) as Record<string, string>)
+                                      : undefined,
+                                  }),
+                                });
+                                const data = await res.json();
+                                if (!res.ok) {
+                                  alert(`❌ 拉取失败: ${describeApiError(data) || `HTTP ${res.status}`}`);
+                                  return;
+                                }
+                                const list: string[] = data.models ?? [];
+                                setFetchedModels((prev) => ({ ...prev, [stageKey]: list }));
+                                if (list.length) {
+                                  alert(`✅ 拉取到 ${list.length} 个模型，已填入下拉列表`);
+                                }
+                              } catch (err) {
+                                alert(`❌ 拉取失败: ${err instanceof Error ? err.message : "网络错误"}`);
+                              } finally {
+                                if (btn) { btn.textContent = "拉取模型"; btn.removeAttribute("disabled"); }
+                              }
+                            }}
+                            id={`fetch-models-${stageKey}`}
+                            title="用当前 API Base + Key 拉取可用模型"
+                            className="px-sp-2 py-sp-2 border rounded-sm text-[11px] shrink-0 transition-colors"
+                            style={{ borderColor: "var(--border)", color: "var(--accent)" }}
+                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                          >
+                            拉取模型
+                          </button>
                         </div>
                         <span className="text-[10px] mt-0.5 block" style={{ color: "var(--muted)" }}>
-                          填纯 model 名，不要带 provider 前缀。
+                          填纯 model 名，不要带 provider 前缀。点击&ldquo;拉取模型&rdquo;可从 API 自动获取可用列表。
                           {stageKey === "embedding" && " 例如: text-embedding-v4 / text-embedding-3-small"}
                         </span>
                       </FieldGroup>
@@ -529,6 +659,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                               method: "POST",
                               headers: {
                                 "Content-Type": "application/json",
+                                ...ownerAuthHeaders(),
                                 "X-Provider-Config": JSON.stringify({
                                   draft: { api_base, api_key, model },
                                   refine: { api_base, api_key, model },
@@ -539,7 +670,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                               body: JSON.stringify({ stage: stageKey }),
                             });
                             const data = await res.json();
-                            if (data.ok) {
+                            if (res.ok && data.ok) {
                               let msg = `✅ 连接成功！模型: ${data.model || model}`;
                               if (data.detected_dim !== undefined) {
                                 msg += `\n向量维度: ${data.detected_dim}`;
@@ -549,7 +680,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                               }
                               alert(msg);
                             } else {
-                              alert(`❌ 连接失败: ${data.error || data.detail || "未知错误"}`);
+                              alert(`❌ 连接失败: ${describeApiError(data) || "未知错误"}`);
                             }
                           } catch (err) {
                             alert(`❌ 连接失败: ${err instanceof Error ? err.message : "网络错误"}`);

@@ -6,7 +6,7 @@ import { FormEvent, useMemo, useState } from "react";
 
 import { useProviderConfig } from "@/hooks/use-provider-config";
 import { chatEndpoint } from "@/lib/config";
-import { loadProviderConfig } from "@/lib/settings";
+import { loadProviderConfig, ownerAuthHeaders } from "@/lib/settings";
 
 interface ChatProps {
   onInsertIntoEditor?: (text: string) => void;
@@ -21,8 +21,9 @@ export function Chat({ onInsertIntoEditor }: ChatProps) {
         api: chatEndpoint,
         headers: (): Record<string, string> => {
           const cfg = loadProviderConfig();
-          if (!cfg) return {};
-          return { "X-Provider-Config": JSON.stringify(cfg) };
+          const auth = ownerAuthHeaders();
+          if (!cfg) return auth;
+          return { "X-Provider-Config": JSON.stringify(cfg), ...auth };
         },
       }),
     [],

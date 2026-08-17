@@ -17,7 +17,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api._deps import extract_embedding_stage, load_parent, require_api_key
+from app.api._deps import extract_embedding_stage, load_parent, owner_key_hash, require_api_key
 from app.db.session import get_db
 from app.schemas.chat import StageConfig
 from app.schemas.novel_memory import (
@@ -50,7 +50,7 @@ async def list_world_settings_endpoint(
     api_key: str = Depends(require_api_key),
 ) -> WorldSettingListResponse:
     """List world settings of a document, ordered by category then title."""
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     items, total = await list_world_settings(
         session, novel_id=doc_id, category=category, limit=limit, offset=offset
     )
@@ -75,7 +75,7 @@ async def create_world_setting_endpoint(
     When X-Provider-Config carries an ``embedding`` stage, it overrides
     .env EMBEDDING_* credentials for the auto-embedding of this setting.
     """
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     payload = payload.model_copy(update={"novel_id": doc_id})
     ws = await create_world_setting(session, payload, stage_config=embedding_stage)
     response.headers["Location"] = f"/v1/documents/{doc_id}/world-settings/{ws.id}"
@@ -90,13 +90,13 @@ async def get_world_setting_endpoint(
     api_key: str = Depends(require_api_key),
 ) -> WorldSettingRead:
     """Get a single world setting by ID. 404 if missing or wrong novel."""
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     try:
         ws = await get_world_setting(session, ws_id)
     except WorldSettingNotFound:
-        raise HTTPException(status_code=404, detail="World setting not found")
+        raise HTTPException(status_code=404, detail="世界设定不存在")
     if ws.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="World setting not found")
+        raise HTTPException(status_code=404, detail="世界设定不存在")
     return ws  # type: ignore[return-value]
 
 
@@ -110,15 +110,15 @@ async def update_world_setting_endpoint(
     embedding_stage: StageConfig | None = Depends(extract_embedding_stage),
 ) -> WorldSettingRead:
     """Partial update a world setting. 404 if missing or wrong novel."""
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     try:
         ws = await update_world_setting(
             session, ws_id, payload, stage_config=embedding_stage,
         )
     except WorldSettingNotFound:
-        raise HTTPException(status_code=404, detail="World setting not found")
+        raise HTTPException(status_code=404, detail="世界设定不存在")
     if ws.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="World setting not found")
+        raise HTTPException(status_code=404, detail="世界设定不存在")
     return ws  # type: ignore[return-value]
 
 
@@ -130,12 +130,12 @@ async def delete_world_setting_endpoint(
     api_key: str = Depends(require_api_key),
 ) -> Response:
     """Delete a world setting. 204 on success."""
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     try:
         existing = await get_world_setting(session, ws_id)
     except WorldSettingNotFound:
-        raise HTTPException(status_code=404, detail="World setting not found")
+        raise HTTPException(status_code=404, detail="世界设定不存在")
     if existing.novel_id != doc_id:
-        raise HTTPException(status_code=404, detail="World setting not found")
+        raise HTTPException(status_code=404, detail="世界设定不存在")
     await delete_world_setting(session, ws_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

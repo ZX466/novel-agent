@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api._deps import extract_embedding_stage, load_parent, require_api_key
+from app.api._deps import extract_embedding_stage, load_parent, owner_key_hash, require_api_key
 from app.db.session import get_db
 from app.schemas.novel_memory import RetrievalHit
 from app.services.retrieval import retrieve
@@ -43,13 +43,13 @@ async def retrieve_endpoint(
     embedding_stage=Depends(extract_embedding_stage),
 ) -> RetrievalResponse:
     """Perform semantic similarity search over the document's memory collections."""
-    await load_parent(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(_api_key))
 
     for et in request.entity_types:
         if et not in _VALID_ENTITY_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid entity_type: {et}",
+                detail=f"无效的实体类型: {et}",
             )
 
     hits = await retrieve(

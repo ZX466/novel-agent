@@ -5,6 +5,7 @@
 fastapi>=0.115
 uvicorn[standard]>=0.30
 python-multipart>=0.0.9
+nh3>=0.2
 
 # LLM orchestration
 langgraph>=0.6

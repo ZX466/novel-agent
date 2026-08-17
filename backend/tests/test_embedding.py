@@ -177,11 +177,13 @@ async def test_embed_batch_rejects_empty_string_in_list():
 
 @pytest.fixture(autouse=True)
 def _reset_actual_dim():
-    """Reset the module-global _actual_dim between tests so ordering
-    doesn't leak state."""
+    """Reset module-global state between tests: _actual_dim and the embed
+    cache, so a cache hit across tests can't mask a missing API call."""
     embedding._actual_dim = None
+    embedding.clear_embedding_cache()
     yield
     embedding._actual_dim = None
+    embedding.clear_embedding_cache()
 
 
 def test_maybe_truncate_shorter_vector_is_zero_padded(monkeypatch):
@@ -221,3 +223,149 @@ def test_get_embedding_dim_reflects_last_actual_dim(monkeypatch):
 
     embedding._maybe_truncate([1.0, 2.0, 3.0])
     assert embedding.get_embedding_dim() == 3  # last detected actual dim
+
+
+# ---------------------------------------------------------------------------
+# embedding cache tests
+# ---------------------------------------------------------------------------
+
+
+def test_embed_cache_key_hashes_text():
+    """The cache key must never contain the raw text or the raw API key."""
+    stage = _make_stage(api_key="sk-secret-tenant")
+    key = embedding._embed_cache_key("secret story premise", "m1", stage)
+    assert "secret story premise" not in key
+    assert "sk-secret-tenant" not in key
+    assert key.count("|") == 2  # identity | model | digest
+    assert "|m1|" in key
+
+    # Stable for the same (text, model, identity), different for others.
+    assert (
+        embedding._embed_cache_key("a", "m", stage)
+        == embedding._embed_cache_key("a", "m", stage)
+    )
+    assert (
+        embedding._embed_cache_key("a", "m", stage)
+        != embedding._embed_cache_key("b", "m", stage)
+    )
+    assert (
+        embedding._embed_cache_key("a", "m", stage)
+        != embedding._embed_cache_key("a", "m2", stage)
+    )
+    # Same text + model under a different API key -> different key (tenant
+    # isolation: users must never share cached vectors).
+    assert (
+        embedding._embed_cache_key("a", "m", stage)
+        != embedding._embed_cache_key("a", "m", _make_stage(api_key="sk-other"))
+    )
+
+
+@pytest.mark.asyncio
+async def test_embed_text_second_call_hits_cache(monkeypatch):
+    """Repeated identical (text, model) must skip the API call entirely."""
+    monkeypatch.setattr(settings, "embedding_dim", 1)
+    fake_client = _client_with_create(_mock_embedding_response([[0.5]]))
+    with patch.object(embedding, "_get_client", return_value=fake_client) as gc:
+        v1 = await embedding.embed_text("repeat")
+        v2 = await embedding.embed_text("repeat")
+    assert v1 == [0.5]
+    assert v2 == [0.5]
+    assert gc.await_count == 1  # second call served from cache
+
+
+@pytest.mark.asyncio
+async def test_embed_text_cache_separates_models(monkeypatch):
+    """Same text under different models must NOT reuse the vector."""
+    monkeypatch.setattr(settings, "embedding_dim", 1)
+    stage_a = _make_stage(model="model-a")
+    stage_b = _make_stage(model="model-b")
+
+    def _client_for(sc):
+        val = [0.1] if sc is stage_a else [0.2]
+        return _client_with_create(_mock_embedding_response([val]))
+
+    with patch.object(embedding, "_get_client", side_effect=_client_for) as gc:
+        va = await embedding.embed_text("same", stage_config=stage_a)
+        vb = await embedding.embed_text("same", stage_config=stage_b)
+        va2 = await embedding.embed_text("same", stage_config=stage_a)
+    assert va == [0.1]
+    assert vb == [0.2]
+    assert va2 == [0.1]  # model-a hit
+    assert gc.await_count == 2  # a, b; third call served from cache
+
+
+@pytest.mark.asyncio
+async def test_embed_text_cache_separates_tenants(monkeypatch):
+    """Same model + same text under different API keys must NOT reuse vectors
+    (cross-tenant isolation: an API key leak must never surface another
+    tenant's cached embedding)."""
+    monkeypatch.setattr(settings, "embedding_dim", 1)
+    stage_a = _make_stage(model="m", api_key="sk-tenant-a")
+    stage_b = _make_stage(model="m", api_key="sk-tenant-b")
+
+    def _client_for(sc):
+        val = [0.1] if sc is stage_a else [0.2]
+        return _client_with_create(_mock_embedding_response([val]))
+
+    with patch.object(embedding, "_get_client", side_effect=_client_for) as gc:
+        va = await embedding.embed_text("same", stage_config=stage_a)
+        vb = await embedding.embed_text("same", stage_config=stage_b)
+        va2 = await embedding.embed_text("same", stage_config=stage_a)
+    assert va == [0.1]
+    assert vb == [0.2]
+    assert va2 == [0.1]  # tenant-a cache hit
+    assert gc.await_count == 2  # a, b embedded once each; third served from cache
+
+
+@pytest.mark.asyncio
+async def test_embed_text_cache_hit_returns_copy(monkeypatch):
+    """Mutating a returned vector must not corrupt the cached entry."""
+    monkeypatch.setattr(settings, "embedding_dim", 1)
+    fake_client = _client_with_create(_mock_embedding_response([[0.7]]))
+    with patch.object(embedding, "_get_client", return_value=fake_client):
+        v1 = await embedding.embed_text("mutable")
+        v2 = await embedding.embed_text("mutable")
+        assert v1 == [0.7] and v2 == [0.7]
+        v1[0] = 99.0  # mutate the returned copy
+        v3 = await embedding.embed_text("mutable")
+    assert v3 == [0.7]  # cache not corrupted
+
+
+@pytest.mark.asyncio
+async def test_embed_text_cache_respects_ttl(monkeypatch):
+    """After the TTL elapses the same text must be re-embedded."""
+    monkeypatch.setattr(settings, "embedding_dim", 1)
+    now = [1000.0]
+    monkeypatch.setattr(embedding.time, "monotonic", lambda: now[0])
+
+    fake_client = _client_with_create(_mock_embedding_response([[0.9]]))
+    with patch.object(embedding, "_get_client", return_value=fake_client) as gc:
+        v1 = await embedding.embed_text("ttl")
+    assert v1 == [0.9]
+    assert gc.await_count == 1
+
+    now[0] += embedding._EMBED_CACHE_TTL_SECONDS + 1  # TTL expires
+    with patch.object(embedding, "_get_client", return_value=fake_client) as gc2:
+        v2 = await embedding.embed_text("ttl")
+    assert v2 == [0.9]
+    assert gc2.await_count == 1  # cache expired → API called again
+
+
+@pytest.mark.asyncio
+async def test_embed_batch_reuses_cached_texts(monkeypatch):
+    """Batch embeds only the texts not already in cache."""
+    monkeypatch.setattr(settings, "embedding_dim", 1)
+    # Pre-seed the cache with "a".
+    with patch.object(
+        embedding, "_get_client",
+        return_value=_client_with_create(_mock_embedding_response([[0.1]])),
+    ):
+        await embedding.embed_text("a")
+
+    fake_client = _client_with_create(_mock_embedding_response([[0.2]]))
+    with patch.object(embedding, "_get_client", return_value=fake_client) as gc:
+        vecs = await embedding.embed_batch(["a", "b"])
+    assert vecs == [[0.1], [0.2]]
+    assert gc.await_count == 1
+    # Only the miss reached the API — the cached "a" is served locally.
+    assert fake_client.embeddings.create.call_args.kwargs["input"] == ["b"]

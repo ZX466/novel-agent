@@ -17,9 +17,10 @@ recovery and hard removal.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api._deps import require_api_key
 from app.db.session import get_db
 from app.schemas.document import (
     DocumentCreate,
@@ -37,25 +38,9 @@ from app.services.document import (
     restore_document,
     update_document,
 )
+from app.api._deps import owner_key_hash, require_api_key as _require_api_key
 
 router = APIRouter(prefix="/v1/documents", tags=["documents"])
-
-
-async def _require_api_key(
-    x_api_key: str = Header(..., alias="X-API-Key"),
-) -> str:
-    """Validate the X-API-Key header and return the key.
-
-    Returns 401 if the header is missing or empty. A future implementation
-    could validate against a key store; for now any non-empty key is accepted
-    and used as the owner scope.
-    """
-    if not x_api_key.strip():
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or empty X-API-Key header",
-        )
-    return x_api_key.strip()
 
 
 @router.get("", response_model=DocumentListResponse)
@@ -71,7 +56,7 @@ async def get_documents(
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0, le=10000),
     session: AsyncSession = Depends(get_db),
-    api_key: str = Depends(_require_api_key),
+    api_key: str = Depends(require_api_key),
 ) -> DocumentListResponse:
     """List documents, newest-first. Omits content_html/content_text.
 
@@ -85,6 +70,7 @@ async def get_documents(
         category=category,
         search=search,
         status=status_filter,
+        owner_key_hash=owner_key_hash(api_key),
     )
     return DocumentListResponse(items=items, total=total)  # type: ignore[arg-type]
 
@@ -98,10 +84,10 @@ async def post_document(
     payload: DocumentCreate,
     response: Response,
     session: AsyncSession = Depends(get_db),
-    api_key: str = Depends(_require_api_key),
+    api_key: str = Depends(require_api_key),
 ) -> DocumentRead:
     """Create a new document. Returns 201 with Location header."""
-    doc = await create_document(session, payload)
+    doc = await create_document(session, payload, owner_key_hash=owner_key_hash(api_key))
     response.headers["Location"] = f"/v1/documents/{doc.id}"
     return doc  # type: ignore[return-value]
 
@@ -110,13 +96,13 @@ async def post_document(
 async def get_document_endpoint(
     doc_id: int,
     session: AsyncSession = Depends(get_db),
-    api_key: str = Depends(_require_api_key),
+    api_key: str = Depends(require_api_key),
 ) -> DocumentRead:
     """Return full document by ID. 404 if missing (or soft-deleted)."""
     try:
-        return await get_document(session, doc_id)  # type: ignore[return-value]
+        return await get_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))  # type: ignore[return-value]
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
 
 
 @router.patch("/{doc_id}", response_model=DocumentRead)
@@ -124,26 +110,26 @@ async def patch_document_endpoint(
     doc_id: int,
     payload: DocumentUpdate,
     session: AsyncSession = Depends(get_db),
-    api_key: str = Depends(_require_api_key),
+    api_key: str = Depends(require_api_key),
 ) -> DocumentRead:
     """Partial update. Bumps version. 404 if missing."""
     try:
-        return await update_document(session, doc_id, payload)  # type: ignore[return-value]
+        return await update_document(session, doc_id, payload, owner_key_hash=owner_key_hash(api_key))  # type: ignore[return-value]
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
 
 
 @router.delete("/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document_endpoint(
     doc_id: int,
     session: AsyncSession = Depends(get_db),
-    api_key: str = Depends(_require_api_key),
+    api_key: str = Depends(require_api_key),
 ) -> Response:
     """Soft-delete by ID (moves to 回收站, recoverable). 204 on success."""
     try:
-        await delete_document(session, doc_id)
+        await delete_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -151,13 +137,13 @@ async def delete_document_endpoint(
 async def restore_document_endpoint(
     doc_id: int,
     session: AsyncSession = Depends(get_db),
-    api_key: str = Depends(_require_api_key),
+    api_key: str = Depends(require_api_key),
 ) -> DocumentRead:
     """Restore a soft-deleted document from the 回收站."""
     try:
-        return await restore_document(session, doc_id)  # type: ignore[return-value]
+        return await restore_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))  # type: ignore[return-value]
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
 
 
 @router.delete(
@@ -167,11 +153,11 @@ async def restore_document_endpoint(
 async def permanent_delete_document_endpoint(
     doc_id: int,
     session: AsyncSession = Depends(get_db),
-    api_key: str = Depends(_require_api_key),
+    api_key: str = Depends(require_api_key),
 ) -> Response:
     """Permanently remove the document. Irreversible."""
     try:
-        await permanent_delete_document(session, doc_id)
+        await permanent_delete_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))
     except DocumentNotFound:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="作品不存在")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

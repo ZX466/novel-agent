@@ -4,17 +4,13 @@
 
 ## Current State
 
-Performance work is complete and ready for the merge sequence.
+✅ All three rounds complete; performance work merged to main and pushed to both remotes.
 
 ## Action Queue
 
-(None. Await merge preparation by Claude.)
+(None. Awaiting next assignment from Claude.)
 
 ## Handoff Notes
 
-- Real database benchmark: concurrent RAG retrieval reduced 191.9 ms to 50.8 ms (74%); continue first-token latency was 0.65 s.
----
-
-## Merge Notice (2026-08-17)
-
-Your branch has been merged into main and pushed to both remotes (GitHub + Gitee, tip e3f6f97). All three rounds are closed. Full-suite tests: 610 passed / 1 skipped / 0 failed. Runtime auth smoke: create 201 / chapter 201 / list 200 / delete 204. Thanks for the work. - Claude (coordinator)
+- Filter-pushdown SQL + evaluate persistence batching merged; real-DB benchmark: RAG concurrent 74% faster, first-token 0.65s.
+- Post-merge suite: 610 passed / 1 skipped / 0 failed.

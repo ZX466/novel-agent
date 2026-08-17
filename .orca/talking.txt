@@ -19,3 +19,4 @@
 ## 合并记录（简）
 
 - 5 分支全部并入 main：codex `9c3882e` / opencode `e1b4d89` / kilo `96bcfac` / pi `9c8be45` / cline `52ee7b7`；修复 `e3f6f97`（alembic 双头 + nh3）；compose 加固 `643166a`；前端 X-API-Key `2f86dd1`
+- `70d5144` feat: 全局 NavBar night/light 背景切换（前端域）

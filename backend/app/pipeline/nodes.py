@@ -343,20 +343,40 @@ async def evaluate_node(state: PipelineState) -> dict:
             }
 
     # Best-effort persistence of the evaluation score.
+    #
+    # Performance: only persist on the FINAL evaluation pass (the one that
+    # routes to safety_check). Intermediate refine-loop passes used to each
+    # commit a row — 3 iteration loop = 3 full DB transactions per request.
+    # The final score/feedback is what trend analysis consumes; intermediate
+    # scores remain visible in state["review_details"] / logging.
     session = state.get("session")
     if session is not None:
+        persist = False
         try:
-            from app.services.evaluation import create_evaluation
-            await create_evaluation(
-                session,
-                novel_id=state.get("novel_id") or 0,
-                stage="pipeline_evaluate",
-                score=score,
-                feedback=feedback,
-                source="stream_pipeline",
+            # Predict the router's decision as of now: if this evaluation
+            # pass is the last one (next hop is safety_check), persist.
+            next_hop = route_after_evaluate(
+                {**state, "score": score, "feedback": feedback}
             )
+            persist = next_hop == "safety_check"
         except Exception:
-            logger.exception("evaluate_node: failed to persist evaluation")
+            # Route prediction must never break persistence semantics:
+            # default to persisting on failure to predict.
+            persist = True
+
+        if persist:
+            try:
+                from app.services.evaluation import create_evaluation
+                await create_evaluation(
+                    session,
+                    novel_id=state.get("novel_id") or 0,
+                    stage="pipeline_evaluate",
+                    score=score,
+                    feedback=feedback,
+                    source="stream_pipeline",
+                )
+            except Exception:
+                logger.exception("evaluate_node: failed to persist evaluation")
 
     result: dict = {"score": score, "feedback": feedback}
     if dim_details:

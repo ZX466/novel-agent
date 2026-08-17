@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import cast, func, select
+from sqlalchemy import Date, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.document import Document
@@ -20,14 +20,14 @@ async def get_dashboard_stats(session: AsyncSession) -> dict:
 
     daily_stmt = (
         select(
-            cast(Document.updated_at, date).label("day"),
+            cast(Document.updated_at, Date).label("day"),
             func.sum(Document.word_count).label("word_count"),
         )
         .where(
             Document.updated_at >= thirty_days_ago,
             Document.status == "active",
         )
-        .group_by(cast(Document.updated_at, date))
+        .group_by(cast(Document.updated_at, Date))
     )
     result = await session.execute(daily_stmt)
     daily_map = {row.day: int(row.word_count or 0) for row in result.all()}

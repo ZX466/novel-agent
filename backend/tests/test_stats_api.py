@@ -2,12 +2,38 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.conftest import _FakeResult
+
 _AUTH = {"X-API-Key": "test-key"}
+
+
+@pytest.mark.asyncio
+async def test_stats_service_builds_real_sql(mock_session) -> None:
+    """The service must construct executable SQL.
+
+    Regression: `cast(Document.updated_at, date)` passed the Python
+    ``datetime.date`` class instead of SQLAlchemy ``Date``, which only
+    exploded at statement-execution time (TypeError: missing argument
+    'year'). Building the statement in this test evaluates the cast, so
+    the shadowing bug can never ship again.
+    """
+    from app.services import stats
+
+    mock_session.set_execute_results([
+        _FakeResult(scalars=[]),  # daily aggregation
+        _FakeResult(scalars=[SimpleNamespace(docs=1, chapters=2, words=300)]),  # totals
+    ])
+    result = await stats.get_dashboard_stats(mock_session)
+    assert len(result["daily_words"]) == 30
+    assert result["total_documents"] == 1
+    assert result["total_chapters"] == 2
+    assert result["total_words"] == 300
 
 
 class _Row:

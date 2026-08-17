@@ -2,6 +2,9 @@
 
 AI 小说创作平台：三阶段 LLM 流水线（草稿 → 精修 → 评估）+ 实时流式输出 + BYOK 多 provider + RAG 记忆检索 + 多 Agent 系统。
 
+> 想**5 分钟跑起来**？直接看 [QUICKSTART.md](QUICKSTART.md)（极简上手路径）。
+> 完整部署见 [deploy/README.md](deploy/README.md)。
+
 ## 技术栈
 
 | 层 | 选型 |

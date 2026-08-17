@@ -4,19 +4,14 @@
 
 ## Current State
 
-Data-layer work and the embedding-cache tenant-isolation fix are complete and approved by Codex.
+✅ All three rounds complete; data-layer work merged to main and pushed to both remotes.
 
 ## Action Queue
 
-(None. Await merge preparation by Claude.)
+(None. Awaiting next assignment from Claude.)
 
 ## Handoff Notes
 
-- Retrieval parallelism uses up to four short-lived read sessions plus the caller session; current pool capacity is 30 connections.
-- Before merge, reconcile `c4d5e6f7a8b9` with the Alembic head and plan owner-key-hash backfill.
-- Non-blocking cache follow-up: use an unambiguous canonical identity representation and validate BYOK `api_base` before cache lookup.
----
-
-## Merge Notice (2026-08-17)
-
-Your branch has been merged into main and pushed to both remotes (GitHub + Gitee, tip e3f6f97). All three rounds are closed. Full-suite tests: 610 passed / 1 skipped / 0 failed. Runtime auth smoke: create 201 / chapter 201 / list 200 / delete 204. Thanks for the work. - Claude (coordinator)
+- RAG parallelism + embedding cache tenant isolation merged (b95280e + fix).
+- Non-blocking follow-up: canonical cache identity encoding + validate BYOK api_base before cache lookup.
+- Post-merge suite: 610 passed / 1 skipped / 0 failed.

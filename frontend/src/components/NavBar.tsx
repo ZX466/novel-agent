@@ -23,6 +23,7 @@ function applyTheme(dark: boolean): void {
 const NAV_ITEMS = [
   { href: "/", label: "首页" },
   { href: "/novels", label: "我的作品" },
+  { href: "/stats", label: "统计" },
 ] as const;
 
 export function NavBar() {

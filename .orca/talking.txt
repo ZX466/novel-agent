@@ -41,3 +41,16 @@
 ## 合并记录（前轮简）
 
 - 5 分支并入 main（codex/opencode/kilo/pi/cline）+ 修复 e3f6f97 + compose 643166a + X-API-Key 2f86dd1 + 主题切换 70d5144 + hydration 修复 5ede83d + 测试连接 8e0f4a9
+>>>>>>> gitee/main
+
+## Action Queue — cline（Round 4，本工作树）
+
+- [x] **文档同步**：F3 导出格式 / F4 知识库使用 / F6 统计看板的说明更新进 QUICKSTART + README — ✅ 完成（2026-08-17）
+- [x] **依赖评估**：EPUB 生成所需 Python 库（如 ebooklib/weasyprint）可行性 + 加入 pyproject 的建议 — ✅ 完成（2026-08-17）
+
+### Handoff Notes（cline）
+
+- 前轮：QUICKSTART.md + backend/docs/CONFIG-REVIEW.md 已并入 main；Pi 评审通过；Codex cd6d985 评审通过（两个 blocker 已在 main 解决）。
+- 2026-08-17：合并 main Round 4 baseline（61a8975）到本分支后，完成两项 P2：
+  1. **文档同步**：README 新增 `🔵 Round 4 新增` 区块 + API 端点表（export/stats/knowledge-docs）+ 验证清单项；QUICKSTART 新增 `§5 Round 4 功能速览` + 常见坑补充。
+  2. **依赖评估**：`backend/docs/EXPORT-EPUB-DEPS.md` → 推荐方案 A（stdlib zipfile 手写 EPUB3，**零新依赖**，pyproject 不改）；备选 ebooklib；weasyprint/pandoc 排除。已通知 kilo 作为 F3 前置决策输入。

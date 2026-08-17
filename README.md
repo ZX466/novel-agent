@@ -53,6 +53,14 @@ AI 小说创作平台：三阶段 LLM 流水线（草稿 → 精修 → 评估�
 - **保存门槛降低**：只需配好 1 个阶段即可保存，不必三阶段全填
 - **大纲状态清理**：应用大纲后自动清除 AI 面板状态，防止残留文本被误插入正文
 
+### 🔵 Round 4 新增（2026-08-17 本轮交付）
+
+- **F1 AI 编剧对话助手**：多轮对话界面，自动注入章节/大纲上下文，生成结果可一键插入正文（复用 /v1/chat，协议见 kilo 接口设计）
+- **F3 作品导出**：作品页一键导出 `md / txt / epub` 三种格式，端点 `GET /v1/documents/{id}/export?format=md|txt|epub`（EPUB 用标准库 zip 容器生成，零新依赖，评估见 [backend/docs/EXPORT-EPUB-DEPS.md](backend/docs/EXPORT-EPUB-DEPS.md)）
+- **F4 本地知识库**：上传参考资料（白名单类型 + 大小上限），自动 ~800 字分块 + embedding 入库；RAG 检索时与小说记忆合并，**小说设定优先**；支持上传/列表/删除
+- **F6 写作统计看板**：近 30 天字数曲线、连续写作天数、今日目标达成，端点 `GET /v1/stats/dashboard`（基于 documents/chapters 的 updated_at + word_count 聚合）
+- **写作体验增强**：编辑器字体/行距/夜间护眼、专注模式增强、自动保存反馈、打字机逐字回显、快捷键体系
+
 ---
 
 ## 目录
@@ -298,6 +306,11 @@ uv sync              # 重新构建
 | CRUD | `/v1/documents/{id}/world-settings/...` | 世界观管理 |
 | CRUD | `/v1/documents/{id}/plot-events/...` | 剧情事件管理 |
 | POST | `/v1/documents/{id}/retrieve` | RAG 语义检索 |
+| GET | `/v1/documents/{id}/export?format=md\|txt\|epub` | **F3 作品导出**（Round 4，附件下载，Content-Disposition 文件名） |
+| GET | `/v1/stats/dashboard` | **F6 写作统计看板**（Round 4，近 30 天字数曲线/连续天数/今日达成） |
+| POST/GET/DELETE | `/v1/documents/{id}/knowledge-docs`（以合并实现为准，详见 `/docs`） | **F4 本地知识库**（Round 4，上传/列表/删除，RAG 检索合并） |
+
+> 除 `/v1/health` 外的受保护端点均需 `X-API-Key` 请求头（`API_KEYS` 白名单模式，见 `.env.example`）。
 
 ---
 
@@ -315,6 +328,10 @@ uv sync              # 重新构建
 | 点击"生成总纲" | 大纲内容与小说标题相关，不再是通用模板 |
 | 点击"应用大纲" | 大纲保存、章节创建、实体提取成功，AI 面板清空 |
 | 点击"生成正文" | AI 根据已保存大纲生成正文，而非凭空编写 |
+| 作品页 → 导出 md/txt/epub | 下载对应格式文件，文件名带作品标题（F3） |
+| 知识库上传参考资料 | 分块 + embedding 入库成功，列表中可见（F4） |
+| 统计看板 | 显示字数曲线 / 连续写作天数 / 今日目标（F6） |
+| AI 编剧对话 → 插入正文 | 多轮对话结果可一键插入编辑器（F1） |
 
 ---
 

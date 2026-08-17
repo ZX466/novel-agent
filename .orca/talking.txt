@@ -4,17 +4,30 @@
 
 ## Current State
 
-🔴 **Round 4 in progress** — F4 本地知识库 [P1] 已接受，执行中。
+🟢 **Round 4 F4 本地知识库已完成** — 实现、测试、迁移、提交推送均已就绪；已请 Codex 评审。
+
+## Completed — F4 本地知识库 [P1]
+
+- 分支 `ZX466/opencode` 已推双远程（origin/gitee `e396635..f12d57b`，3 commits）。
+- **实现**：
+  - `knowledge_docs` 表（id/owner_key_hash idx/novel_id idx/title/chunk_index/content/embedding Vector(1536)/created_at/updated_at）+ 迁移 `e5f6a7b8c9d0`（HNSW 索引）。
+  - 上传校验：白名单默认 `md/markdown/txt`、上限默认 2MiB、严格 UTF-8、文件名清理为安全 basename（防路径穿越）、封顶读取（max_bytes+1，超限 400，不整读超大文件）。
+  - 纯文本存储、永不 HTML 渲染；无 SSRF 面；所有操作 owner_key_hash + novel_id 双范围 + `load_parent` 归属校验。
+  - 段落感知分块（默认 800 字符）+ `embed_batch` 一次批量入库。
+  - API：`POST/GET/DELETE /v1/documents/{doc_id}/knowledge`（201/400/404/204）。
+- **小说设定优先**：`retrieve()` 合并 **5 集合**（并发 5 会话）；`_search_knowledge` 每文件仅取最优 chunk 防单文件霸榜；world_setting 与 knowledge_doc 统一 `+0.05` boost（`SETTING_PRIORITY_BOOST`）；score=1-distance 约定与 `_search_one` 一致。
+- **测试**：`test_knowledge_doc.py`（22 项：分块/清理/上传校验/入库/列表/删除/检索/API 鉴权）；全套 **632 passed / 1 skipped**。
+- **DB 验证**：本地 PG 已 `alembic upgrade head` → `e5f6a7b8c9d0`；`knowledge_docs` 9 列（embedding=vector）+ 4 索引（pkey/owner_key_hash/novel_id/title/embedding HNSW）均确认。
+- 提交：`feat(knowledge)` / `feat(retrieval)` / `test(knowledge)`。
+- ⏭ 已向 Codex 发起评审请求（codex board 已发 `[通知]`）。
 
 ## Action Queue
 
-- [P1] **F4 本地知识库**（已接受 2026-08-17）：knowledge_docs 表 + alembic 迁移；上传分块(~800字)+embedding 入库；RAG 合并检索（小说设定优先）；上传/列表/删除端点；文件白名单与大小上限按 Codex 安全规格。
+- （空 — F4 完成，等待 Codex 评审反馈）
 
 ## Handoff Notes
 
 - RAG parallelism + embedding cache tenant isolation merged (b95280e + fix).
 - Non-blocking follow-up: canonical cache identity encoding + validate BYOK api_base before cache lookup.
-- Post-merge suite: 610 passed / 1 skipped / 0 failed.
-## Action Queue (Round 4 — 2026-08-17)
-
-- [P1] **F4 本地知识库**：新增 `knowledge_docs` 表（novel_id/title/content/chunk/embedding）+ alembic 迁移；上传文件分块（~800 字）+ embedding 入库；RAG 检索合并（小说设定优先）；上传/列表/删除端点。文件类型白名单与大小上限配合 Codex 安全规格。评审: Codex
+- Post-merge suite: 610 passed / 1 skipped / 0 failed（F4 完成后 632 passed / 1 skipped）。
+- F4 提交后 `alembic upgrade head` 已应用到本地 PG（e5f6a7b8c9d0），`knowledge_docs` 表已就绪。

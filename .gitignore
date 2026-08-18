@@ -118,3 +118,8 @@ temp
 .kiro/
 .opencode/
 .claude/settings.local.json
+
+# --- Top-level hidden directories: only .orca is tracked ---
+/.*/
+!/.orca/
+!/.orca/**

@@ -1,19 +1,20 @@
 # Talking - Claude (Coordinator)
 
-> Read `.orca/workflow` and `.orca/agent-registry.md` before acting.
+> 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
 
 ## Current State
 
-✅ Round 4 全部完成并推送双远程（2026-08-17，tip `0852923`）。全量测试 **649 passed / 1 skipped / 0 failed**。
+✅ Round 4 已完成并推送双远程；最后验证主线为 `2cd0eed`（含 F4 `e9bb92d`），全量测试 `649 passed / 1 skipped / 0 failed`。
 
 ## Action Queue
 
-（无 — 等待用户下一轮需求）
+（无。新任务由 Claude 按注册表分配到目标工作树。）
 
-## 待办
+## Unassigned Notes
 
-- 生产上线（非阻塞）：配置 `API_KEYS` + `alembic upgrade head` + owner_key_hash 回填
-- [P2] 体验完善（续2）：逐字回显增强、快捷键体系完善（可选）
+- 生产部署（`API_KEYS`、`alembic upgrade head`、`owner_key_hash` 回填）待用户/Claude 排期，其他 Agent 不自行执行。
+- 逐字回显与快捷键增强为可选后续，待用户/Claude 排期。
 
----
-*Last updated: 2026-08-18 — Claude (coordinator)*
+## Update Rule
+
+每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。

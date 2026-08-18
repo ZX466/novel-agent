@@ -94,6 +94,56 @@ def test_export_requires_api_key(app_client: TestClient) -> None:
     assert r.status_code == 422
 
 
+def _create_doc_with_chapter(app_client: TestClient, title: str, chapter_title: str, body: str) -> int:
+    create = app_client.post("/v1/documents", json={"title": title}, headers=_AUTH)
+    assert create.status_code == 201
+    doc_id = create.json()["id"]
+    app_client.post(
+        f"/v1/documents/{doc_id}/chapters",
+        json={"chapter_index": 0, "title": chapter_title, "content_text": body},
+        headers=_AUTH,
+    )
+    return doc_id
+
+
+def test_export_qidian_renders_platform_markdown(app_client: TestClient) -> None:
+    doc_id = _create_doc_with_chapter(app_client, "导出平台", "第一章", "正文")
+    r = app_client.get(f"/v1/documents/{doc_id}/export", params={"format": "qidian"}, headers=_AUTH)
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/markdown")
+    assert ".md" in r.headers["content-disposition"]
+    body = r.text
+    assert "第1章 第一章" in body
+    assert "起点" in body
+
+
+def test_export_jj_renders_platform_markdown(app_client: TestClient) -> None:
+    doc_id = _create_doc_with_chapter(app_client, "导出平台", "第一章", "正文")
+    r = app_client.get(f"/v1/documents/{doc_id}/export", params={"format": "jj"}, headers=_AUTH)
+    assert r.status_code == 200
+    assert "晋江" in r.text
+    assert "谢绝转载" in r.text
+
+
+def test_export_zhihu_renders_platform_markdown(app_client: TestClient) -> None:
+    doc_id = _create_doc_with_chapter(app_client, "导出平台", "第一章", "正文")
+    r = app_client.get(f"/v1/documents/{doc_id}/export", params={"format": "zhihu"}, headers=_AUTH)
+    assert r.status_code == 200
+    assert "知乎专栏" in r.text
+
+
+def test_export_wechat_renders_platform_markdown(app_client: TestClient) -> None:
+    doc_id = _create_doc_with_chapter(app_client, "导出平台", "第一章", "正文")
+    r = app_client.get(f"/v1/documents/{doc_id}/export", params={"format": "wechat"}, headers=_AUTH)
+    assert r.status_code == 200
+    assert "原创" in r.text
+
+
+def test_export_invalid_platform_returns_422(app_client: TestClient) -> None:
+    r = app_client.get("/v1/documents/1/export", params={"format": "medium"}, headers=_AUTH)
+    assert r.status_code == 422
+
+
 def test_export_epub_escapes_special_chars_in_titles(app_client: TestClient) -> None:
     create = app_client.post(
         "/v1/documents",

@@ -15,6 +15,7 @@ from app.db.session import get_db
 from app.schemas.novel_memory import ChapterListItem
 from app.services.document import get_document
 from app.services.chapter import list_chapters
+from app.services.export_adapters import PLATFORM_FORMATS, render_platform
 
 router = APIRouter(tags=["export"])
 
@@ -167,13 +168,19 @@ p { text-indent: 2em; margin: 0; }
 @router.get("/v1/documents/{doc_id}/export")
 async def export_document(
     doc_id: int,
-    format: str = Query(..., pattern="^(md|txt|epub)$", description="导出格式：md / txt / epub"),
+    format: str = Query(
+        ...,
+        pattern=f"^(md|txt|epub|{'|'.join(PLATFORM_FORMATS)})$",
+        description="导出格式：md / txt / epub / qidian / jj / zhihu / wechat",
+    ),
     session: AsyncSession = Depends(get_db),
     api_key: str = Depends(require_api_key),
 ) -> Response:
     """Export a document with its chapters.
 
-    Supports markdown, plain text, and EPUB (zip container). Returns the
+    Supports markdown, plain text, and EPUB (zip container), plus
+    platform-specific Markdown adapters (qidian / jj / zhihu / wechat) that
+    render cover/byline/copyright per the target platform. Returns the
     exported file with a Content-Disposition attachment header.
     """
     await load_parent(session, doc_id)
@@ -183,7 +190,19 @@ async def export_document(
     filename_base = doc.title or f"document-{doc_id}"
     safe_filename = filename_base.replace("/", "-").replace("\\", "-") or "export"
 
-    if format == "md":
+    if format in PLATFORM_FORMATS:
+        author = (doc.metadata_json or {}).get("author")
+        content = render_platform(
+            format,
+            title=doc.title,
+            author=author,
+            cover_url=doc.cover_url or None,
+            chapters=chapters,
+        )
+        media_type = "text/markdown; charset=utf-8"
+        filename = f"{safe_filename}.md"
+        body = content.encode("utf-8")
+    elif format == "md":
         content = _build_markdown(doc.title, chapters)
         media_type = "text/markdown; charset=utf-8"
         filename = f"{safe_filename}.md"

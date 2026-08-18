@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from app.api import chat as chat_router_module
 from app.api import chapters as chapters_router_module
 from app.api import characters as characters_router_module
+from app.api import consistency as consistency_router_module
 from app.api import documents as documents_router_module
 from app.api import health as health_router_module
 from app.api import knowledge_docs as knowledge_docs_router_module
@@ -136,6 +137,7 @@ app.include_router(export_router_module.router)
 app.include_router(stats_router_module.router)
 app.include_router(knowledge_docs_router_module.router)
 app.include_router(snapshots_router_module.router)
+app.include_router(consistency_router_module.router)
 
 
 @app.exception_handler(Exception)

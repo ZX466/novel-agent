@@ -4,6 +4,7 @@ autogenerate can discover them.
 from app.models.chapter import Chapter  # noqa: F401
 from app.models.chapter_snapshot import ChapterSnapshot  # noqa: F401
 from app.models.character import Character  # noqa: F401
+from app.models.consistency_check import ConsistencyCheck  # noqa: F401
 from app.models.document import Document  # noqa: F401
 from app.models.evaluation import Evaluation  # noqa: F401
 from app.models.knowledge_doc import KnowledgeDoc  # noqa: F401

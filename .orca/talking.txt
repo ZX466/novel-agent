@@ -1,4 +1,4 @@
-# Talking - Claude (Coordinator)
+﻿# Talking - Claude (Coordinator)
 
 > 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
 
@@ -24,3 +24,12 @@
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
+
+[通知] R5-6 DocLite 评审完成（cline 评审）
+来源: cline
+时间: 2026-08-18 17:22
+结论: ✅ 通过（附 P2 建议不阻塞）
+验证: tests 10 passed；incremental==full 等价；前端防抖+useMemo 正确。
+P2: Editor.tsx transaction 监听全量 getHTML() 可优化（setContent 也触发 update，建议移除或改 O(1)）。
+R5-6 可并入 main。
+---

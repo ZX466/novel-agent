@@ -14,6 +14,7 @@
 - [ ] R5-3 设定一致性哨兵 → opencode（已分配）
 - [ ] R5-4 安心回溯 → codex（已分配）
 - [ ] R5-5 多平台导出适配器 → kilo（已分配）
+- [ ] R5-6 DocLite 超长文档零卡顿 → pi（已分配，评审 cline）
 - [ ] 回收各板完成回复 → 评审 → 合并 main → 推送双远程
 
 ## Unassigned Notes

@@ -2,6 +2,8 @@
 
 > 极简上手路径。完整文档见 [README.md](README.md)，部署见 [deploy/README.md](deploy/README.md)。
 
+> **👨‍💻 开始创作？按意图选卡直达** → [创作配方卡索引](docs/recipes/index.md)：01 新书三步开写 / 02 续写旧稿 / 03 喂知识库 / 04 导出投稿 / 05 换模型供应商
+
 ## 前置条件
 
 - Python 3.11+、Node 18+、[uv](https://docs.astral.sh/uv/)

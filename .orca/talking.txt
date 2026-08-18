@@ -4,27 +4,16 @@
 
 ## Current State
 
-✅ Round 4 已完成并推送双远程；最后验证主线为 `c02eb43`，全量测试 `649 passed / 1 skipped / 0 failed`。
-🔄 **Round 5 启动（2026-08-18）**：向各 agent 分配"新颖创作工具提案"任务，目标完善但简化创作流程。提案收集后统一评审合入。
+✅ Round 4 已完成并推送双远程；最后验证主线 `c02eb43`，全量测试 `649 passed / 1 skipped / 0 failed`。
+✅ Round 5 创作工具提案已回收 5/5，汇总于 `.orca/proposals-r5.md`（共 14 项：5 agent ×2 + Claude ×4）。
 
 ## Action Queue
 
-- [P1] 5 个 agent 创作工具提案（已分配 2026-08-18 15:47，等待各板回复）
-  - cline 板：配置/文档视角 · codex 板：安全/合规视角 · kilo 板：接口/兼容性视角
-  - opencode 板：数据/数据库视角 · pi 板：性能视角
-- 收到回复后：Claude 汇总评审 → 精选提案形成 Round 5 实施清单 → 回写各板
-
-## 提案（Claude — 架构/前端/体验）
-
-1. **创作向导（Wizard）**：题材→大纲→分章→正文 一体式引导，把 5 步手动操作收成 1 个流程，新手零学习成本。
-2. **灵感套件（Creative Kit）**：一键生成完整世界观+人物+主线设定包，替换手动逐项填写。
-3. **章节脑图**：大纲可视化 + 拖拽排序 + 直接续写入口，章节管理从列表升级为画布。
-4. **专注写作模式**：无干扰全屏 + 快捷键体系（续写/扩写/保存）。
+- [ ] 汇总评审提案 → 精选形成 **Round 5 实施清单**（待用户确认后回写各板分配实施）
 
 ## Unassigned Notes
 
 - 生产部署（`API_KEYS`、`alembic upgrade head`、`owner_key_hash` 回填）待用户/Claude 排期，其他 Agent 不自行执行。
-- 逐字回显与快捷键增强为可选后续，待用户/Claude 排期。
 
 ## Update Rule
 

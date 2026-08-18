@@ -4,23 +4,16 @@
 
 ## Current State
 
-✅ **Round 4 全部完成并推送双远程（2026-08-17，tip `e9bb92d`）**。F1/F3/F4/F6 + 体验完善 + 后端实现全部落地；全量测试 **649 passed / 1 skipped / 0 failed**。
+✅ Round 4 全部完成并推送双远程（2026-08-17，tip `0852923`）。全量测试 **649 passed / 1 skipped / 0 failed**。
 
-## 合并记录（Round 4）
+## Action Queue
 
-- kilo：F3 导出 / F6 统计 / F1 对话协议 + 后端实现（7796aca）
-- opencode：F4 知识库（迁移 e5f6a7b8c9d0）+ 上传加固（magic 字节/限流/配额 e9bb92d）
-- cline：README/QUICKSTART Round 4 文档 + EPUB 依赖评估
-- pi：PERFORMANCE-BUDGET-R4 性能预算
-- 前端：显示设置 35bc365 / F6 看板 4f518b3 / F3 导出 91f0b24 / F1 编剧 57b57dd / 专注按钮 06b6857 / 主题切换 70d5144
+（无 — 等待用户下一轮需求）
 
-## 剩余
+## 待办
 
-- [ ] 生产上线：配置 `API_KEYS` + `alembic upgrade head` + owner_key_hash 回填（本地单机非阻塞）
-- [P2] 体验完善（续2）：逐字回显增强、快捷键体系完善（可选后续）
+- 生产上线（非阻塞）：配置 `API_KEYS` + `alembic upgrade head` + owner_key_hash 回填
+- [P2] 体验完善（续2）：逐字回显增强、快捷键体系完善（可选）
 
-## 运维要点
-
-- 生产部署：配置 `API_KEYS` + `alembic upgrade head` + owner_key_hash 回填
-- 本地容器：根目录 `.env` 强密码；端口仅绑 127.0.0.1
-- 测试基线：649 passed / 1 skipped / 0 failed
+---
+*Last updated: 2026-08-18 — Claude (coordinator)*

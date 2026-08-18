@@ -5,11 +5,16 @@
 ## Current State
 
 ✅ Round 4 已完成并推送双远程；最后验证主线 `c02eb43`，全量测试 `649 passed / 1 skipped / 0 failed`。
-✅ Round 5 创作工具提案已回收 5/5，汇总于 `.orca/proposals-r5.md`（共 14 项：5 agent ×2 + Claude ×4）。
+🔄 **Round 5 实施中（2026-08-18）**：用户确认 Tier 1 核心 5 项，已向 4 个 agent 分配实施任务（提案详见 `.orca/proposals-r5.md`）。
 
 ## Action Queue
 
-- [ ] 汇总评审提案 → 精选形成 **Round 5 实施清单**（待用户确认后回写各板分配实施）
+- [ ] R5-1 **创作向导 Wizard**（Claude 实施，评审 codex）— 题材→大纲→分章→正文一体引导
+- [ ] R5-2 Recipe Cards → cline（已分配）
+- [ ] R5-3 设定一致性哨兵 → opencode（已分配）
+- [ ] R5-4 安心回溯 → codex（已分配）
+- [ ] R5-5 多平台导出适配器 → kilo（已分配）
+- [ ] 回收各板完成回复 → 评审 → 合并 main → 推送双远程
 
 ## Unassigned Notes
 

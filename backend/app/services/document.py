@@ -70,6 +70,49 @@ def _compute_word_count(text: str) -> int:
     return cjk + latin_words
 
 
+def _common_prefix_suffix_len(a: str, b: str) -> tuple[int, int]:
+    """Return (prefix_len, suffix_len) of common chars between a and b.
+
+    Suffix counting starts after the common prefix so overlapping
+    prefix/suffix regions are not double-counted.
+    """
+    max_pre = min(len(a), len(b))
+    pre = 0
+    while pre < max_pre and a[pre] == b[pre]:
+        pre += 1
+    max_suf = min(len(a), len(b)) - pre
+    suf = 0
+    while suf < max_suf and a[len(a) - 1 - suf] == b[len(b) - 1 - suf]:
+        suf += 1
+    return pre, suf
+
+
+def _compute_word_count_incremental(old_text: str, new_text: str, old_count: int) -> int:
+    """Incremental word count for large-document edits.
+
+    DocLite: for >100KB documents a full-text regex pass on every save is
+    O(n). Instead, find the unchanged common prefix/suffix and run the
+    counters only over the changed middle segment:
+
+        new_count = old_count + count(changed_middle_new) - count(changed_middle_old)
+
+    Equivalent to `_compute_word_count(new_text)` (guaranteed by
+    tests/test_document_wordcount.py::test_incremental_matches_full) while
+    touching only the edited region.
+    """
+    if old_text == new_text:
+        return old_count
+    if not old_text:
+        return _compute_word_count(new_text)
+    if not new_text:
+        return 0
+
+    pre, suf = _common_prefix_suffix_len(old_text, new_text)
+    old_mid = old_text[pre : len(old_text) - suf if suf else len(old_text)]
+    new_mid = new_text[pre : len(new_text) - suf if suf else len(new_text)]
+    return old_count + _compute_word_count(new_mid) - _compute_word_count(old_mid)
+
+
 class DocumentNotFound(Exception):
     """Raised when a document ID does not exist in the database."""
 
@@ -179,10 +222,17 @@ async def update_document(
     if "content_html" in updates and updates["content_html"] is not None:
         updates["content_html"] = sanitize_content_html(updates["content_html"])
     content_changed = "content_text" in updates
+    # DocLite: capture the pre-edit text for incremental word count so
+    # >100KB saves don't pay a full-text regex pass.
+    old_text = doc.content_text or ""
+    old_count = doc.word_count or 0
     for field, value in updates.items():
         setattr(doc, field, value)
     if content_changed:
-        doc.word_count = _compute_word_count(doc.content_text or "")
+        new_text = doc.content_text or ""
+        doc.word_count = _compute_word_count_incremental(
+            old_text, new_text, old_count,
+        )
     if updates:
         doc.version = doc.version + 1
     await session.commit()

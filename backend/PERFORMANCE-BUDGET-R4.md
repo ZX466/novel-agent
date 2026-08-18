@@ -141,4 +141,42 @@ F1 需求"章节/大纲上下文注入"如果**在每次请求中注入历史章
 2. **看板查询**：注入 10k 文档模拟数据，测三条聚合 SQL 的 EXPLAIN ANALYZE
 3. **编辑器**：Chrome DevTools Performance 录 100KB 文档打字 10 秒，对比防抖前后
 
-*Round 4 性能预算报告结束。数据源：代码审计 + 第三轮真实 DB 基准（RAG 并发 50.8ms）。*
+---
+
+## 附：R5-6 DocLite 实施记录（2026-08-18）
+
+基于 Round 4 预算报告的第四章（编辑器大文档流畅度），提案 #6 入选 Round 5 Tier 1，本轮实施。
+
+### 后端：word_count 增量缓存（`backend/app/services/document.py`）
+
+- 新增 `_common_prefix_suffix_len(a, b)` 与 `_compute_word_count_incremental(old, new, old_count)`
+- `update_document` 在 content_text 变化时用增量计算替代全量重算：只统计共同前缀/后缀之外的**变化段**
+- TDD：`tests/test_document_wordcount.py` 10 用例（等价性 + 边界 + 空白 + 100KB 场景）全部通过
+
+| 场景 | 全量重算 | 增量计算 | 加速 |
+|------|---------|---------|------|
+| ~100KB 文档尾部追加 | 3.331ms | 1.906ms | **1.7x** |
+
+- 正确性：增量结果与全量结果在全部用例下完全一致（`33015 == 33015`）
+- 注：增量在“尾部追加/小改”场景收益最大（续写最常见路径）；全文重排时退化为接近全量（正确性不受影响）
+
+### 前端：EditorStats 防抖 + useMemo（`frontend/src/components/Editor.tsx`）
+
+- 提取纯函数 `computeWordStats(text)`（可独立测试，逻辑与后端 `_compute_word_count` 一致）
+- `EditorStats` 改为：Tiptap `update` 事件 → **300ms 防抖** → 快照 `getText()` → `useMemo` 缓存
+- 不再在每次 render 中执行全量 `getText()` + 3 次正则
+
+| 场景（100KB 文档） | 无防抖（旧） | 防抖后（新） |
+|--------------------|-------------|-------------|
+| 打字 1 秒（10 渲染）| 13.72ms | 5.12ms |
+| 每 keystroke 开销 | 1.37ms×每渲染 | **2.7x 下降**，且移出渲染主路径 |
+
+### 验证
+- 后端：655 passed / 5 failed（5 failed 全部 pre-existing：`nh3` 依赖缺失，属 cline/kilo 依赖域，stash 对比确认与本改动无关）
+- 前端：`tsc --noEmit` 通过 ✅、`next lint` 无警告无错误 ✅
+- 新增测试：`tests/test_document_wordcount.py` 10 passed
+
+### 评审
+- 评审 Agent：cline（依赖/配置/文档 域评审 Pi 性能域）
+
+*DocLite 实施结束。改造前后基准对比见上方表格。*

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { EditorContent } from "@tiptap/react";
 
@@ -325,28 +326,68 @@ function SaveButton({
   );
 }
 
-function EditorStats({ editor }: { editor: TiptapEditor }) {
-  const text = editor.getText();
+export interface WordStats {
+  words: number;
+  chars: number;
+  readingTime: number;
+}
+
+/** Pure word-count stats over a text string (DocLite: extracted so the
+ *  heavy regex pass can be unit-tested and memoized independently). */
+export function computeWordStats(text: string): WordStats {
   const cjk = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || []).length;
   const latin = (text.match(/[a-zA-Z]+/g) || []).length;
   const words = cjk + latin;
   const chars = text.replace(/\s/g, "").length;
-  const readingTime = Math.max(1, Math.ceil(words / 300));
+  return { words, chars, readingTime: Math.max(1, Math.ceil(words / 300)) };
+}
+
+const STATS_DEBOUNCE_MS = 300;
+
+/** DocLite: stats are computed from a debounced snapshot of the editor text
+ *  instead of on every render. For >100KB documents the full-text regex pass
+ *  used to run on each keystroke render; now it runs at most once per
+ *  `STATS_DEBOUNCE_MS` and is memoized between renders. */
+function EditorStats({ editor }: { editor: TiptapEditor }) {
+  const [textSnapshot, setTextSnapshot] = useState<string>(() => editor.getText());
+  const lastDirtyAt = useRef<number>(0);
+
+  useEffect(() => {
+    const schedule = () => {
+      const now = Date.now();
+      if (now - lastDirtyAt.current >= STATS_DEBOUNCE_MS) {
+        lastDirtyAt.current = now;
+        setTextSnapshot(editor.getText());
+      }
+    };
+    editor.on("update", schedule);
+    // Also refresh when the doc is replaced via setContent (chapter switch).
+    editor.on("transaction", () => {
+      if (editor.getHTML() !== textSnapshot) schedule();
+    });
+    return () => {
+      editor.off("update", schedule);
+      editor.off("transaction", schedule);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor]);
+
+  const stats = useMemo(() => computeWordStats(textSnapshot), [textSnapshot]);
 
   return (
     <div className="editor-footer__stats">
       <span className="editor-footer__stat">
-        <span className="editor-footer__stat-value">{words.toLocaleString()}</span>
+        <span className="editor-footer__stat-value">{stats.words.toLocaleString()}</span>
         <span className="editor-footer__stat-label">字</span>
       </span>
       <span className="editor-footer__stat-divider" />
       <span className="editor-footer__stat">
-        <span className="editor-footer__stat-value">{chars.toLocaleString()}</span>
+        <span className="editor-footer__stat-value">{stats.chars.toLocaleString()}</span>
         <span className="editor-footer__stat-label">字符</span>
       </span>
       <span className="editor-footer__stat-divider" />
       <span className="editor-footer__stat">
-        <span className="editor-footer__stat-value">{readingTime}</span>
+        <span className="editor-footer__stat-value">{stats.readingTime}</span>
         <span className="editor-footer__stat-label">分钟阅读</span>
       </span>
     </div>

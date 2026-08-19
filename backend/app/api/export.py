@@ -10,7 +10,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api._deps import load_parent, require_api_key
+from app.api._deps import load_parent, owner_key_hash, require_api_key
 from app.db.session import get_db
 from app.schemas.novel_memory import ChapterListItem
 from app.services.document import get_document
@@ -183,8 +183,8 @@ async def export_document(
     render cover/byline/copyright per the target platform. Returns the
     exported file with a Content-Disposition attachment header.
     """
-    await load_parent(session, doc_id)
-    doc = await get_document(session, doc_id)
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
+    doc = await get_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))
     chapters, _ = await list_chapters(session, novel_id=doc_id, limit=500, offset=0)
 
     filename_base = doc.title or f"document-{doc_id}"

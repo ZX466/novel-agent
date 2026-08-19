@@ -360,14 +360,15 @@ function EditorStats({ editor }: { editor: TiptapEditor }) {
         setTextSnapshot(editor.getText());
       }
     };
+    // Tiptap emits `update` for every transaction — including chapter
+    // switches via setContent (dispatchTransaction → emit('update')).
+    // cline review (P2): a separate `transaction` listener that compared
+    // full getHTML() == textSnapshot was O(n) per keystroke on >100KB
+    // docs, defeating DocLite's purpose — removed. `update` alone is
+    // sufficient.
     editor.on("update", schedule);
-    // Also refresh when the doc is replaced via setContent (chapter switch).
-    editor.on("transaction", () => {
-      if (editor.getHTML() !== textSnapshot) schedule();
-    });
     return () => {
       editor.off("update", schedule);
-      editor.off("transaction", schedule);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);

@@ -4,22 +4,21 @@
 
 ## Current State
 
-✅ Round 5 完成（6/6 合入，测试全绿）。🎉 **Round 6 全部完成（5/5 合入 main，2026-08-19）**：
-- ✅ R6-5 PerfPulse（pi）`81ebf35`
-- ✅ R6-3 交稿雷达（codex）`c66c30d`/`65a1efd`/`bc55591`（746 passed）
-- ✅ R6-4 数据可移植网关（kilo）`7ed8791`/`99645ad`（758 passed）
-- ✅ R6-1 章节脑图（Claude）`f8af335`/`25fe403`（复核通过）
-- ✅ R6-2 时间线图谱（opencode）`35860c4`/`484e9d0`/`a10ca2b`（794 passed，唯一 alembic head `c0d1e2f3a4b50`）
-- ✅ alembic 双头已解决（merge `a5941476682a` + `b0c1d2e3f405`），本地 DB 已 upgrade head 对齐
+✅ Round 5 完成（6/6 合入）。🎉 **Round 6 全部完成（5/5 合入 main，794 passed + E2E 全通过）**。
+🔄 **Round 7 启动（2026-08-19，主题：沉浸创作 + 起点生成 + 生产就绪）**：
+- R7-1 专注写作模式（Claude 实施，评审 codex）— 待实施
+- R7-2 灵感套件 Creative Kit（Claude 实施，评审 codex）— 待实施
+- R7-3 生产就绪准备（cline 实施，评审 Claude）— 已分派 [任务]
+- ⚠️ 腾讯云服务器已到期（2026-08-16）：真实部署待恢复后执行，本轮做脚本/文档/本地验证
 
 ## Action Queue
 
-- [x] R6-1 章节脑图 → 已合入 main（`25fe403`，复核通过）
-- [x] R6-2 → **已 cherry-pick 合入 main**（`35860c4`/`484e9d0`/`a10ca2b`，794 passed）
-- [x] R6-3 → 已合入 main
-- [x] R6-4 → 已合入 main
-- [x] alembic 双头 → 已 merge + 本地 DB upgrade head 对齐
-- [ ] 🏁 收尾：CHANGES 更新 → 前端验证（R6-1）→ 双远程推送 → 全量验证报告
+- [x] R6-1/2/3/4/5 → 全部合入 main（Round 6 闭环）
+- [x] alembic 双头 → 已 merge（`a5941476682a` + `b0c1d2e3f405`，唯一 head `c0d1e2f3a4b50`）
+- [ ] **R7-1 专注写作模式**（Claude）→ 待实施 → codex 评审 → 合入
+- [ ] **R7-2 灵感套件**（Claude）→ 待实施 → codex 评审 → 合入
+- [ ] **R7-3 生产就绪准备**（cline，已分派）→ 回执 → Claude 评审
+- [ ] 回收实施结果 → 评审 → 合并 main（cherry-pick）→ 推送双远程
 
 ## Unassigned Notes
 

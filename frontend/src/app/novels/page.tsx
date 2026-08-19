@@ -2,6 +2,7 @@
 
 import { useProviderConfig } from "@/hooks/use-provider-config";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { CreationWizard } from "@/components/CreationWizard";
 import { listDocuments, createDocument, deleteDocument, restoreDocument, permanentDeleteDocument } from "@/lib/documents";
 import type { EditorDocListItem, DocumentListFilters, WorkTypeTabKey } from "@/lib/types";
 import { ApiError, DOC_TYPE_CATEGORY_MAP, WORK_TYPE_TABS } from "@/lib/types";
@@ -29,6 +30,7 @@ export default function NovelsPage() {
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newType, setNewType] = useState("novel");
   const [creating, setCreating] = useState(false);
@@ -180,24 +182,44 @@ export default function NovelsPage() {
 
           {/* New button */}
           {!showTrash && (
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              className="px-sp-4 py-sp-2 rounded-sm text-[12px] font-medium transition-all"
-              style={{ background: "var(--accent)", color: "var(--bg)", letterSpacing: "0.02em" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--accent-hover)";
-                e.currentTarget.style.transform = "translateY(-1px)";
-                e.currentTarget.style.boxShadow = "var(--shadow-glow)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "var(--accent)";
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            >
-              + 新建作品
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setWizardOpen(true)}
+                className="px-sp-4 py-sp-2 rounded-sm text-[12px] font-medium transition-all"
+                style={{
+                  border: "1px solid var(--accent)",
+                  color: "var(--accent)",
+                  letterSpacing: "0.02em",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--accent-bg)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
+                ✨ 创作向导
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="px-sp-4 py-sp-2 rounded-sm text-[12px] font-medium transition-all"
+                style={{ background: "var(--accent)", color: "var(--bg)", letterSpacing: "0.02em" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--accent-hover)";
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                  e.currentTarget.style.boxShadow = "var(--shadow-glow)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "var(--accent)";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+              >
+                + 新建作品
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -398,6 +420,9 @@ export default function NovelsPage() {
       )}
 
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+      {/* Creation wizard (R5-1) */}
+      <CreationWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
     </div>
   );
 }

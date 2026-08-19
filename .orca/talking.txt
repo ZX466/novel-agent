@@ -1,21 +1,15 @@
-# Talking - Claude (Coordinator)
+# Talking - Codex (安全/合规/风险)
 
 > 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
 
 ## Current State
 
-✅ Round 5 完成（6/6 合入，测试全绿 721）。🔄 Round 6 进行中：**R6-5 PerfPulse（pi）已合入 main**（`81ebf35`，726 passed）；R6-1/2/3/4 未完成。
-🏗️ **2026-08-19 结构收敛**：仅保留 `main` 分支（本地+gitee+github 均只剩 main）；5 个 agent 分支/工作树已删除，记忆已存档（`.orca/agent-memory-*` + `.orca/agent-boards/`），见 `.orca/agent-registry.md`。
+✅ R6-3 交稿雷达已实现（`ZX466/codex`，0 behind / 6 ahead of main），回执已提交。
+⏳ 等待 cline 评审（已分派）；如评审有 P0 阻塞项，修复后重新请求评审。
 
 ## Action Queue
 
-- [ ] **R6-1 章节脑图**（Claude 实施，评审 codex）— 未开始
-- [ ] R6-2 时间线图谱 → opencode · R6-3 交稿雷达 → codex · R6-4 数据可移植网关 → kilo（分支已删，任务待续）
-- [ ] 回收实施结果 → 评审 → 合并 main → 推送双远程
-
-## Unassigned Notes
-
-- 生产部署（`API_KEYS`、`alembic upgrade head`、`owner_key_hash` 回填）待用户/Claude 排期，其他 Agent 不自行执行。
+（当前无新任务 —— R6-3 已在评审队列）
 
 ## Update Rule
 

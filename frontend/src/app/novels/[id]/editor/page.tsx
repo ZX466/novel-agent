@@ -33,7 +33,9 @@ import {
   type EditorDisplay,
 } from "@/components/EditorDisplaySettings";
 import { EditorToolbar, FindReplaceBar } from "@/components/EditorToolbar";
+import { FocusModeBar } from "@/components/FocusModeBar";
 import { VersionHistoryDialog } from "@/components/VersionHistoryDialog";
+import { matchesShortcut } from "@/lib/shortcuts";
 import { createSnapshot } from "@/lib/snapshots";
 import { extractEntitiesFromOutline } from "@/lib/extract-entities";
 import { createCharacter } from "@/lib/characters";
@@ -348,6 +350,35 @@ export default function NovelEditorPage() {
 
   const handleSave = useCallback(() => {
     if (dirty) void performSave();
+  }, [dirty, performSave]);
+
+  // R7-1 focus-mode shortcut suite: Ctrl+S save, Ctrl+\ focus toggle,
+  // Ctrl+F find, Ctrl+Enter continue-writing entry (surface AI tools).
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (matchesShortcut(e, "Ctrl+S")) {
+        e.preventDefault();
+        if (dirty) void performSave();
+        return;
+      }
+      if (matchesShortcut(e, "Ctrl+\\")) {
+        e.preventDefault();
+        setFocusMode((p) => !p);
+        return;
+      }
+      if (matchesShortcut(e, "Ctrl+F")) {
+        e.preventDefault();
+        setFindOpen((p) => !p);
+        return;
+      }
+      if (matchesShortcut(e, "Ctrl+Enter")) {
+        e.preventDefault();
+        setRightTab("tools");
+        return;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [dirty, performSave]);
 
   // Cleanup timeout.
@@ -861,6 +892,16 @@ export default function NovelEditorPage() {
             onAutoSave={handleAutoSave}
           />
         </>
+      )}
+
+      {/* Focus mode slim bar (R7-1): title + save + exit + shortcut hints. */}
+      {focusMode && (
+        <FocusModeBar
+          title={title || "未命名作品"}
+          dirty={dirty}
+          onSave={handleSave}
+          onExit={() => setFocusMode(false)}
+        />
       )}
 
       {/* Three-column body */}

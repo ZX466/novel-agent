@@ -66,3 +66,10 @@
 - **时间线资源上限**：`settings.timeline_max_events` 默认 5000；`get_timeline()` 先 count，超过上限由 API 返回 413；章节写入的告警检查则 best-effort 跳过。后续可关注 count→select 并发窗口和 summary 的字节级响应限制。
 - **迁移与真实 DB**：时间线链的目标 head 为 `c0d1e2f3a4b50`。子工作树通常没有 `.env`；运行真实 DB Alembic 时从主工作树 `backend/.env` 读取环境变量，绝不猜测或记录密码。`alembic heads/current/upgrade head` 都需要实际环境变量，失败原因应区分“未加载 env”和“真实迁移错误”。
 - **Token / 上下文纪律（用户明确要求）**：每个 Agent 在上下文接近 50% 时主动提醒切换新对话；切换前将当前任务、提交、验证、阻塞和待复审结论压缩写入 `.orca/agent-memory-*.md` 与相应 `talking.txt`。只写可复用事实，不写密钥、完整终端日志或冗长会话转录。
+
+## 8. Round 7 前端复审经验（2026-08-19）
+
+- **专注模式快捷键必须有可见结果**：若专注模式隐藏了右侧 AI 工具栏，`Ctrl+Enter` 仅修改隐藏的 tab state 就是静默 no-op。任何在 FocusModeBar 中展示的快捷键都应做端到端状态测试，确认目标面板/对话框实际可达；保留的旧快捷键也必须统一走 Ctrl/Meta 归一逻辑。
+- **子组件写入后必须同步父级文档状态**：子组件 `updateDocument()` 成功却丢弃返回的 `EditorDoc`，而父级之后用陈旧 `doc.metadata_json` 整体 PATCH，会静默覆盖刚写入的 outline。JSON metadata 的读改写须把最新结果回传并更新单一事实来源；有并发保存时优先使用服务端原子 merge 或版本/冲突控制。
+- **LLM 批量写入的完整性边界**：逐条调用会各自提交；任一条的字段校验、网络或服务错误都会留下部分持久化数据，重试会重复创建。对 LLM 解析结果先限制条数、长度和对象类型，跨多实体的一键“应用”优先后端原子批量 API，或明确幂等键/补偿策略。
+- **LLM 内容的展示边界**：React 普通文本插值默认转义，且不得把生成文本转入 `dangerouslySetInnerHTML`；仍需为弹窗提供 `role="dialog"`/名称、初始焦点、焦点返回和 Escape，不能把“已渲染”误当成“可访问”。

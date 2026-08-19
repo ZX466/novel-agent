@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.chapter import Chapter
@@ -78,26 +78,54 @@ async def _resolve_prev_event(
     )
 
 
+def _affected_chapter_refs(*events: PlotEvent | None) -> tuple[set[int], set[int]]:
+    """Collect (chapter_ids, chapter_indexes) touched by the given events.
+
+    An event may be tied to a chapter by id, by index, both, or neither —
+    all non-None references are collected so `_refresh_chapter_warnings`
+    recomputes every affected chapter (R6-2 复审 P2: chapter_id-only events
+    must enter the affected set too).
+    """
+    ids: set[int] = set()
+    indexes: set[int] = set()
+    for e in events:
+        if e is None:
+            continue
+        if e.chapter_id is not None:
+            ids.add(e.chapter_id)
+        if e.chapter_index is not None:
+            indexes.add(e.chapter_index)
+    return ids, indexes
+
+
 async def _refresh_chapter_warnings(
-    session: AsyncSession, *, novel_id: int, chapter_indexes: set[int | None],
+    session: AsyncSession, *, novel_id: int,
+    chapter_ids: set[int] | None = None,
+    chapter_indexes: set[int] | None = None,
 ) -> None:
     """Recompute timeline warnings for affected chapters (R6-2 P2).
 
-    Keeps ``chapter.metadata_json.timeline_warnings`` fresh when plot events
-    change, and clears the key when the chapter no longer has any warning
-    (residual cleanup). Best-effort; failures are logged, never raised.
+    Chapters can be matched by id, by chapter_index, or both; the union of
+    all matches is refreshed. Keeps ``chapter.metadata_json.timeline_warnings``
+    fresh when plot events change (including OLD predecessor chapters after a
+    relation is removed/moved), and clears the key when the chapter no longer
+    has any warning (residual cleanup). Best-effort; failures are logged,
+    never raised.
     """
-    indexes = sorted(i for i in chapter_indexes if i is not None)
-    if not indexes:
+    chapter_ids = set(chapter_ids or ())
+    chapter_indexes = set(chapter_indexes or ())
+    if not chapter_ids and not chapter_indexes:
         return
     try:
         from app.services.timeline import validate_chapter_write
 
+        conds = []
+        if chapter_ids:
+            conds.append(Chapter.id.in_(chapter_ids))
+        if chapter_indexes:
+            conds.append(Chapter.chapter_index.in_(chapter_indexes))
         result = await session.execute(
-            select(Chapter).where(
-                Chapter.novel_id == novel_id,
-                Chapter.chapter_index.in_(indexes),
-            )
+            select(Chapter).where(Chapter.novel_id == novel_id, or_(*conds))
         )
         chapters = list(result.scalars().all())
         for ch in chapters:
@@ -181,11 +209,10 @@ async def create_plot_event(
     await _maybe_embed_plot_event(session, pe, stage_config=stage_config)
     await session.commit()
     await session.refresh(pe)  # re-load after embedding flush expires updated_at
-    affected = {payload.chapter_index}
-    if prev is not None:
-        affected.add(prev.chapter_index)
+    ids, indexes = _affected_chapter_refs(pe, prev)
     await _refresh_chapter_warnings(
-        session, novel_id=payload.novel_id, chapter_indexes=affected,
+        session, novel_id=payload.novel_id,
+        chapter_ids=ids, chapter_indexes=indexes,
     )
     return pe
 
@@ -196,13 +223,19 @@ async def update_plot_event(
 ) -> PlotEvent:
     pe = await get_plot_event(session, event_id)
     updates = payload.model_dump(exclude_unset=True)
-    prev: PlotEvent | None = None
+    new_prev: PlotEvent | None = None
+    old_prev: PlotEvent | None = None
     if "prev_event_id" in updates and updates["prev_event_id"] is not None:
-        prev = await _resolve_prev_event(
+        new_prev = await _resolve_prev_event(
             session, pe.novel_id, updates["prev_event_id"]
         )
-        if prev is None:
+        if new_prev is None:
             raise PlotEventPredecessorNotFound(updates["prev_event_id"])
+    if pe.prev_event_id is not None:
+        # Refresh the OLD predecessor's chapter too when the relation is
+        # removed/re-pointed — its warnings may reference this event (R6-2 复审 P2).
+        old_prev = await _resolve_prev_event(session, pe.novel_id, pe.prev_event_id)
+    old_chapter_id = pe.chapter_id
     old_chapter_index = pe.chapter_index
     for field, value in updates.items():
         setattr(pe, field, value)
@@ -212,11 +245,13 @@ async def update_plot_event(
         await _maybe_embed_plot_event(session, pe, stage_config=stage_config)
     await session.commit()
     await session.refresh(pe)  # re-load after embedding flush expires updated_at
-    affected = {old_chapter_index, pe.chapter_index}
-    if prev is not None:
-        affected.add(prev.chapter_index)
+    ids, indexes = _affected_chapter_refs(pe, new_prev, old_prev)
+    if old_chapter_id is not None:
+        ids.add(old_chapter_id)
+    if old_chapter_index is not None:
+        indexes.add(old_chapter_index)
     await _refresh_chapter_warnings(
-        session, novel_id=pe.novel_id, chapter_indexes=affected,
+        session, novel_id=pe.novel_id, chapter_ids=ids, chapter_indexes=indexes,
     )
     return pe
 
@@ -230,14 +265,26 @@ async def update_plot_event_embedding(
 
 
 async def delete_plot_event(session: AsyncSession, event_id: int) -> None:
+    """Delete a plot event, clearing successor pointers first.
+
+    The same-novel composite FK is `(novel_id, prev_event_id)` with
+    `ON DELETE SET NULL`; PostgreSQL would null BOTH local columns (including
+    the NOT NULL `novel_id`), so successors are explicitly unlinked here
+    within the same transaction before the row is deleted (R6-2 复审 P1).
+    """
     pe = await get_plot_event(session, event_id)
     result = await session.execute(
-        select(PlotEvent).where(PlotEvent.prev_event_id == pe.id)
+        select(PlotEvent).where(
+            PlotEvent.prev_event_id == pe.id,
+            PlotEvent.novel_id == pe.novel_id,
+        )
     )
     dependents = list(result.scalars().all())
+    ids, indexes = _affected_chapter_refs(pe, *dependents)
+    for d in dependents:
+        d.prev_event_id = None
     await session.delete(pe)
     await session.commit()
-    affected = {pe.chapter_index} | {d.chapter_index for d in dependents}
     await _refresh_chapter_warnings(
-        session, novel_id=pe.novel_id, chapter_indexes=affected,
+        session, novel_id=pe.novel_id, chapter_ids=ids, chapter_indexes=indexes,
     )

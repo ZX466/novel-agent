@@ -16,7 +16,16 @@ from __future__ import annotations
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,6 +37,17 @@ class PlotEvent(Base):
     """A discrete plot event in the novel timeline."""
 
     __tablename__ = "plot_events"
+    __table_args__ = (
+        # Predecessor must live in the SAME novel (R6-2 P1): composite FK
+        # (novel_id, prev_event_id) -> (novel_id, id) + unique target.
+        UniqueConstraint("novel_id", "id", name="uq_plot_events_novel_id_id"),
+        ForeignKeyConstraint(
+            ["novel_id", "prev_event_id"],
+            ["plot_events.novel_id", "plot_events.id"],
+            name="fk_plot_events_prev_same_novel",
+            ondelete="SET NULL",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     novel_id: Mapped[int] = mapped_column(
@@ -47,10 +67,9 @@ class PlotEvent(Base):
     )
     prev_event_id: Mapped[int | None] = mapped_column(
         Integer,
-        ForeignKey("plot_events.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
-        comment="Causal predecessor event id (timeline DAG edge source)",
+        comment="Causal predecessor event id (timeline DAG edge source, same novel)",
     )
     involved_character_ids: Mapped[list] = mapped_column(
         JSONB,

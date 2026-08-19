@@ -311,3 +311,161 @@ def test_timeline_endpoint_404_when_novel_missing(app_client: TestClient) -> Non
     with patch("app.api.timeline.load_parent", new=_raise):
         r = app_client.get("/v1/documents/999/timeline", headers=_AUTH)
     assert r.status_code == 404
+
+
+# ===========================================================================
+# Review fixes (R6-2 评审 P1/P2)
+# ===========================================================================
+
+
+def test_build_dag_orders_non_iso_dates_by_normalized_value():
+    """1000/3/5, 1000-03-05, 1000年3月6日 must all parse to (y,m,d)."""
+    e1 = _ev(1, "A", in_world_date="1000/3/5")
+    e2 = _ev(2, "B", in_world_date="1000-03-05")
+    e3 = _ev(3, "C", in_world_date="1000年3月6日")
+    dag = tl.build_timeline_dag([e3, e1, e2])
+    assert [n.event_id for n in dag.nodes] == [1, 2, 3]
+
+
+def test_build_dag_unparseable_dates_sort_after_real_dates():
+    e1 = _ev(1, "A", in_world_date="1000-01-01")
+    e2 = _ev(2, "B", in_world_date="第二年春天")
+    dag = tl.build_timeline_dag([e2, e1])
+    assert [n.event_id for n in dag.nodes] == [1, 2]
+
+
+def test_build_dag_reverse_order_with_non_iso_dates():
+    cause = _ev(1, "cause", in_world_date="1000/6/1")
+    effect = _ev(2, "effect", in_world_date="1000-01-01", prev=1)
+    dag = tl.build_timeline_dag([cause, effect])
+    rev = [w for w in dag.warnings if w.kind == "reverse_order"]
+    assert len(rev) == 1 and rev[0].event_id == 2
+
+
+def test_timeline_endpoint_limit_slices_nodes_and_derived(app_client: TestClient) -> None:
+    with patch("app.api.timeline.load_parent", new=AsyncMock()), \
+            patch("app.api.timeline.get_timeline",
+                  new=AsyncMock(return_value=_dag())):
+        r = app_client.get(
+            "/v1/documents/5/timeline", params={"limit": 1}, headers=_AUTH,
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert [n["event_id"] for n in body["nodes"]] == [1]
+    assert body["edges"] == []
+    assert body["warnings"] == []
+    assert body["topological_order"] == [1]
+
+
+def test_timeline_endpoint_rejects_oversized_limit(app_client: TestClient) -> None:
+    r = app_client.get(
+        "/v1/documents/5/timeline", params={"limit": 1001}, headers=_AUTH,
+    )
+    assert r.status_code == 422
+
+
+# --- P1: prev_event_id must belong to the same novel (service boundary) ----
+
+
+@pytest.mark.asyncio
+async def test_create_plot_event_rejects_missing_predecessor(mock_session):
+    from app.schemas.novel_memory import PlotEventCreate
+    from app.services.plot_event import (
+        PlotEventPredecessorNotFound,
+        create_plot_event,
+    )
+
+    mock_session.set_scalar_results([None])  # prev id=999 not found
+    payload = PlotEventCreate(novel_id=5, summary="effect", prev_event_id=999)
+    with pytest.raises(PlotEventPredecessorNotFound, match="不属于当前作品"):
+        await create_plot_event(mock_session, payload)
+    assert mock_session.added == []
+
+
+@pytest.mark.asyncio
+async def test_create_plot_event_accepts_same_novel_predecessor(mock_session, monkeypatch):
+    async def _noop_embed(*args, **kwargs):
+        return [0.0] * 8
+
+    monkeypatch.setattr("app.llm.embedding.embed_text", _noop_embed)
+    from app.schemas.novel_memory import PlotEventCreate
+    from app.services.plot_event import create_plot_event
+
+    prev = _ev(1, "cause", chapter_index=1, novel_id=5)
+    mock_session.set_scalar_results([prev])
+    payload = PlotEventCreate(
+        novel_id=5, summary="effect", prev_event_id=1, chapter_index=2,
+    )
+    pe = await create_plot_event(mock_session, payload)
+    assert pe.prev_event_id == 1
+
+
+@pytest.mark.asyncio
+async def test_update_plot_event_rejects_foreign_predecessor(mock_session):
+    from app.schemas.novel_memory import PlotEventUpdate
+    from app.services.plot_event import (
+        PlotEventPredecessorNotFound,
+        update_plot_event,
+    )
+
+    existing = _ev(1, "old", novel_id=5)
+    mock_session.set_scalar_results([existing, None])  # get, then prev resolve
+    with pytest.raises(PlotEventPredecessorNotFound, match="不属于当前作品"):
+        await update_plot_event(
+            mock_session, 1, PlotEventUpdate(prev_event_id=999),
+        )
+
+
+def test_create_plot_event_endpoint_400_on_foreign_predecessor(
+    app_client: TestClient,
+) -> None:
+    from app.services.plot_event import PlotEventPredecessorNotFound
+
+    async def _raise_prev(*a, **k):
+        raise PlotEventPredecessorNotFound(999)
+
+    with patch("app.api.plot_events.load_parent", new=AsyncMock()), \
+            patch("app.api.plot_events.create_plot_event", new=_raise_prev):
+        r = app_client.post(
+            "/v1/documents/5/plot-events",
+            json={"summary": "effect", "prev_event_id": 999},
+            headers=_AUTH,
+        )
+    assert r.status_code == 400
+    assert "不属于当前作品" in r.json()["detail"]
+
+
+# --- P2: stored timeline_warnings refresh / residual cleanup ---------------
+
+
+@pytest.mark.asyncio
+async def test_refresh_chapter_warnings_clears_stale_key(mock_session):
+    from app.services.plot_event import _refresh_chapter_warnings
+
+    ch = Chapter(
+        id=9, novel_id=5, chapter_index=1, title="t",
+        metadata_json={"timeline_warnings": [{"kind": "cycle", "event_id": 1, "detail": "stale"}]},
+    )
+    mock_session.set_execute_results([
+        _FakeResult(scalars=[ch]),  # select Chapter
+        _FakeResult(scalars=[]),    # select PlotEvent -> no events -> no warnings
+    ])
+    await _refresh_chapter_warnings(mock_session, novel_id=5, chapter_indexes={1})
+    assert "timeline_warnings" not in (ch.metadata_json or {})
+    assert mock_session.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_refresh_chapter_warnings_writes_fresh(mock_session):
+    from app.services.plot_event import _refresh_chapter_warnings
+
+    ch = Chapter(id=9, novel_id=5, chapter_index=1, title="t")
+    cause = _ev(1, "cause", chapter_index=3, novel_id=5)
+    effect = _ev(2, "effect", chapter_index=1, prev=1, novel_id=5)
+    mock_session.set_execute_results([
+        _FakeResult(scalars=[ch]),
+        _FakeResult(scalars=[cause, effect]),
+    ])
+    await _refresh_chapter_warnings(mock_session, novel_id=5, chapter_indexes={1})
+    warnings = (ch.metadata_json or {}).get("timeline_warnings")
+    assert warnings and warnings[0]["kind"] == "reverse_order"

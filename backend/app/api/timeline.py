@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api._deps import load_parent, owner_key_hash, require_api_key
 from app.db.session import get_db
 from app.schemas.timeline import TimelineResponse
-from app.services.timeline import TimelineDag, get_timeline
+from app.services.timeline import TimelineDag, TimelineTooLargeError, get_timeline
 
 router = APIRouter(prefix="/v1/documents/{doc_id}/timeline", tags=["timeline"])
 
@@ -51,5 +51,10 @@ async def get_timeline_endpoint(
 ) -> TimelineResponse:
     """Return the novel's timeline graph (nodes, edges, warnings)."""
     await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
-    dag = await get_timeline(session, novel_id=doc_id)
+    try:
+        dag = await get_timeline(session, novel_id=doc_id)
+    except TimelineTooLargeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)
+        )
     return _slice_dag(dag, limit, offset)

@@ -469,3 +469,149 @@ async def test_refresh_chapter_warnings_writes_fresh(mock_session):
     await _refresh_chapter_warnings(mock_session, novel_id=5, chapter_indexes={1})
     warnings = (ch.metadata_json or {}).get("timeline_warnings")
     assert warnings and warnings[0]["kind"] == "reverse_order"
+
+
+# --- 复审第二轮 P2: warnings refresh must cover chapter_id-only / old prev ---
+
+
+@pytest.mark.asyncio
+async def test_refresh_chapter_warnings_matches_by_id_or_index(mock_session):
+    """Chapters referenced only by id OR only by index must both refresh."""
+    from app.services.plot_event import _refresh_chapter_warnings
+
+    ch_by_id = Chapter(id=9, novel_id=5, chapter_index=1, title="by-id")
+    ch_by_index = Chapter(id=10, novel_id=5, chapter_index=7, title="by-index")
+    mock_session.set_execute_results([
+        _FakeResult(scalars=[ch_by_id, ch_by_index]),
+        _FakeResult(scalars=[]),  # validate_chapter_write: no events -> no warnings
+        _FakeResult(scalars=[]),
+    ])
+    await _refresh_chapter_warnings(
+        mock_session, novel_id=5, chapter_ids={9}, chapter_indexes={7},
+    )
+    assert "timeline_warnings" not in (ch_by_id.metadata_json or {})
+    assert "timeline_warnings" not in (ch_by_index.metadata_json or {})
+    assert mock_session.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_update_plot_event_refreshes_old_and_new_prev_chapters(mock_session, monkeypatch):
+    """Moving a relation must refresh the OLD predecessor's chapter too."""
+    async def _noop_embed(*args, **kwargs):
+        return [0.0] * 8
+
+    monkeypatch.setattr("app.llm.embedding.embed_text", _noop_embed)
+    from app.schemas.novel_memory import PlotEventUpdate
+    from app.services.plot_event import update_plot_event
+
+    pe = _ev(1, "effect", chapter_index=2, novel_id=5, prev=10)
+    old_prev = _ev(10, "old cause", chapter_index=3, novel_id=5)
+    new_prev = _ev(20, "new cause", chapter_index=4, novel_id=5)
+    # get_plot_event -> pe; resolve new prev -> new_prev; resolve old prev -> old_prev
+    mock_session.set_scalar_results([pe, new_prev, old_prev])
+
+    from unittest.mock import AsyncMock
+    from app.services.plot_event import _refresh_chapter_warnings
+    refresh_mock = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.plot_event._refresh_chapter_warnings", refresh_mock
+    )
+
+    await update_plot_event(mock_session, 1, PlotEventUpdate(prev_event_id=20))
+    assert refresh_mock.call_args.kwargs["chapter_indexes"] == {2, 3, 4}
+
+
+# --- 复审第二轮 P2: timeline resource cap ----------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_timeline_raises_when_events_exceed_cap(mock_session, monkeypatch):
+    from app.config import settings
+    from app.services.timeline import TimelineTooLargeError, get_timeline
+
+    monkeypatch.setattr(settings, "timeline_max_events", 3)
+    mock_session.set_scalar_results([10])  # count(*)
+    with pytest.raises(TimelineTooLargeError):
+        await get_timeline(mock_session, novel_id=5)
+
+
+@pytest.mark.asyncio
+async def test_get_timeline_builds_dag_within_cap(mock_session, monkeypatch):
+    from app.config import settings
+    from app.services.timeline import get_timeline
+
+    monkeypatch.setattr(settings, "timeline_max_events", 10)
+    mock_session.set_scalar_results([2])
+    mock_session.set_execute_results([
+        _FakeResult(scalars=[
+            _ev(1, "a", chapter_index=1, novel_id=5),
+            _ev(2, "b", chapter_index=2, prev=1, novel_id=5),
+        ]),
+    ])
+    dag = await get_timeline(mock_session, novel_id=5)
+    assert [n.event_id for n in dag.nodes] == [1, 2]
+
+
+def test_timeline_endpoint_413_when_novel_too_large(app_client: TestClient) -> None:
+    from app.services.timeline import TimelineTooLargeError
+
+    async def _raise(*a, **k):
+        raise TimelineTooLargeError(5, 9001)
+
+    with patch("app.api.timeline.load_parent", new=AsyncMock()), \
+            patch("app.api.timeline.get_timeline", new=_raise):
+        r = app_client.get("/v1/documents/5/timeline", headers=_AUTH)
+    assert r.status_code == 413
+    assert "9001" in r.json()["detail"]
+
+
+# --- 复审第二轮 P1: real-DB delete semantics (same-novel composite FK) -----
+
+
+def test_delete_plot_event_predecessor_unlinks_successor_real_db(app_client: TestClient) -> None:
+    """Deleting a predecessor with successors must succeed (204) and null the
+    successors' prev_event_id instead of tripping the NOT NULL novel_id
+    composite-FK SET NULL (真实 DB 集成测试)."""
+    create = app_client.post("/v1/documents", json={"title": "删除语义"}, headers=_AUTH)
+    assert create.status_code == 201
+    doc_id = create.json()["id"]
+
+    cause = app_client.post(
+        f"/v1/documents/{doc_id}/plot-events",
+        json={"summary": "cause", "chapter_index": 1},
+        headers=_AUTH,
+    )
+    assert cause.status_code == 201
+    effect = app_client.post(
+        f"/v1/documents/{doc_id}/plot-events",
+        json={"summary": "effect", "chapter_index": 2, "prev_event_id": cause.json()["id"]},
+        headers=_AUTH,
+    )
+    assert effect.status_code == 201
+    assert effect.json()["prev_event_id"] == cause.json()["id"]
+
+    r = app_client.delete(
+        f"/v1/documents/{doc_id}/plot-events/{cause.json()['id']}", headers=_AUTH,
+    )
+    assert r.status_code == 204
+
+    effect_after = app_client.get(
+        f"/v1/documents/{doc_id}/plot-events/{effect.json()['id']}", headers=_AUTH,
+    )
+    assert effect_after.status_code == 200
+    assert effect_after.json()["prev_event_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_delete_plot_event_unlinks_dependents_before_delete(mock_session):
+    """Service must clear successor prev_event_id within the delete."""
+    from app.services.plot_event import delete_plot_event
+
+    pe = _ev(1, "cause", chapter_index=1, novel_id=5)
+    dep = _ev(2, "effect", chapter_index=2, prev=1, novel_id=5)
+    mock_session.set_scalar_results([pe])
+    mock_session.set_execute_results([_FakeResult(scalars=[dep])])
+    await delete_plot_event(mock_session, 1)
+    assert dep.prev_event_id is None
+    assert mock_session.deleted == [pe]
+    assert mock_session.commits == 1

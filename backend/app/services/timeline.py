@@ -16,13 +16,25 @@ import re
 from collections import deque
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.plot_event import PlotEvent
 from app.schemas.timeline import TimelineEdge, TimelineNode, TimelineWarning
 
 logger = logging.getLogger(__name__)
+
+
+class TimelineTooLargeError(Exception):
+    """The novel has more plot events than the timeline view will process."""
+
+    def __init__(self, novel_id: int, count: int) -> None:
+        super().__init__(
+            f"作品 {novel_id} 的剧情事件数 {count} 超过时间线处理上限"
+        )
+        self.novel_id = novel_id
+        self.count = count
 
 _WARN_PREDECESSOR = "predecessor"
 _WARN_REVERSE_ORDER = "reverse_order"
@@ -269,7 +281,22 @@ async def validate_chapter_write(
     warnings that touch this chapter: predecessor / reverse-order findings on
     events placed here (or whose predecessor is placed here), plus every
     cycle warning (a cycle is a structural defect regardless of chapter).
+
+    Best-effort: if the novel exceeds ``timeline_max_events`` the warnings are
+    skipped (logged) so huge works never block chapter writes.
     """
+    total = await session.scalar(
+        select(func.count()).select_from(PlotEvent).where(
+            PlotEvent.novel_id == novel_id
+        )
+    )
+    if total and int(total) > settings.timeline_max_events:
+        logger.warning(
+            "timeline: novel_id=%s has %s plot events — write-time warnings "
+            "skipped (cap %s)",
+            novel_id, int(total), settings.timeline_max_events,
+        )
+        return []
     result = await session.execute(
         select(PlotEvent).where(PlotEvent.novel_id == novel_id)
     )
@@ -296,7 +323,18 @@ async def validate_chapter_write(
 
 
 async def get_timeline(session: AsyncSession, *, novel_id: int) -> TimelineDag:
-    """Load the novel's plot events and build the timeline view."""
+    """Load the novel's plot events and build the timeline view.
+
+    Bounds the work by refusing to build the DAG past ``timeline_max_events``
+    (413 via the API) instead of unboundedly loading every event + summary.
+    """
+    total = await session.scalar(
+        select(func.count()).select_from(PlotEvent).where(
+            PlotEvent.novel_id == novel_id
+        )
+    )
+    if total and int(total) > settings.timeline_max_events:
+        raise TimelineTooLargeError(novel_id, int(total))
     result = await session.execute(
         select(PlotEvent).where(PlotEvent.novel_id == novel_id)
     )

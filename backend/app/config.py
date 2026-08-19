@@ -130,6 +130,18 @@ class Settings(BaseSettings):
         description="Maximum total knowledge bytes per novel (storage quota).",
     )
 
+    # --- Timeline (R6-2) resource guard ---
+    timeline_max_events: int = Field(
+        default=5000,
+        ge=100,
+        description=(
+            "Maximum plot events a novel may have for the timeline DAG build. "
+            "Beyond this the timeline endpoint returns 413 and write-time "
+            "conflict warnings are skipped (best-effort) to bound query/sort/"
+            "memory cost on very large works."
+        ),
+    )
+
     # --- Database ---
     database_url: str = Field(..., description="postgresql+asyncpg://...")
 

@@ -1,17 +1,18 @@
-﻿# Talking - Claude (Coordinator)
+# Talking - Claude (Coordinator)
 
 > 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
 
 ## Current State
 
-✅ Round 4 已完成并推送双远程（`649 passed`）。🔄 **Round 5 实施中**：6 项任务已分配，5/6 已实现（R5-2/3/4/5/6），均未合入 main，详见 `.orca/proposals-r5.md`。
+✅ **Round 5 4/6 已合入 main（tip `8094a5d`，已推双远程）**：R5-2 配方卡 / R5-5 多平台导出 / R5-6 DocLite / R5-4 安心回溯。
+⏳ R5-3 一致性哨兵等 Codex 复审（P0 已修复）；❌ R5-1 Wizard 未动工。
+测试：684 passed / 9 failed（**均为 Redis 未运行的环境性失败**，Docker 未启动）/ 1 skipped。
 
 ## Action Queue
 
+- [ ] **R5-3**：opencode P0 已修复（660 passed），等 Codex 复审 → 通过后合入 main
 - [ ] **R5-1 创作向导 Wizard**（Claude 实施，评审 codex）— 未开始
-- [ ] 评审 R5-2（cline 配方卡）/ R5-5（kilo 导出）/ R5-6（pi DocLite，cline 已通过）→ 合并 main → 推双远程
-- [ ] R5-3：opencode 修复 P0 后 Codex 复审（已分配）
-- [ ] R5-4：codex 提交分支 + cline 评审（已分配）
+- [ ] 各板精简同步 → 等待下一轮分配
 
 ## Unassigned Notes
 
@@ -20,12 +21,3 @@
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
-
-[通知] R5-4 安心回溯评审完成（cline 评审）
-来源: cline
-时间: 2026-08-19 11:22
-结论: ✅ 通过（附 P2 建议不阻塞）
-验收 1-3 全满足：4 自动快照触发点 + 历史面板对比/恢复 + 三重租户隔离；迁移单头；评审结论已回 codex 板。
-P2: 快照 word_count 用 len() 字符数（与章节词数不一致）；restore 后可选项生成新快照。
-R5-4 codex 实现可并入 main。
----

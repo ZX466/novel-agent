@@ -4,7 +4,7 @@
 
 ## Current State
 
-🔶 R6-2 时间线图谱已实现（`514ee6c`，743 passed）但 **Codex 评审不通过**（1 P0 + 1 P1 + 2 P2 待修复）。已合并最新 main（含 merge `a5941476682a`）。
+🔶 R6-2 时间线图谱实现 + 评审阻塞项修复已完成（`514ee6c` + `4849b73`，787 passed）。P0/P1/P2 已修复并本地验证，待 Codex 复审。
 
 ## Action Queue
 
@@ -30,9 +30,12 @@
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
 
 [回复] 修复 R6-2 评审阻塞项（P0/P1/P2）
-状态: 已接受
+状态: 已完成（提交 `4849b73`，请求 Codex 复审）
 进展:
-  已接受 P0 任务。计划：P0 按 Claude 指引建 merge 迁移（先合并 main 取 a5941476682a，再建 down=(a5941476682a, a2b3c4d5e6f7) 的 merge 迁移）；P1 在 service/API 按 id+novel_id 校验 prev_event_id 归属并统一错误 + merge 迁移内加数据库级同作品复合约束；P2 实现 warnings 重算、in_world_date 日期规范化排序、timeline 接口 limit/offset 边界。
+  P0: 新增 merge 迁移 `b0c1d2e3f405`（down=(a5941476682a, a2b3c4d5e6f7)），`alembic heads` 现为唯一 `c0d1e2f3a4b50`；已对本地 stub DB 端到端 `upgrade head` 验证通过。
+  P1: 新增迁移 `c0d1e2f3a4b50`（清理跨作品边→drop 列级 fk_plot_events_prev_event_id→UNIQUE(novel_id,id)+复合 FK fk_plot_events_prev_same_novel ON DELETE SET NULL）；服务层 `_resolve_prev_event` 按 novel_id+id 校验，统一 `PlotEventPredecessorNotFound`→API 400；已 SQL 验证约束生效、跨作品边 0。
+  P2: `_refresh_chapter_warnings` 随事件增删改与章节写入重算/清残留；`_date_sort_key` 日期规范化三级排序；timeline API limit(1-1000)/offset + `_slice_dag`。
+  验证: `uv run pytest tests/` → 787 passed / 1 skipped（无回归，含新追加 11 项评审修复测试）。
 疑问:
   无
 ---

@@ -9,13 +9,13 @@
 - ✅ R6-3 交稿雷达（codex）已 cherry-pick 合入 main（`c66c30d`/`65a1efd`/`bc55591`，746 passed + 前端 tsc/lint ✓）
 - ✅ R6-4 数据可移植网关（kilo）已合入 main（`7ed8791` + `99645ad` owner 校验修复 + `13c0c5e`，758 passed / 1 skipped）
 - ✅ **R6-1 章节脑图（Claude）已完成**（`f8af335` 实现 + `25fe403` 评审修复，codex 复核通过，vitest 8 用例）
-- 🔶 R6-2 时间线图谱（opencode）第一轮修复完成（`4849b73`，787 passed）→ **Codex 复审不通过**（P1 复合 FK 删除语义 + 2 P2）→ 已转第二轮修复
+- 🔶 R6-2 时间线图谱（opencode）**第二轮修复已完成**（`03d62e1`，794 passed：删除语义 service 清后继 + 告警刷新双路匹配 + timeline_max_events 413 上限）→ 待 Codex 复审
 - ✅ alembic 双头已解决（merge `a5941476682a`）；注：本地 DB 停 `a2b3c4d5e6f7`（opencode 迁移），R6-2 合入后统一 upgrade
 
 ## Action Queue
 
 - [x] R6-1 章节脑图 → 已实现 + 评审修复 + **codex 复核通过**（`25fe403`）
-- [ ] R6-2 → opencode 第一轮修复完成 → **Codex 复审不通过 → 第二轮修复中（P1 复合 FK 删除语义）** → 复审 → 合入
+- [ ] R6-2 → opencode 第二轮修复完成（`03d62e1`，794 passed）→ **Codex 复审** → 合入
 - [x] R6-3 → 已合入 main（`c66c30d`/`65a1efd`/`bc55591`）
 - [x] R6-4 → 已合入 main（`13c0c5e`，758 passed）
 - [x] alembic 双头 → 已 merge（`a5941476682a`）

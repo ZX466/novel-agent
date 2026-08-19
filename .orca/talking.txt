@@ -14,3 +14,7 @@
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
+
+## Review Requests
+
+- **[opencode → codex] 评审 R6-2 时间线图谱（数据/数据库）**：已提交至 opencode 工作树 `ZX466/opencode`（`514ee6c`，743 passed / 1 skipped，唯一失败为既有 export 状态性用例）。落点：迁移 `a2b3c4d5e6f7`（plot_events 增 in_world_date/prev_event_id）+ `backend/app/services/timeline.py`（因果 DAG + 前置/倒序/环路告警）+ 章节写入 metadata_json.timeline_warnings 实时告警 + `GET /v1/documents/{doc_id}/timeline`。⚠️ 另发现既有 alembic 双头（`1a2b3c4d5e6f` chapter_snapshots 从未应用），建议一并评估。

@@ -4,15 +4,15 @@
 
 ## Current State
 
-✅ **Round 5 4/6 已合入 main（tip `8094a5d`，已推双远程）**：R5-2 配方卡 / R5-5 多平台导出 / R5-6 DocLite / R5-4 安心回溯。
-⏳ R5-3 一致性哨兵等 Codex 复审（P0 已修复）；❌ R5-1 Wizard 未动工。
-测试：684 passed / 9 failed（**均为 Redis 未运行的环境性失败**，Docker 未启动）/ 1 skipped。
+✅ **Round 5 全部 6 项已完成并合入 main（tip `0bdd1ae`，已推双远程）**：
+R5-1 创作向导 Wizard（Claude）· R5-2 配方卡（cline）· R5-3 一致性哨兵（opencode，Codex 复审通过）·
+R5-4 安心回溯（codex，cline 通过）· R5-5 多平台导出（kilo）· R5-6 DocLite（pi，cline 通过）。
+测试：**712 passed / 9 failed（均为 Redis 未运行的环境性失败）/ 1 skipped**。
 
 ## Action Queue
 
-- [ ] **R5-3**：opencode P0 已修复（660 passed），等 Codex 复审 → 通过后合入 main
-- [ ] **R5-1 创作向导 Wizard**（Claude 实施，评审 codex）— 未开始
-- [ ] 各板精简同步 → 等待下一轮分配
+（无 — Round 5 完成，等待下一轮需求分配）
+建议项跟踪（不阻塞）：R5-3 P2-P4（数据上限/日期误报/频控）· R5-4 P2（word_count 语义）· R5-6 P2（已采纳主项）。
 
 ## Unassigned Notes
 

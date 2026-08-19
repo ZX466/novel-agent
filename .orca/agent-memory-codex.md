@@ -55,3 +55,14 @@
 - **上下文预算**：context 使用达到 50% 时主动提醒切换新对话，最大限度节省用户 token。
 - **任务流**：Claude 通过 talking.txt 分配 `[任务]`；Agent 回写“已接受”后立即执行；执行后回写结论（安全结论/验证/Git 状态/评审状态）。
 - **留言板维护**：每几轮对话检查全部工作树的 `.orca/talking.txt`，删除无用内容避免干扰，保持各板同步精简版。
+
+## 7. Round 6 复盘与持久记忆（2026-08-19）
+
+- **R6-1 章节脑图复核通过**：Claude 修复提交 `25fe403` 解决了向下拖拽删除源节点后的插入索引错误；脑图节点支持 `role="button"`、`tabIndex`、Enter/Space 选择、ArrowUp/ArrowDown 排序，续写按钮有 `aria-label`，视图切换有 `aria-pressed`，空状态可添加第一章。前端新增 Vitest + Testing Library；复核时 `npm test -- --run` 为 8 passed，`npx tsc --noEmit`、`npm run lint`、`npm run build` 均通过（lint/build 仅有既有字体警告）。
+- **R6-2 时间线图谱第二轮复审通过**：opencode 提交 `03d62e1` 已解决此前阻塞项；本记忆只记录“复审通过”，不要在未由 Claude 合入 main 前声称已合并。该轮测试快照为 `794 passed / 1 skipped`，其中 `tests/test_timeline.py` 为 36 passed。
+- **跨作品前置事件防线**：`prev_event_id` 必须在 service 层按 `id + novel_id` 校验，并在数据库层使用 `(novel_id, prev_event_id)` 到 `(novel_id, id)` 的复合 FK；不存在和跨作品前置事件应统一报错，避免事件 ID 存在性侧信道。
+- **复合 FK 删除陷阱**：PostgreSQL 对复合 FK 的普通 `ON DELETE SET NULL` 会尝试清空全部本地引用列，连同 NOT NULL 的 `novel_id` 一并置空而失败。删除前置事件前，必须在同一事务中先把同作品后继的 `prev_event_id` 显式置 NULL，再删目标；此行为需要真实 PostgreSQL 集成测试，而不能只依赖 mock。
+- **时间线告警刷新**：更新/删除事件时，受影响章节应取 `chapter_id ∪ chapter_index`，并覆盖旧事件位置、旧前置事件和新前置事件；没有告警时必须移除 `metadata_json["timeline_warnings"]`，避免残留状态。
+- **时间线资源上限**：`settings.timeline_max_events` 默认 5000；`get_timeline()` 先 count，超过上限由 API 返回 413；章节写入的告警检查则 best-effort 跳过。后续可关注 count→select 并发窗口和 summary 的字节级响应限制。
+- **迁移与真实 DB**：时间线链的目标 head 为 `c0d1e2f3a4b50`。子工作树通常没有 `.env`；运行真实 DB Alembic 时从主工作树 `backend/.env` 读取环境变量，绝不猜测或记录密码。`alembic heads/current/upgrade head` 都需要实际环境变量，失败原因应区分“未加载 env”和“真实迁移错误”。
+- **Token / 上下文纪律（用户明确要求）**：每个 Agent 在上下文接近 50% 时主动提醒切换新对话；切换前将当前任务、提交、验证、阻塞和待复审结论压缩写入 `.orca/agent-memory-*.md` 与相应 `talking.txt`。只写可复用事实，不写密钥、完整终端日志或冗长会话转录。

@@ -6,16 +6,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { chatEndpoint } from "@/lib/config";
 import { loadProviderConfig, ownerAuthHeaders } from "@/lib/settings";
-import { createWorldSetting } from "@/lib/world-settings";
-import { createCharacter } from "@/lib/characters";
+import { createWorldSetting, listWorldSettings } from "@/lib/world-settings";
+import { createCharacter, listCharacters } from "@/lib/characters";
 import { getDocument, updateDocument } from "@/lib/documents";
+import type { EditorDoc } from "@/lib/types";
 import { parseCreativeKit, type CreativeKitPackage } from "@/lib/creative-kit";
 
 interface CreativeKitDialogProps {
   docId: number;
   open: boolean;
   onClose: () => void;
-  onApplied?: () => void;
+  /** Called after a successful apply; receives the freshly-updated document so
+   *  the parent can refresh its own copy (prevents stale-metadata overwrites). */
+  onApplied?: (updatedDoc: EditorDoc) => void;
 }
 
 const GENRES = ["玄幻", "修仙", "都市", "历史", "科幻", "悬疑", "言情", "武侠", "末世", "系统", "其他"];
@@ -83,6 +86,16 @@ export function CreativeKitDialog({
     wasGenerating.current = isGenerating;
   }, [isGenerating, latestText]);
 
+  // Escape closes the dialog (modal semantics).
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const handleGenerate = () => {
@@ -96,31 +109,68 @@ export function CreativeKitDialog({
     setApplying(true);
     setApplyStatus("");
     try {
-      for (const ws of kit.world_settings) {
+      let createdWs = 0;
+      let skippedWs = 0;
+      let createdCh = 0;
+      let skippedCh = 0;
+
+      // Idempotent apply: load existing titles/names once and skip duplicates,
+      // so retries after a partial failure never create duplicates.
+      const [existingWs, existingChars] = await Promise.all([
+        listWorldSettings(docId, { limit: 100 }).catch(() => ({ items: [] as { title: string }[], total: 0 })),
+        listCharacters(docId, 100).catch(() => ({ items: [] as { name: string }[], total: 0 })),
+      ]);
+      const wsTitles = new Set(existingWs.items.map((w) => w.title));
+      const charNames = new Set(existingChars.items.map((c) => c.name));
+
+      // Cap payloads: at most 10 entries each, attributes must be a plain object.
+      for (const ws of kit.world_settings.slice(0, 10)) {
+        if (wsTitles.has(ws.title)) {
+          skippedWs += 1;
+          continue;
+        }
         await createWorldSetting(docId, {
           title: ws.title,
           category: ws.category,
           content_text: ws.content_text,
         });
+        createdWs += 1;
       }
-      for (const ch of kit.characters) {
+      for (const ch of kit.characters.slice(0, 10)) {
+        if (charNames.has(ch.name)) {
+          skippedCh += 1;
+          continue;
+        }
+        const attributes =
+          ch.attributes && typeof ch.attributes === "object" && !Array.isArray(ch.attributes)
+            ? ch.attributes
+            : undefined;
         await createCharacter(docId, {
           name: ch.name,
           role: ch.role,
           description: ch.description,
-          attributes: ch.attributes,
+          attributes,
           arc_summary: ch.arc_summary,
         });
+        createdCh += 1;
       }
+
+      let outlineApplied = false;
       if (kit.outline.trim()) {
         const doc = await getDocument(docId);
         const meta = { ...(doc.metadata_json ?? {}), outline: kit.outline };
-        await updateDocument(docId, { metadata_json: meta });
+        const updated = await updateDocument(docId, { metadata_json: meta });
+        // P0: hand the freshest document back so the parent never overwrites
+        // this outline with a stale metadata_json later.
+        onApplied?.(updated);
+        outlineApplied = true;
       }
+
       setApplyStatus(
-        `已应用：世界观 ${kit.world_settings.length} 条 · 人物 ${kit.characters.length} 个 · 主线大纲`,
+        `已应用：世界观 ${createdWs}${skippedWs ? `（跳过 ${skippedWs}）` : ""} · ` +
+          `人物 ${createdCh}${skippedCh ? `（跳过 ${skippedCh}）` : ""}` +
+          (outlineApplied ? " · 主线大纲" : ""),
       );
-      onApplied?.();
     } catch (err) {
       setApplyStatus(
         `应用失败：${err instanceof Error ? err.message : "未知错误"}`,
@@ -134,6 +184,9 @@ export function CreativeKitDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onClose} />
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="灵感套件 Creative Kit"
         className="relative z-10 w-[720px] max-w-[92vw] max-h-[86vh] flex flex-col rounded-lg border shadow-2xl"
         style={{ background: "var(--surface)", borderColor: "var(--border-hairline)" }}
       >

@@ -37,28 +37,67 @@ function asRecord(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
 }
 
+/**
+ * Enumerate candidate top-level `{...}` regions in text order, skipping
+ * braces inside strings and nested objects (brace-depth aware). Each `{`
+ * starts a candidate; the caller tries them in order until JSON.parse works,
+ * so prose like "注意：{这不是JSON}" is skipped in favour of the real object.
+ */
+function extractJsonRegions(text: string): string[] {
+  const regions: string[] = [];
+  for (let start = 0; start < text.length; start++) {
+    if (text[start] !== "{") continue;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = start; i < text.length; i++) {
+      const c = text[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (c === "\\") escaped = true;
+        else if (c === '"') inString = false;
+        continue;
+      }
+      if (c === '"') inString = true;
+      else if (c === "{") depth += 1;
+      else if (c === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          regions.push(text.slice(start, i + 1));
+          break;
+        }
+      }
+    }
+  }
+  return regions;
+}
+
+function tryParse(raw: string): unknown | null {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 export function parseCreativeKit(text: string): CreativeKitPackage {
   const trimmed = text.trim();
   if (!trimmed) return EMPTY_KIT;
 
-  // Prefer a fenced ```json block; otherwise the first {...} region.
-  let jsonText = "";
+  // Prefer a fenced ```json block; otherwise try candidate {...} regions in
+  // order until one parses (brace-depth aware, prose-brace tolerant).
+  let data: unknown | null = null;
   const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fence) {
-    jsonText = fence[1].trim();
-  } else {
-    const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start !== -1 && end > start) jsonText = trimmed.slice(start, end + 1);
+    data = tryParse(fence[1].trim());
   }
-  if (!jsonText) return EMPTY_KIT;
-
-  let data: unknown;
-  try {
-    data = JSON.parse(jsonText);
-  } catch {
-    return EMPTY_KIT;
+  if (data === null) {
+    for (const region of extractJsonRegions(trimmed)) {
+      data = tryParse(region);
+      if (data !== null) break;
+    }
   }
+  if (data === null) return EMPTY_KIT;
   const rec = asRecord(data);
 
   const world_settings: CreativeKitWorldSetting[] = Array.isArray(rec.world_settings)

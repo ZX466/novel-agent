@@ -278,7 +278,7 @@ export default function NovelEditorPage() {
   // Ctrl+Shift+F for focus mode.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === "F") {
+      if (matchesShortcut(e, "Ctrl+Shift+F")) {
         e.preventDefault();
         setFocusMode((p) => !p);
       }
@@ -375,6 +375,9 @@ export default function NovelEditorPage() {
       }
       if (matchesShortcut(e, "Ctrl+Enter")) {
         e.preventDefault();
+        // The AI tool panel is hidden in focus mode; exit it so the user can
+        // reach the continue-writing entry (matches the bar's hint text).
+        setFocusMode(false);
         setRightTab("tools");
         return;
       }
@@ -1305,7 +1308,12 @@ export default function NovelEditorPage() {
         docId={docId}
         open={kitOpen}
         onClose={() => setKitOpen(false)}
-        onApplied={() => setPanelRefreshKey((k) => k + 1)}
+        onApplied={(updated) => {
+          // Refresh the parent document copy so a later save never overwrites
+          // the applied outline with stale metadata_json (P0 fix).
+          setDoc(updated);
+          setPanelRefreshKey((k) => k + 1);
+        }}
       />
     </div>
   );

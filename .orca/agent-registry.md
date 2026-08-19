@@ -31,16 +31,20 @@
 
 ---
 
-## Agent 工作树映射
+## Agent 工作树映射（2026-08-19 起：已收敛）
 
-| Agent | 工作树路径 | 分支名 |
-|-------|-----------|--------|
-| Claude（主） | `E:/zxdevelop/project2/novel-agent` | `main` |
-| cline | `E:/zxdevelop/.orca/worktrees/novel-agent/cline` | `ZX466/cline` |
-| Codex | `E:/zxdevelop/.orca/worktrees/novel-agent/codex` | `ZX466/codex` |
-| kilo | `E:/zxdevelop/.orca/worktrees/novel-agent/kilo` | `ZX466/kilo` |
-| opencode | `E:/zxdevelop/.orca/worktrees/novel-agent/opencode` | `ZX466/opencode` |
-| Pi | `E:/zxdevelop/.orca/worktrees/novel-agent/pi` | `ZX466/pi` |
+> **分支与工作树已全部收敛**：仅保留 `main` 分支（本地 + gitee + github）。原 5 个 `ZX466/*` 分支与工作树已删除（工作树物理目录待关闭会话后清理）。
+> 各 Agent 的记忆已存档于主工作树：`.orca/agent-memory-pi.md`、`.orca/agent-memory-codex.md`、`AGENTS.md`（opencode 会话记忆）、`.orca/agent-boards/*-talking.txt`（各板终态）。
+> 后续协作直接在 `main` 上按能力域分工，通过主工作树 `.orca/talking.txt` 留言流转。
+
+| Agent | 能力域 | 协作位置 | 评审 Agent |
+|-------|--------|---------|-----------|
+| Claude（主） | 架构 / 代码质量 / 逻辑 / 测试 / 前端 / 体验 / 发布 / 运维 | `E:/zxdevelop/project2/novel-agent`（main） | Codex |
+| cline | 依赖 / 配置 / 文档 | main（按任务分区） | Claude |
+| Codex | 安全 / 合规 / 风险 | main | cline |
+| Pi | 性能 | main | cline |
+| opencode | 数据 / 数据库 | main | Codex |
+| kilo | 接口 / 兼容性 | main | Claude |
 
 ---
 

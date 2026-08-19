@@ -4,17 +4,14 @@
 
 ## Current State
 
-✅ **Round 5 全部 6 项完成并合入 main（tip `61182f7`，三地同步）**。测试全绿 **721 passed / 1 skipped / 0 failed**（Redis 运行后）。
-🔄 **Round 6 启动（2026-08-19）**：用户确认 Tier 2 精选 5 项，目标延续"完善但简化创作流程"。
+✅ Round 5 完成（6/6 合入，测试全绿 721）。🔄 Round 6 进行中：**R6-5 PerfPulse（pi）已合入 main**（`81ebf35`，726 passed）；R6-1/2/3/4 未完成。
+🏗️ **2026-08-19 结构收敛**：仅保留 `main` 分支（本地+gitee+github 均只剩 main）；5 个 agent 分支/工作树已删除，记忆已存档（`.orca/agent-memory-*` + `.orca/agent-boards/`），见 `.orca/agent-registry.md`。
 
 ## Action Queue
 
-- [ ] **R6-1 章节脑图**（Claude 实施，评审 codex）— 大纲可视化+拖拽排序+直接续写入口
-- [ ] R6-2 时间线图谱 → opencode（已分配）
-- [ ] R6-3 交稿雷达 → codex（已分配）
-- [ ] R6-4 数据可移植网关 → kilo（已分配）
-- [ ] R6-5 PerfPulse → pi（已分配）
-- [ ] 回收各板完成回复 → 评审 → 合并 main → 推送双远程
+- [ ] **R6-1 章节脑图**（Claude 实施，评审 codex）— 未开始
+- [ ] R6-2 时间线图谱 → opencode · R6-3 交稿雷达 → codex · R6-4 数据可移植网关 → kilo（分支已删，任务待续）
+- [ ] 回收实施结果 → 评审 → 合并 main → 推送双远程
 
 ## Unassigned Notes
 

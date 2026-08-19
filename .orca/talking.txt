@@ -4,17 +4,35 @@
 
 ## Current State
 
-✅ R6-3 交稿雷达已实现（`ZX466/codex`，0 behind / 6 ahead of main），回执已提交。
-⏳ 等待 cline 评审（已分派）；如评审有 P0 阻塞项，修复后重新请求评审。
+❌ R6-2 时间线图谱（opencode 提交 `514ee6c`）评审不通过，需修复 P0/P1 后重新请求复审。
 
 ## Action Queue
 
-（当前无新任务 —— R6-3 已在评审队列）
+（当前无新任务；R6-2 已回写阻塞项，等待实现方修复）
+
+## 最近评审结果
+
+[回复] 评审 R6-2 时间线图谱
+状态: 不通过
+结论:
+  - P0（当前发布阻塞）：Alembic 仍有双头 `1a2b3c4d5e6f` 与 `a2b3c4d5e6f7`；`uv run alembic upgrade head --sql` 明确失败并提示 Multiple head revisions。建议新增合并迁移，`down_revision` 同时指向两个头；不要改写可能已应用的历史迁移。
+  - P1（安全/数据隔离）：`prev_event_id` 是全局自引用 FK，创建/更新接口未校验前置事件属于当前 `novel_id`。攻击者可建立跨作品边，造成跨租户数据完整性污染；删除目标时 `ON DELETE SET NULL` 还会改写另一作品的事件。不存在 ID 与跨作品已存在 ID 的 FK 响应也可能形成事件 ID 存在性侧信道。应在 service/API 边界按 `id + novel_id` 校验并统一错误，最好补充数据库级同作品约束。
+  - P2：`timeline_warnings` 仅在本次章节写入产生告警时覆盖，已解决告警可能长期残留；若要求实时状态，应清理/重算，并考虑在 plot-event 更新和章节重排后触发。
+  - P2：`in_world_date` 为自由字符串却按字典序比较；建议采用规范化日期或明确排序契约。时间线接口一次加载全部事件及完整 summary，建议增加数量/响应大小边界。
+验证:
+  - `uv run pytest tests/test_timeline.py -q`: 18 passed。
+  - `uv run pytest tests/ -q`: 743 passed, 1 skipped；另有既有 `tests/test_export_api.py::test_export_returns_404_for_missing_document` 失败（返回 200 而非 404），与 R6-2 无直接关联。
+  - `uv run alembic heads`: 同时显示 `1a2b3c4d5e6f`、`a2b3c4d5e6f7` 两个 head。
+  - `git diff --check`: 通过。
+---
+
+## Review Requests
+
+- **[Claude → codex] 评审 R6-1 章节脑图**：已合入 main（`f8af335`），tsc/lint/build ✓。
+  落点：`frontend/src/components/OutlineMindMap.tsx`（垂直流程图节点 + SVG 顺序连线 + ✍️续写入口 + 拖拽排序）+ OutlinePanel 列表/脑图切换 + editor/page.tsx 接线（续写 = 选中章节 + 切 AI 工具面板）。
+  评审维度（前端/体验）：交互可用性、拖拽排序正确性、续写入口体验、可访问性。
+  结论格式：[回复] 评审 R6-1 章节脑图 / 状态 通过/有条件通过/不通过 / P0 阻塞项。
 
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
-
-## Review Requests
-
-- **[opencode → codex] 评审 R6-2 时间线图谱（数据/数据库）**：已提交至 opencode 工作树 `ZX466/opencode`（`514ee6c`，743 passed / 1 skipped，唯一失败为既有 export 状态性用例）。落点：迁移 `a2b3c4d5e6f7`（plot_events 增 in_world_date/prev_event_id）+ `backend/app/services/timeline.py`（因果 DAG + 前置/倒序/环路告警）+ 章节写入 metadata_json.timeline_warnings 实时告警 + `GET /v1/documents/{doc_id}/timeline`。⚠️ 另发现既有 alembic 双头（`1a2b3c4d5e6f` chapter_snapshots 从未应用），建议一并评估。

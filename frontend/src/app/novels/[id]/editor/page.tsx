@@ -34,6 +34,7 @@ import {
 } from "@/components/EditorDisplaySettings";
 import { EditorToolbar, FindReplaceBar } from "@/components/EditorToolbar";
 import { FocusModeBar } from "@/components/FocusModeBar";
+import { CreativeKitDialog } from "@/components/CreativeKitDialog";
 import { VersionHistoryDialog } from "@/components/VersionHistoryDialog";
 import { matchesShortcut } from "@/lib/shortcuts";
 import { createSnapshot } from "@/lib/snapshots";
@@ -151,6 +152,7 @@ export default function NovelEditorPage() {
   const [rightTab, setRightTab] = useState<"tools" | "assistant">("tools");
   const [findOpen, setFindOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [kitOpen, setKitOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedText, setSelectedText] = useState("");
   const [extracting, setExtracting] = useState(false);
@@ -955,6 +957,25 @@ export default function NovelEditorPage() {
                   </button>
                 );
               })}
+              {/* Creative Kit entry (R7-2) */}
+              <button
+                type="button"
+                onClick={() => setKitOpen(true)}
+                title="✨ 灵感套件 — 一键生成世界观/人物/主线"
+                className="flex-1 py-sp-2 text-center transition-colors"
+                style={{
+                  color: kitOpen ? "var(--accent)" : "var(--muted)",
+                  fontSize: "13px",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = "var(--fg)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = "var(--muted)";
+                }}
+              >
+                ✨
+              </button>
             </div>
             {/* Tab body */}
             <div className="flex-1 min-h-0 overflow-hidden">
@@ -1277,6 +1298,14 @@ export default function NovelEditorPage() {
             setDirty(true);
           }
         }}
+      />
+
+      {/* Creative Kit dialog (R7-2) */}
+      <CreativeKitDialog
+        docId={docId}
+        open={kitOpen}
+        onClose={() => setKitOpen(false)}
+        onApplied={() => setPanelRefreshKey((k) => k + 1)}
       />
     </div>
   );

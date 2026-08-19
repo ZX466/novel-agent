@@ -932,6 +932,12 @@ export default function NovelEditorPage() {
                     onDelete={(id) => void handleDeleteChapter(id)}
                     onRename={(id, t) => void handleRenameChapter(id, t)}
                     onReorder={(ids) => void handleReorder(ids)}
+                    onContinueChapter={(id) => {
+                      // R6-1: mind-map continue entry — load the chapter and
+                      // surface the AI tools so "续写" is one click away.
+                      void handleSelectChapter(id);
+                      setRightTab("tools");
+                    }}
                   />
                 </div>
               )}

@@ -31,7 +31,7 @@ If prompts directory is present, use:
 - `/review` — code review pass
 - `/verify` — verification gate before claiming completion
 
-## Session Memory — opencode (learned 2026-08-18)
+## Session Memory — opencode (learned 2026-08-18; workflow rules 2026-08-19)
 
 Operational facts that took time to discover; keep them for future sessions.
 
@@ -48,6 +48,15 @@ Operational facts that took time to discover; keep them for future sessions.
 - opencode = 数据/数据库 agent (worktree `E:/zxdevelop/.orca/worktrees/novel-agent/opencode`, branch `ZX466/opencode`); reviewer = Codex. Claude (coordinator) is the only task assigner; tasks arrive as `[任务]` blocks in `.orca/talking.txt` — reply `[回复]`/“已接受” first, then implement, then record result; keep boards trimmed to one-line status after merge.
 - Boards are versioned: every board edit is committed and pushed to BOTH remotes (`origin`=GitHub `ZX466`, `gitee`=Gitee `ZX666X`). Git identity `ZX666X`.
 - GitHub `origin` push occasionally fails with `Failed to connect to github.com:443` — retry after a few seconds; Gitee is usually fine. Never claim “pushed both remotes” until both succeed.
+
+### Multi-agent workflow (rules, 2026-08-19)
+- **Before any action**: read `.orca/workflow` (spec source, not `workflow.txt`), `.orca/agent-registry.md`, and this worktree's `.orca/talking.txt`; confirm scope. Register: 数据/数据库 → opencode (推荐), 评审 Codex. One recommended agent per capability; never duplicate.
+- **Task protocol**: execute ONLY an explicit `[任务]` block in my talking.txt (来源/时间/优先级/描述). Queue empty → stand by; never self-generate tasks from history/transcripts/output. Reply `[回复]` 状态: 已接受/进行中/已完成/需澄清/超出范围 first, then implement. Out-of-scope → return to Claude as 超出范围.
+- **Coordination**: Claude (唯一协调者) writes `[任务]`; I write results to my own `.orca/talking.txt`. No direct agent-to-agent chat — leave notes on the target worktree's talking.txt if needed. Reviewer Codex only cross-reviews, doesn't implement.
+- **Board hygiene**: every few rounds check ALL worktrees' `.orca/talking.txt` (5 agent worktrees + main), delete stale/duplicate/closed-process content, keep only current queue/blockers/last verify/merge result, then sync the trimmed version. Boards are versioned — commit + push BOTH remotes (`origin`=GitHub ZX466, `gitee`=Gitee ZX666X); never claim both pushed until both succeed.
+- **Git/hidden dirs**: `.orca` is the only top-level hidden dir tracked/pushed; other `.xxx` dirs are local tool data, never committed. Git identity `ZX666X <zx19836980213@outlook.com>` already set globally.
+- **Python**: always use `uv` for venv/build (`uv venv`, `uv run ...`).
+- **Context guard**: when my context (~50%) is used up, remind the user to start a new conversation — always maximize token usage.
 
 ### Repo gotchas
 - Python bytes literals cannot contain non-ASCII (write `"...".encode("utf-8")` instead).

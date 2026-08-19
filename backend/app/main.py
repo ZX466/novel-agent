@@ -28,6 +28,7 @@ from app.api import safety as safety_router_module
 from app.api import snapshots as snapshots_router_module
 from app.api import export as export_router_module
 from app.api import stats as stats_router_module
+from app.api import timeline as timeline_router_module
 from app.api import world_settings as world_settings_router_module
 from app.config import settings
 from app.core.redis import close_redis, get_redis
@@ -144,6 +145,7 @@ app.include_router(stats_router_module.router)
 app.include_router(knowledge_docs_router_module.router)
 app.include_router(snapshots_router_module.router)
 app.include_router(consistency_router_module.router)
+app.include_router(timeline_router_module.router)
 
 
 @app.exception_handler(Exception)

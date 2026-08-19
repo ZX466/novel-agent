@@ -179,6 +179,8 @@ class PlotEventBase(BaseModel):
     chapter_index: int | None = Field(default=None, ge=0)
     event_type: str = Field(default="beat", max_length=64)
     summary: str = Field(..., min_length=1, max_length=100_000)
+    in_world_date: str | None = Field(default=None, max_length=64)
+    prev_event_id: int | None = Field(default=None, ge=1)
     involved_character_ids: list[int] = Field(default_factory=list)
 
 
@@ -191,6 +193,8 @@ class PlotEventUpdate(BaseModel):
     chapter_index: int | None = Field(default=None, ge=0)
     event_type: str | None = Field(default=None, max_length=64)
     summary: str | None = Field(default=None, max_length=100_000)
+    in_world_date: str | None = Field(default=None, max_length=64)
+    prev_event_id: int | None = Field(default=None, ge=1)
     involved_character_ids: list[int] | None = None
 
 

@@ -10,6 +10,7 @@ interface OutlineMindMapProps {
   onSelect: (chapterId: number) => void;
   onContinue: (chapterId: number) => void;
   onReorder: (orderedIds: Array<{ id: number; chapter_index: number }>) => void;
+  onAdd: () => void;
 }
 
 const NODE_H = 52;
@@ -27,6 +28,7 @@ export function OutlineMindMap({
   onSelect,
   onContinue,
   onReorder,
+  onAdd,
 }: OutlineMindMapProps) {
   const dragItemRef = useRef<number | null>(null);
   const dragOverItemRef = useRef<number | null>(null);
@@ -54,17 +56,27 @@ export function OutlineMindMap({
     if (fromIdx === -1 || toIdx === -1) return;
 
     const reordered = chapters.filter((c) => c.id !== fromId);
-    reordered.splice(toIdx, 0, chapters[fromIdx]);
+    // After removing the source, indices at/after fromIdx shift down by one,
+    // so the drop index must be corrected when dragging downward.
+    reordered.splice(toIdx > fromIdx ? toIdx - 1 : toIdx, 0, chapters[fromIdx]);
     onReorder(reordered.map((c, i) => ({ id: c.id, chapter_index: i })));
   };
 
   if (chapters.length === 0) {
     return (
       <div
-        className="flex flex-col items-center justify-center h-full p-sp-8 text-center gap-sp-2"
+        className="flex flex-col items-center justify-center h-full p-sp-8 text-center gap-sp-3"
         style={{ color: "var(--muted)" }}
       >
         <p className="text-[12px]">暂无章节，先添加章节后再查看脑图</p>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="px-sp-3 py-sp-1.5 rounded-sm text-[11px] font-medium border transition-colors"
+          style={{ borderColor: "var(--border)", color: "var(--fg-secondary)" }}
+        >
+          + 添加第一章
+        </button>
       </div>
     );
   }
@@ -121,7 +133,10 @@ export function OutlineMindMap({
               onDragOver={(e) => e.preventDefault()}
             >
               <div
-                className="flex items-center gap-sp-2 pl-sp-3 pr-sp-2 h-full rounded-md border cursor-pointer select-none transition-all"
+                role="button"
+                tabIndex={0}
+                aria-pressed={isActive}
+                className="flex items-center gap-sp-2 pl-sp-3 pr-sp-2 h-full rounded-md border cursor-pointer select-none transition-all outline-none focus-visible:ring-1"
                 style={{
                   background: isActive ? "var(--accent-bg)" : "var(--surface)",
                   borderColor: isActive ? "var(--accent)" : "var(--border-hairline)",
@@ -130,6 +145,22 @@ export function OutlineMindMap({
                   marginLeft: 48,
                 }}
                 onClick={() => onSelect(ch.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelect(ch.id);
+                  } else if (e.key === "ArrowUp" && i > 0) {
+                    e.preventDefault();
+                    const moved = [...chapters];
+                    [moved[i - 1], moved[i]] = [moved[i], moved[i - 1]];
+                    onReorder(moved.map((c, idx) => ({ id: c.id, chapter_index: idx })));
+                  } else if (e.key === "ArrowDown" && i < chapters.length - 1) {
+                    e.preventDefault();
+                    const moved = [...chapters];
+                    [moved[i], moved[i + 1]] = [moved[i + 1], moved[i]];
+                    onReorder(moved.map((c, idx) => ({ id: c.id, chapter_index: idx })));
+                  }
+                }}
                 onMouseEnter={(e) => {
                   if (!isActive) e.currentTarget.style.background = "var(--surface-2)";
                 }}
@@ -183,6 +214,7 @@ export function OutlineMindMap({
                   className="shrink-0 w-[24px] h-[24px] flex items-center justify-center rounded-sm text-[12px] transition-colors"
                   style={{ color: "var(--muted)" }}
                   title="直接续写此章节"
+                  aria-label={`续写章节 ${ch.title || "未命名章节"}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onContinue(ch.id);

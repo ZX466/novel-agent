@@ -89,9 +89,10 @@ export function OutlinePanel({
     const toIdx = chapters.findIndex((c) => c.id === toId);
     if (fromIdx === -1 || toIdx === -1) return;
 
-    // Build reordered list: remove fromId, insert at toIdx position.
+    // Build reordered list: remove fromId, insert at corrected toIdx position
+    // (indices at/after fromIdx shift down by one after removal).
     const reordered = chapters.filter((c) => c.id !== fromId);
-    reordered.splice(toIdx, 0, chapters[fromIdx]);
+    reordered.splice(toIdx > fromIdx ? toIdx - 1 : toIdx, 0, chapters[fromIdx]);
 
     // Assign new sequential indices.
     const orderedIds = reordered.map((c, i) => ({
@@ -162,6 +163,7 @@ export function OutlinePanel({
               key={v.key}
               type="button"
               onClick={() => setView(v.key)}
+              aria-pressed={view === v.key}
               className="px-sp-2 py-px text-[10px] font-medium transition-colors"
               style={{
                 color: view === v.key ? "var(--fg)" : "var(--muted)",
@@ -290,6 +292,7 @@ export function OutlinePanel({
               onSelect={onSelect}
               onContinue={onContinueChapter ?? onSelect}
               onReorder={onReorder}
+              onAdd={onAdd}
             />
           )}
         </div>

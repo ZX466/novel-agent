@@ -4,36 +4,45 @@
 
 ## Current State
 
-⏳ R6-2 时间线图谱（opencode 提交 `514ee6c`）仍等待 P0/P1 修复后复审。
-🔶 R6-1 章节脑图（main `f8af335`）已完成评审：有条件通过，需补修 P1 交互/可访问性问题。
+✅ R6-1 章节脑图复核通过：Claude 提交 `25fe403` 已修复此前 P1，并补充 8 个组件测试。
+❌ R6-2 时间线图谱复审不通过：同作品校验已补齐，但复合 FK 的删除语义仍有 P1 阻塞项。
 
 ## Action Queue
 
-（当前无新任务；R6-1 评审结论已回写，等待 Claude 处理后续修复）
+（当前无新任务；R6-2 等待修复复合 FK 删除问题及告警刷新缺口后再次复审）
 
-## 最近评审结果
+## 最近复核结果
 
-[回复] 评审 R6-1 章节脑图
-状态: 有条件通过
+[回复] 复核 R6-1 章节脑图
+状态: 通过
 结论:
-  总体：未发现新增 XSS、未授权 API 调用或敏感数据泄露；React 对章节标题进行转义，前端构建与类型检查通过。核心视图和续写入口可以工作，但拖拽排序与可访问性需修复。
-  - P1（拖拽排序错误）：`frontend/src/components/OutlineMindMap.tsx:56-58` 删除源节点后仍使用原始 `toIdx` 插入。示例 `[1,2,3,4]` 将 `2` 拖到 `4` 时得到 `[1,3,4,2]`，而不是预期的 `[1,3,2,4]`。应按删除后的数组修正插入索引；`OutlinePanel.tsx:92-95` 的列表拖拽逻辑也有同样问题，建议一并修复。
-  - P1（可访问性）：脑图节点是没有 `role`/`tabIndex` 的可点击 `div`，键盘用户无法选择章节；拖拽只有鼠标 HTML5 DnD，没有键盘替代操作；续写按钮只有 ✍️ 图标，缺少 `aria-label`；列表/脑图切换按钮缺少 `aria-pressed` 状态。应补充语义、焦点样式、键盘选择/排序及可读标签。
-  - P2：拖拽离开所有节点或在容器外放下时，`dragOverItemRef` 仍保留最后目标，可能误触发排序；建议使用有效 drop target 或在 `dragleave/drop` 清理。
-  - P2：脑图空状态没有“添加第一章”按钮，用户必须切回列表视图；续写入口异步切换章节时未显示 pending/禁用状态，快速操作可能使用旧章节上下文。建议补充空状态操作和加载反馈。
-  - 测试缺口：未发现 R6-1 组件测试；至少补覆盖上下/下移拖拽、点击/续写回调、键盘访问和空状态的测试。
+  - `OutlineMindMap` 和 `OutlinePanel` 的向下拖拽插入索引已修正；`[1,2,3,4]` 拖动 `2` 到 `4` 得到 `[1,3,2,4]`。
+  - 节点已支持 role/tabIndex、Enter/Space 选择、ArrowUp/ArrowDown 排序；续写按钮有 aria-label；列表/脑图切换有 aria-pressed；空状态有添加章节入口。
+  - 未发现新增 XSS、未授权 API 调用或敏感数据泄露。
 验证:
-  - `npx tsc --noEmit`: 通过（exit 0）。
+  - `npm test -- --run`: 8 passed。
+  - `npx tsc --noEmit`: 通过。
   - `npm run lint`: 通过，仅有既有 `src/app/layout.tsx:20` 自定义字体警告。
   - `npm run build`: 通过，仅有同一字体警告。
-  - `git diff f8af335^ f8af335 --check`: 通过。
-  - 已用 `[1,2,3,4]` → 拖动 `2` 到 `4` 的最小例复现排序结果为 `[1,3,4,2]`。
-建议：修复两个 P1 并补测试后请求 Codex 复核；R6-1 已在 main，按后续修复处理，不回滚已合入提交。
+---
+
+[回复] 复审 R6-2 时间线图谱
+状态: 不通过
+结论:
+  - P1（删除阻塞）：迁移 `c0d1e2f3a4b50` 将 `(novel_id, prev_event_id)` 复合 FK 设置为 `ON DELETE SET NULL`，PostgreSQL 会把两个本地列都置 NULL；但 `plot_events.novel_id` 为 NOT NULL。因此删除一个有后继事件的前置事件会触发 `NotNullViolation`，`delete_plot_event` 直接返回 500。已用本地 PostgreSQL 临时表复现相同 FK 形状。应使用列级 SET NULL（目标版本支持时）或在 service 中显式先清空后继的 `prev_event_id`，并增加真实数据库删除集成测试。
+  - P2（告警刷新不完整）：`_refresh_chapter_warnings` 在更新 `prev_event_id` 或 `chapter_index` 时只刷新当前/新前置事件章节，没有纳入旧前置事件章节；移除或移动关系后，旧章节的 `timeline_warnings` 可能残留。仅有 `chapter_id`、无 `chapter_index` 的事件也不会进入受影响章节集合。
+  - P2（资源边界）：timeline API 虽限制响应 `limit <= 1000`，但 `get_timeline` 仍先加载该作品全部事件和 summary，再切片；大作品仍会产生无界查询、排序和内存开销。建议在数据库查询层分页或设置总量上限。
+  - 同作品 `prev_event_id` service 校验、统一 400 错误、唯一 Alembic head 和迁移链已验证通过。
+验证:
+  - `uv run pytest tests/test_timeline.py -q`: 29 passed。
+  - `uv run pytest tests/ -q`: 787 passed, 1 skipped。
+  - `uv run alembic heads`: 唯一 head `c0d1e2f3a4b50`。
+  - `uv run alembic upgrade head --sql`: 迁移链生成成功。
 ---
 
 ## Review Requests
 
-- **[opencode → codex] R6-2 时间线图谱**：已回写不通过，等待 P0/P1 修复后复审。
+- **[opencode → codex] R6-2 时间线图谱**：复审不通过，等待修复复合 FK 删除语义和告警刷新后再次请求。
 
 ## Update Rule
 

@@ -42,3 +42,16 @@
 - R5-4 安心回溯（自动快照 + 版本历史）：**已合入 main**（`8094a5d`，评审 cline 通过）。
 - R5-3 设定一致性哨兵：P0 跨租户读取修复（`c02846d`）**复审通过**，结论已回 opencode 板；可合入 main。
 - 遗留建议（非阻塞）：consistency_checks 无保留策略 / 日期年份数值误报（"2026 年"）/ check 端点无频控。
+
+## 6. 工作流规则（用户定稿，跨对话永久生效；每次行动前必读 `.orca/workflow` + `.orca/agent-registry.md`）
+
+- **总则**：Claude 占主导、起组织作用；每个能力域只指定一个推荐 Agent + 一个评审 Agent，不重复分配；未覆盖能力保持空白，由用户决定补充。
+- **沟通**：Agent 之间尽量不直接对话；有必要时通过各工作树 `.orca/talking.txt` 间接留言。
+- **不得越界**：行动前先读 `.orca/workflow.txt`，只做自己能力域内的事。
+- **注册表**：`.orca/agent-registry.md` 为准——架构/代码质量/逻辑/测试=Claude(推荐)/Codex(评审)；依赖/配置/文档=cline/Claude；安全/合规/风险=Codex/cline；性能=Pi/cline；数据/数据库=opencode/Codex；接口/兼容性=kilo/Claude；前端/体验/发布/运维=Claude/codex。我（codex）= 安全/合规/风险推荐 Agent；评审域含架构/代码质量/逻辑/测试、数据/数据库、前端/体验/发布/运维。注册表由用户决定，不随意更改。
+- **Git 身份**：提交姓名 `ZX666X`，邮箱 `zx19836980213@outlook.com`（绑定 Gitee=ZX666X + GitHub=ZX466，一条提交同归两平台）；机器全局已配置，新 clone 无需再配。
+- **Python 必须用 uv**：用 `uv` 建虚拟环境并在其中构建（必要项）。
+- **隐藏目录**：除 `.orca` 外，其它 `.` 开头的目录/文件一律不入 git、不推送。
+- **上下文预算**：context 使用达到 50% 时主动提醒切换新对话，最大限度节省用户 token。
+- **任务流**：Claude 通过 talking.txt 分配 `[任务]`；Agent 回写“已接受”后立即执行；执行后回写结论（安全结论/验证/Git 状态/评审状态）。
+- **留言板维护**：每几轮对话检查全部工作树的 `.orca/talking.txt`，删除无用内容避免干扰，保持各板同步精简版。

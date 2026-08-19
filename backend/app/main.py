@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import importlib
 import re
 from contextlib import asynccontextmanager
 
@@ -136,6 +137,9 @@ app.include_router(plot_events_router_module.router)
 app.include_router(retrieval_router_module.router)
 app.include_router(safety_router_module.router)
 app.include_router(export_router_module.router)
+# `import.py` collides with the `import` keyword, so load it via importlib.
+import_router_module = importlib.import_module("app.api.import")
+app.include_router(import_router_module.router)
 app.include_router(stats_router_module.router)
 app.include_router(knowledge_docs_router_module.router)
 app.include_router(snapshots_router_module.router)

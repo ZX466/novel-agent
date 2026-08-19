@@ -7,12 +7,15 @@ import zipfile
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api._deps import load_parent, owner_key_hash, require_api_key
 from app.db.session import get_db
 from app.schemas.novel_memory import ChapterListItem
+from app.services import portable
 from app.services.document import get_document
 from app.services.chapter import list_chapters
 from app.services.export_adapters import PLATFORM_FORMATS, render_platform
@@ -170,21 +173,48 @@ async def export_document(
     doc_id: int,
     format: str = Query(
         ...,
-        pattern=f"^(md|txt|epub|{'|'.join(PLATFORM_FORMATS)})$",
-        description="导出格式：md / txt / epub / qidian / jj / zhihu / wechat",
+        pattern=f"^(md|txt|epub|ndjson|{'|'.join(PLATFORM_FORMATS)})$",
+        description="导出格式：md / txt / epub / ndjson / qidian / jj / zhihu / wechat",
+    ),
+    since: str | None = Query(
+        None,
+        description="增量同步游标（ISO8601）。仅 ndjson 生效：只导出 updated_at 晚于此时间的章节",
     ),
     session: AsyncSession = Depends(get_db),
     api_key: str = Depends(require_api_key),
 ) -> Response:
     """Export a document with its chapters.
 
-    Supports markdown, plain text, and EPUB (zip container), plus
-    platform-specific Markdown adapters (qidian / jj / zhihu / wechat) that
-    render cover/byline/copyright per the target platform. Returns the
-    exported file with a Content-Disposition attachment header.
+    Supports markdown, plain text, EPUB (zip container), and the portable
+    NDJSON gateway (R6-4), plus platform-specific Markdown adapters
+    (qidian / jj / zhihu / wechat) that render cover/byline/copyright per the
+    target platform. Returns the exported file with a Content-Disposition
+    attachment header.
     """
     await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     doc = await get_document(session, doc_id, owner_key_hash=owner_key_hash(api_key))
+
+    if format == "ndjson":
+        since_dt = None
+        if since:
+            try:
+                since_dt = datetime.fromisoformat(since)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"invalid since cursor: {exc}",
+                ) from exc
+        chapters_full = await portable.list_full_chapters(session, doc_id)
+        body = portable.build_export_ndjson(doc, chapters_full, since=since_dt).encode("utf-8")
+        encoded_filename = quote(doc.title or "export")
+        headers = {
+            "Content-Disposition": (
+                f"attachment; filename=\"{encoded_filename}.ndjson\"; "
+                f"filename*=UTF-8''{encoded_filename}.ndjson"
+            ),
+        }
+        return Response(content=body, media_type="application/x-ndjson", headers=headers)
+
     chapters, _ = await list_chapters(session, novel_id=doc_id, limit=500, offset=0)
 
     filename_base = doc.title or f"document-{doc_id}"

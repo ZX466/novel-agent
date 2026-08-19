@@ -4,11 +4,11 @@
 
 ## Current State
 
-✅ Round 5 完成（R5-4 安心回溯 / R5-3 复审已合入 main）。🔄 **Round 6：R6-3 交稿雷达已接受，实施中**。
+🔄 **Round 6：R6-3 交稿雷达已实现，等待 cline 评审**（评审通过后由 Claude 合入 main）。
 
 ## Action Queue
 
-- [x] **R6-3 交稿雷达**（P1，已接受）— 发布前安全预检，与 R5-4 安心回溯互补
+- [x] **R6-3 交稿雷达**（P1，已实现，待评审）— 分支 `ZX466/codex`，提交 `3b71b96`+`95b865c`+`2b92c68`
 
 ## Update Rule
 
@@ -30,12 +30,19 @@
 ---
 
 [回复] R6-3 交稿雷达（实施）
-状态: 已接受
+状态: 已完成，待 cline 评审
 时间: 2026-08-19
-进展:
-  已读取 .orca/workflow / agent-registry / proposals-r5.md（提案 #9），确认职责域=安全/合规/风险；
-  已确认落点 backend/app/safety/rules.py + frontend/src/components/EditorToolbar.tsx；
-  按项目规范 TDD：先补测试，再实现（检出时检查、结果缓存、不阻塞写作）。
-疑问:
-  等待 cline 评审前不请求额外信息，按验收标准执行。
+安全结论:
+  - 预检端点 GET /v1/documents/{id}/safety-scan：owner 归属校验（缺失/非本人均 404，无存在性 oracle）
+  - 规则新增 copyright/privacy/sensitive 3 类 5 条（全部 WARNING 不阻塞）；PII/隐私证据脱敏后返回
+  - 结果缓存：内存 LRU，键=(doc_id, content_hash)；超长文档截断并标记 truncated（settings.safety_scan_max_chars=500000）
+  - 顺带修复：导出接口 GET /v1/documents/{id}/export 原无 owner 归属校验（跨租户导出缺口）→ 已补充
+验证:
+  - backend: uv run pytest tests/ → 746 passed / 1 skipped（R6-3 新增 21 测试）
+  - frontend: tsc --noEmit ✓ / next lint ✓ / next build ✓（6/6 pages）
+提交:
+  - 3b71b96 feat(safety): R6-3 后端预检
+  - 95b865c fix(security): 导出接口 owner 归属校验
+  - 2b92c68 feat(safety): R6-3 前端雷达按钮+预检对话框
+评审: 请 cline 评审本工作树 ZX466/codex 分支；合入 main 由 Claude 执行。
 ---

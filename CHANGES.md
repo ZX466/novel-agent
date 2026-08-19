@@ -13,12 +13,13 @@
 | R5-5 多平台导出适配器 | `/v1/documents/{id}/export` 扩展 qidian/jj/zhihu/wechat 平台化 Markdown | `d44fb07` |
 | R5-6 DocLite 超长文档零卡顿 | word_count 增量计算（1.7x）+ EditorStats 防抖/useMemo（2.7x） | `9bac060`+`f121290` |
 
-**测试基线**：Redis 运行后 `726 passed / 1 skipped`（R6-5 并入后）。
+**测试基线**：Redis 运行后 `746 passed / 1 skipped`（R6-3 并入后）。
 
 ### Round 6（进行中）
 
 - R6-5 PerfPulse 性能自监控面板（pi）✅ 已合入：`@_timed` 采集 5 节点耗时（0.6us/节点）+ SSE perf 事件 + 前端状态栏，TDD 5 测试 | `81ebf35`
-- R6-1 章节脑图（Claude）/ R6-2 时间线图谱（opencode）/ R6-3 交稿雷达（codex）/ R6-4 数据可移植网关（kilo）— 任务已定义（`.orca/proposals-r5.md`），待实施
+- R6-3 交稿雷达（codex）✅ 已实现待评审：`GET /v1/documents/{id}/safety-scan` 导出前隐私/版权/敏感表达预检（内容哈希缓存 + PII 证据脱敏 + 不阻塞导出），前端工具栏雷达按钮 + 导出前提示对话框（可忽略仍可导出）；顺带修复导出接口跨租户访问缺口；TDD 21 测试 | `3b71b96`+`95b865c`+`2b92c68`
+- R6-1 章节脑图（Claude）/ R6-2 时间线图谱（opencode）/ R6-4 数据可移植网关（kilo）— 任务已定义（`.orca/proposals-r5.md`），待实施
 
 ### 结构收敛（2026-08-19）
 

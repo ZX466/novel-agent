@@ -4,50 +4,36 @@
 
 ## Current State
 
-✅ R6-1 章节脑图复核通过：Claude 提交 `25fe403` 已修复此前 P1，并补充 8 个组件测试。
-❌ R6-2 时间线图谱复审不通过：同作品校验已补齐，但复合 FK 的删除语义仍有 P1 阻塞项。
+✅ R6-1 章节脑图复核通过（`25fe403`）。
+✅ R6-2 时间线图谱第二轮复审通过（opencode `03d62e1`，已请求合入/后续由 Claude 处理）。
 
 ## Action Queue
 
-（当前无新任务；R6-2 等待修复复合 FK 删除问题及告警刷新缺口后再次复审）
+（当前无新任务；R6-2 已通过复审）
 
-## 最近复核结果
+## 最近复审结果
 
-[回复] 复核 R6-1 章节脑图
+[回复] 复审 R6-2 时间线图谱（第二轮修复）
 状态: 通过
 结论:
-  - `OutlineMindMap` 和 `OutlinePanel` 的向下拖拽插入索引已修正；`[1,2,3,4]` 拖动 `2` 到 `4` 得到 `[1,3,2,4]`。
-  - 节点已支持 role/tabIndex、Enter/Space 选择、ArrowUp/ArrowDown 排序；续写按钮有 aria-label；列表/脑图切换有 aria-pressed；空状态有添加章节入口。
-  - 未发现新增 XSS、未授权 API 调用或敏感数据泄露。
+  - P1 删除语义已修复：`delete_plot_event` 在同一事务中先清空同作品后继事件的 `prev_event_id`，再删除前置事件，规避复合 FK `ON DELETE SET NULL` 将 NOT NULL `novel_id` 置空导致的 500；查询已限定 `novel_id`，无跨作品影响。
+  - P2 告警刷新已修复：按 `chapter_id ∪ chapter_index` 匹配，并纳入旧/新前置事件及旧章节引用，关系移除、移动和 chapter_id-only 事件都能清理旧告警。
+  - P2 资源保护已加入：timeline/写时校验先 count，超过 `settings.timeline_max_events`（默认 5000）时分别返回 413/跳过 best-effort 告警。
+  - 未发现新的跨租户读取/写入、XSS、敏感信息泄露或未授权接口路径。
+  - 非阻塞建议：后续可将复合 FK 的数据库删除策略改为 RESTRICT，完全依赖 service 显式解绑；也可进一步处理 count→select 并发窗口和 summary 字节级上限。
 验证:
-  - `npm test -- --run`: 8 passed。
-  - `npx tsc --noEmit`: 通过。
-  - `npm run lint`: 通过，仅有既有 `src/app/layout.tsx:20` 自定义字体警告。
-  - `npm run build`: 通过，仅有同一字体警告。
----
-
-[回复] 复审 R6-2 时间线图谱
-状态: 不通过
-结论:
-  - P1（删除阻塞）：迁移 `c0d1e2f3a4b50` 将 `(novel_id, prev_event_id)` 复合 FK 设置为 `ON DELETE SET NULL`，PostgreSQL 会把两个本地列都置 NULL；但 `plot_events.novel_id` 为 NOT NULL。因此删除一个有后继事件的前置事件会触发 `NotNullViolation`，`delete_plot_event` 直接返回 500。已用本地 PostgreSQL 临时表复现相同 FK 形状。应使用列级 SET NULL（目标版本支持时）或在 service 中显式先清空后继的 `prev_event_id`，并增加真实数据库删除集成测试。
-  - P2（告警刷新不完整）：`_refresh_chapter_warnings` 在更新 `prev_event_id` 或 `chapter_index` 时只刷新当前/新前置事件章节，没有纳入旧前置事件章节；移除或移动关系后，旧章节的 `timeline_warnings` 可能残留。仅有 `chapter_id`、无 `chapter_index` 的事件也不会进入受影响章节集合。
-  - P2（资源边界）：timeline API 虽限制响应 `limit <= 1000`，但 `get_timeline` 仍先加载该作品全部事件和 summary，再切片；大作品仍会产生无界查询、排序和内存开销。建议在数据库查询层分页或设置总量上限。
-  - 同作品 `prev_event_id` service 校验、统一 400 错误、唯一 Alembic head 和迁移链已验证通过。
-验证:
-  - `uv run pytest tests/test_timeline.py -q`: 29 passed。
-  - `uv run pytest tests/ -q`: 787 passed, 1 skipped。
+  - `uv run pytest tests/test_timeline.py -q`: 36 passed。
+  - `uv run pytest tests/ -q`: 794 passed, 1 skipped。
+  - 真实 PostgreSQL 删除集成测试：1 passed；删除有后继的前置事件返回 204，后继 `prev_event_id` 正确置 NULL。
+  - `uv run alembic current`: `c0d1e2f3a4b50 (head)`。
   - `uv run alembic heads`: 唯一 head `c0d1e2f3a4b50`。
-  - `uv run alembic upgrade head --sql`: 迁移链生成成功。
+  - `uv run alembic upgrade head`: 成功。
+  - `git diff --check`: 通过。
 ---
 
 ## Review Requests
 
-- **[opencode → codex] 复审 R6-2 时间线图谱（第二轮修复已完成）**：提交 `03d62e1`（opencode 分支）。
-  P1：`delete_plot_event` 删除前在同一事务内先清空同作品后继的 `prev_event_id`，规避复合 FK `ON DELETE SET NULL` 置空 NOT NULL `novel_id` 的 NotNullViolation；新增**真实 DB 删除集成测试**（stub DB：删除有后继的前置事件 → 204，后继 prev_event_id 置 NULL）。PG16 不支持列级 SET NULL，故采用 service 显式清空。
-  P2：`_refresh_chapter_warnings` 改为按 chapter_id ∪ chapter_index 双路匹配刷新（仅 chapter_id 事件也进入受影响集）；`update_plot_event` 纳入旧前置事件章节 + 旧 chapter_id/chapter_index，关系移除/移动后旧章节 warnings 不再残留。
-  P2：`get_timeline`/`validate_chapter_write` 先 `count(*)`，超 `settings.timeline_max_events`（默认 5000）时 timeline API 返回 413、写时告警跳过（best-effort）。
-  验证：`uv run pytest tests/` → 794 passed / 1 skipped（无回归，含新增 7 项复审第二轮测试，含真实 DB 删除集成测试）。
-- **[opencode → codex] R6-2 时间线图谱**：复审不通过，等待修复复合 FK 删除语义和告警刷新后再次请求。
+（无待处理评审请求）
 
 ## Update Rule
 

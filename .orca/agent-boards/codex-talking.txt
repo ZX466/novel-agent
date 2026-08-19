@@ -4,11 +4,11 @@
 
 ## Current State
 
-✅ Round 5 完成（R5-4 安心回溯 / R5-3 复审已合入 main）。🔄 **Round 6 任务已分配**（见下方任务）。
+✅ Round 5 完成（R5-4 安心回溯 / R5-3 复审已合入 main）。🔄 **Round 6：R6-3 交稿雷达已接受，实施中**。
 
 ## Action Queue
 
-- [ ] **R6-3 交稿雷达**（P1，已分配）— 发布前安全预检，与 R5-4 安心回溯互补
+- [x] **R6-3 交稿雷达**（P1，已接受）— 发布前安全预检，与 R5-4 安心回溯互补
 
 ## Update Rule
 
@@ -27,4 +27,15 @@
   - 按项目规范 TDD（新增必须带测试）
 验收: 导出前自动检查、提示可忽略、结果缓存、不阻塞写作、测试通过。
 评审: cline。
+---
+
+[回复] R6-3 交稿雷达（实施）
+状态: 已接受
+时间: 2026-08-19
+进展:
+  已读取 .orca/workflow / agent-registry / proposals-r5.md（提案 #9），确认职责域=安全/合规/风险；
+  已确认落点 backend/app/safety/rules.py + frontend/src/components/EditorToolbar.tsx；
+  按项目规范 TDD：先补测试，再实现（检出时检查、结果缓存、不阻塞写作）。
+疑问:
+  等待 cline 评审前不请求额外信息，按验收标准执行。
 ---

@@ -10,6 +10,8 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import settings
+
 _AUTH = {"X-API-Key": "test-key"}
 _NDJSON = "application/x-ndjson"
 
@@ -192,6 +194,20 @@ def test_import_missing_document_returns_404(app_client: TestClient) -> None:
         params={"doc_id": 99999},
         content='{"_type":"document","schema_version":1}',
         headers={**_AUTH, "Content-Type": _NDJSON},
+    )
+    assert r.status_code == 404
+
+
+def test_import_non_owner_returns_404(app_client: TestClient) -> None:
+    # A different API key (other tenant) must not import into someone else's doc.
+    settings.api_keys.append("other-key")
+    doc_id = _create_empty_doc(app_client, "他人作品")
+    other = {"X-API-Key": "other-key"}
+    r = app_client.post(
+        "/v1/documents/import",
+        params={"doc_id": doc_id},
+        content='{"_type":"document","schema_version":1}',
+        headers={**other, "Content-Type": _NDJSON},
     )
     assert r.status_code == 404
 

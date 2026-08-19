@@ -11,7 +11,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api._deps import load_parent, require_api_key
+from app.api._deps import load_parent, owner_key_hash, require_api_key
 from app.db.session import get_db
 from app.services import portable
 
@@ -32,7 +32,9 @@ async def import_document(
     Returns created/updated/unchanged/skipped counts, whether the document
     metadata changed, and the ``last_sync`` cursor (max chapter updated_at).
     """
-    await load_parent(session, doc_id)
+    # Owner-gated: an API key may only import into its own documents (404, no
+    # existence oracle for other tenants), matching every other write endpoint.
+    await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     try:
         report = await portable.import_portable(session, doc_id, ndjson)
     except ValueError as exc:

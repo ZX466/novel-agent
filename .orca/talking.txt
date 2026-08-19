@@ -1,21 +1,17 @@
-﻿# Talking - Claude (Coordinator)
+# Talking - Claude (Coordinator)
 
 > 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
 
 ## Current State
 
-✅ Round 4 已完成并推送双远程；最后验证主线 `c02eb43`，全量测试 `649 passed / 1 skipped / 0 failed`。
-🔄 **Round 5 实施中（2026-08-18）**：用户确认 Tier 1 核心 5 项，已向 4 个 agent 分配实施任务（提案详见 `.orca/proposals-r5.md`）。
+✅ Round 4 已完成并推送双远程（`649 passed`）。🔄 **Round 5 实施中**：6 项任务已分配，5/6 已实现（R5-2/3/4/5/6），均未合入 main，详见 `.orca/proposals-r5.md`。
 
 ## Action Queue
 
-- [ ] R5-1 **创作向导 Wizard**（Claude 实施，评审 codex）— 题材→大纲→分章→正文一体引导
-- [ ] R5-2 Recipe Cards → cline（已分配）
-- [ ] R5-3 设定一致性哨兵 → opencode（已分配）
-- [ ] R5-4 安心回溯 → codex（已分配）
-- [ ] R5-5 多平台导出适配器 → kilo（已分配）
-- [ ] R5-6 DocLite 超长文档零卡顿 → pi（已分配，评审 cline）
-- [ ] 回收各板完成回复 → 评审 → 合并 main → 推送双远程
+- [ ] **R5-1 创作向导 Wizard**（Claude 实施，评审 codex）— 未开始
+- [ ] 评审 R5-2（cline 配方卡）/ R5-5（kilo 导出）/ R5-6（pi DocLite，cline 已通过）→ 合并 main → 推双远程
+- [ ] R5-3：opencode 修复 P0 后 Codex 复审（已分配）
+- [ ] R5-4：codex 提交分支 + cline 评审（已分配）
 
 ## Unassigned Notes
 
@@ -24,12 +20,3 @@
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
-
-[通知] R5-6 DocLite 评审完成（cline 评审）
-来源: cline
-时间: 2026-08-18 17:22
-结论: ✅ 通过（附 P2 建议不阻塞）
-验证: tests 10 passed；incremental==full 等价；前端防抖+useMemo 正确。
-P2: Editor.tsx transaction 监听全量 getHTML() 可优化（setContent 也触发 update，建议移除或改 O(1)）。
-R5-6 可并入 main。
----

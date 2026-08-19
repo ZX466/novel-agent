@@ -41,6 +41,17 @@ class PlotEvent(Base):
         String(64), nullable=False, default="beat", index=True
     )
     summary: Mapped[str] = mapped_column(Text, nullable=False)
+    in_world_date: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True,
+        comment="In-world date (free-form, e.g. YYYY-MM-DD) for the timeline",
+    )
+    prev_event_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("plot_events.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Causal predecessor event id (timeline DAG edge source)",
+    )
     involved_character_ids: Mapped[list] = mapped_column(
         JSONB,
         nullable=False,

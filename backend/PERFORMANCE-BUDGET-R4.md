@@ -179,4 +179,33 @@ F1 需求"章节/大纲上下文注入"如果**在每次请求中注入历史章
 ### 评审
 - 评审 Agent：cline（依赖/配置/文档 域评审 Pi 性能域）
 
-*DocLite 实施结束。改造前后基准对比见上方表格。*
+---
+
+## 附：R6-5 PerfPulse 实施记录（2026-08-19）
+
+提案 #5（PerfPulse 性能自监控面板）入选 Tier 1，与 R5-6 DocLite 配套（性能透明化）。
+
+### 后端：pipeline 各阶段耗时采集（`backend/app/pipeline/`）
+
+- `nodes.py`：`@_timed(stage)` 装饰器写入 `state["perf"][f"{stage}_ms"]`（round 0.1ms）
+  - `_timed` 开销：**0.615us/节点**（100k 次实测），相对秒级 LLM 调用占比 0.00006%，可忽略
+  - 应用到 5 节点：retrieval / draft / refine / evaluate / safety
+- `graph.py`：`run_pipeline`/`stream_pipeline` 增加 `perf` 可变 dict 参数（透传进 state，可回读）
+- `chat.py`：`_encode_perf()` 发 `{"type":"perf","data":{...}}` SSE 事件（text 流结束后、finish-step 前）
+
+### 前端：状态栏实时显示（`frontend/`）
+
+- `src/lib/perf-transport.ts`：`PerfChatTransport` 自定义 transport
+  - 说明：DefaultChatTransport 的 uiMessageChunkSchema 会丢弃未知类型（perf）→ 需自解析 SSE
+  - 直接 fetch + 按 `\n\n` 分隔解析 `data: {json}`，text-delta → UIMessageChunk，perf → 回调
+  - `reconnectToStream` 返回 null（无服务端流持久化）
+- `src/components/Chat.tsx`：`useChat({ transport: PerfChatTransport })` + 底部「耗时」区
+  - PerfChip 组件按阶段显示（检索/草稿/精修/评估/安全），>2s 标黄
+
+### 验证
+- 后端：`tests/test_pipeline_perf.py` 5 passed（TDD）；全量 **665 passed / 1 skipped / 0 failed**
+- 采集开销：0.615us/节点（实测 100k 次），对生成延迟无可见影响
+- 前端：`tsc --noEmit` ✅ + `next lint` ✅；SSE 解析逻辑 node 验证通过（文本重组 + perf 捕获）
+- 评审：cline
+
+*PerfPulse 实施结束。性能透明化闭环：采集 → SSE → 前端状态栏。*

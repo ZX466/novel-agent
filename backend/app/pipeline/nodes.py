@@ -14,7 +14,32 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Dict
+import time
+from functools import wraps
+from typing import Dict, TypeVar, Callable, Any, Awaitable
+
+T = TypeVar("T")
+
+
+def _timed(stage: str) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
+    """PerfPulse: record a node's wall-clock elapsed time into
+    ``state["perf"][f"{stage}_ms"]`` (rounded to 0.1ms).
+
+    Overhead is two `time.perf_counter()` calls per node (~0.05us) —
+    negligible vs. LLM/DB stage cost. `state` is the first positional
+    argument (PipelineState TypedDict as dict).
+    """
+    def deco(fn: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+        @wraps(fn)
+        async def wrapper(state: dict, *args: Any, **kwargs: Any) -> T:
+            t0 = time.perf_counter()
+            try:
+                return await fn(state, *args, **kwargs)
+            finally:
+                perf = state.setdefault("perf", {})
+                perf[f"{stage}_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+        return wrapper
+    return deco
 
 from app.config import settings
 from app.llm import draft as llm_draft
@@ -44,6 +69,7 @@ def _system_msg(content: str) -> Dict[str, str]:
     return {"role": "system", "content": content}
 
 
+@_timed("retrieval")
 async def retrieval_node(state: PipelineState) -> dict:
     """Retrieve relevant memories from the novel's lore before drafting.
 
@@ -92,6 +118,7 @@ async def retrieval_node(state: PipelineState) -> dict:
     return {"retrieved_context": ""}
 
 
+@_timed("draft")
 async def draft_node(state: PipelineState) -> dict:
     """DeepSeek-V4-Flash (or BYOK draft stage) generates an initial draft.
 
@@ -231,6 +258,7 @@ def _format_retrieval_context(hits: list) -> str:
     return "\n".join(lines)[:8000]
 
 
+@_timed("refine")
 async def refine_node(state: PipelineState) -> dict:
     """Qwen-Max (or BYOK refine stage) refines the most recent text using feedback.
 
@@ -284,6 +312,7 @@ async def refine_node(state: PipelineState) -> dict:
     }
 
 
+@_timed("evaluate")
 async def evaluate_node(state: PipelineState) -> dict:
     """Scores the refined text — single evaluator or multi-dimensional matrix.
 
@@ -459,6 +488,7 @@ def route_after_evaluate(state: PipelineState) -> str:
     return "refine"
 
 
+@_timed("safety")
 async def safety_check_node(state: PipelineState) -> dict:
     """Rule-engine safety check run on the final output before release.
 

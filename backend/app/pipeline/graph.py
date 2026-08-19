@@ -172,12 +172,17 @@ async def run_pipeline(
     novel_id: int | None = None,
     task_type: str = "generate",
     on_token=None,
+    perf: dict | None = None,
 ) -> PipelineState:
     """Runs the full pipeline non-streaming; returns final state.
 
     `on_token` is an optional async callback for real-time streaming.
     When provided, draft_node and refine_node call it for each streamed
     token so the caller can yield tokens as they arrive.
+
+    `perf` is an optional mutable dict (PerfPulse). Pipeline nodes write
+    stage timings into ``state["perf"]``; the same dict reference is
+    passed in as initial state so callers can read it back after invoke.
     """
     app = _get_pipeline_for_task(task_type)
     return await app.ainvoke(
@@ -189,6 +194,7 @@ async def run_pipeline(
             "novel_id": novel_id,
             "task_type": task_type,
             "on_token": on_token,
+            "perf": perf if perf is not None else {},
         },
         config={"recursion_limit": _recursion_limit()},
     )
@@ -201,6 +207,7 @@ async def stream_pipeline(
     evaluator=None,
     novel_id: int | None = None,
     task_type: str = "generate",
+    perf: dict | None = None,
 ) -> AsyncIterator[str]:
     """True streaming: yields tokens as the LLM generates them.
 
@@ -232,6 +239,7 @@ async def stream_pipeline(
                 novel_id=novel_id,
                 task_type=task_type,
                 on_token=on_token,
+                perf=perf,
             )
         except Exception as e:
             logger.error("stream_pipeline: pipeline task failed: %s", e)
@@ -269,6 +277,7 @@ async def stream_pipeline(
             evaluator=evaluator,
             novel_id=novel_id,
             task_type=task_type,
+            perf=perf,
         )
         final_text = final_state.get("refined") or final_state.get("draft") or ""
 

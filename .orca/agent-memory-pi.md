@@ -51,6 +51,12 @@
 - documents 表已有 word_count/created_at/updated_at
 - 聚合禁拉 content_text/html 大文本列；单查询预算 ≤50-200ms；字数曲线需聚合方案
 
+### PerfPulse 性能监控（R6，已实施）
+- 后端：`nodes.py` 的 `@_timed(stage)` 装饰器写 `state["perf"][f"{stage}_ms"]`；开销 0.615us/节点（可忽略）
+- `graph.py` run/stream_pipeline 加 `perf` dict 参数；`chat.py` 发 `{"type":"perf","data":{...}}` SSE 事件
+- 前端：`PerfChatTransport`（自定义 transport 自解析 SSE）+ Chat.tsx 底部耗时区
+- **坑**：AI SDK DefaultChatTransport 的 uiMessageChunkSchema 会**丢弃未知事件**（perf 无法透传）→ 必须自定义 transport 直接 fetch+解析 SSE；`reconnectToStream` 接口必须实现（不支持就返回 null）；ReadableStream start 回调里 `this` 丢失 → 用闭包捕获
+
 ## 4. 坑与教训
 
 1. **asyncpg 单连接不能并发**：`asyncio.gather(conn.fetch...)` 报 "another operation in progress" → 必须用连接池（`create_pool`）模拟 SQLAlchemy 池化

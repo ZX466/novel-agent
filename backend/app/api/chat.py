@@ -275,6 +275,16 @@ def _encode_error(message: str) -> str:
     return _sse({"type": "error", "detail": message})
 
 
+def _encode_perf(perf: dict) -> str:
+    """PerfPulse: emit stage timings as a non-text SSE event.
+
+    Sent after the last text-delta and before finish-step so the frontend
+    can render a per-stage latency breakdown (RAG/embed/draft/refine/…)
+    without interfering with the AI SDK text stream.
+    """
+    return _sse({"type": "perf", "data": perf})
+
+
 async def _extract_provider_config(
     x_provider_config: Annotated[str | None, Header(alias="X-Provider-Config")] = None,
 ) -> ProviderConfig | None:
@@ -330,10 +340,11 @@ async def _event_stream(
         # safety_check) to completion, THEN yields text chunks. If the pipeline
         # fails, it raises before any chunk is yielded, so text-start won't be emitted.
         evaluator = _build_evaluator()
+        perf: dict = {}
         async for token in stream_pipeline(
             topic, provider_config,
             session=session, evaluator=evaluator, novel_id=novel_id,
-            task_type=task_type,
+            task_type=task_type, perf=perf,
         ):
             if not text_started:
                 yield _encode_text_start()
@@ -350,6 +361,12 @@ async def _event_stream(
                 )
             else:
                 yield _encode_error("AI 未返回任何内容，请检查 API Key 配置或重试")
+        # PerfPulse: emit stage timings (best-effort; never blocks the stream).
+        try:
+            if perf:
+                yield _encode_perf(perf)
+        except Exception:
+            logger.warning("PerfPulse: failed to encode perf event", exc_info=True)
         yield _encode_finish_step()
     except litellm.AuthenticationError as e:
         logger.error("LLM auth failed: %s", _redact_key(str(e)))

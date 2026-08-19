@@ -1,8 +1,9 @@
 "use client";
 
-import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { FormEvent, useMemo, useState } from "react";
+
+import { PerfChatTransport, type PipelinePerf } from "@/lib/perf-transport";
 
 import { useProviderConfig } from "@/hooks/use-provider-config";
 import { chatEndpoint } from "@/lib/config";
@@ -14,10 +15,11 @@ interface ChatProps {
 
 export function Chat({ onInsertIntoEditor }: ChatProps) {
   const { isConfigured, loaded } = useProviderConfig();
+  const [lastPerf, setLastPerf] = useState<PipelinePerf | null>(null);
 
   const transport = useMemo(
     () =>
-      new DefaultChatTransport({
+      new PerfChatTransport({
         api: chatEndpoint,
         headers: (): Record<string, string> => {
           const cfg = loadProviderConfig();
@@ -25,6 +27,7 @@ export function Chat({ onInsertIntoEditor }: ChatProps) {
           if (!cfg) return auth;
           return { "X-Provider-Config": JSON.stringify(cfg), ...auth };
         },
+        onPerf: (perf) => setLastPerf(perf),
       }),
     [],
   );
@@ -239,6 +242,29 @@ export function Chat({ onInsertIntoEditor }: ChatProps) {
         )}
       </div>
 
+      {/* PerfPulse: last-generation stage timings */}
+      {lastPerf && !isBusy && (
+        <div
+          className="px-sp-5 py-sp-2 border-t flex flex-wrap items-center gap-x-sp-3 gap-y-1 shrink-0"
+          style={{
+            background: "var(--surface)",
+            borderColor: "var(--border-subtle)",
+          }}
+        >
+          <span
+            className="text-[9px] font-semibold uppercase tracking-wider"
+            style={{ color: "var(--fg-tertiary)" }}
+          >
+            耗时
+          </span>
+          <PerfChip label="检索" ms={lastPerf.retrieval_ms} />
+          <PerfChip label="草稿" ms={lastPerf.draft_ms} />
+          <PerfChip label="精修" ms={lastPerf.refine_ms} />
+          <PerfChip label="评估" ms={lastPerf.evaluate_ms} />
+          <PerfChip label="安全" ms={lastPerf.safety_ms} />
+        </div>
+      )}
+
       {/* Chat input */}
       <form
         onSubmit={onSubmit}
@@ -310,6 +336,22 @@ export function Chat({ onInsertIntoEditor }: ChatProps) {
         </div>
       </form>
     </section>
+  );
+}
+
+function PerfChip({ label, ms }: { label: string; ms: number | undefined }) {
+  if (typeof ms !== "number") return null;
+  return (
+    <span
+      className="text-[10px] font-mono inline-flex items-center gap-1"
+      style={{
+        color: ms > 2000 ? "var(--warn)" : "var(--muted)",
+      }}
+      title={`${label} 阶段耗时`}
+    >
+      <span style={{ color: "var(--fg-tertiary)" }}>{label}</span>
+      {ms >= 100 ? `${(ms / 1000).toFixed(2)}s` : `${ms}ms`}
+    </span>
   );
 }
 

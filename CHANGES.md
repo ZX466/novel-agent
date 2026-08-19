@@ -1,5 +1,41 @@
 # 变更说明
 
+## 2026-08-19：Round 5 创作工具轮 + 结构收敛
+
+### Round 5（完善但简化创作流程，6/6 合入 main，tip `61182f7`）
+
+| 功能 | 说明 | 提交 |
+|------|------|------|
+| R5-1 创作向导 CreationWizard | 设定→大纲→应用 三步一体引导，复用 useChat/createDocument/createChapter/extract，零新后端接口 | `a15efa8` |
+| R5-2 创作配方卡 Recipe Cards | `docs/recipes/` 5 张卡（新书开写/续写/知识库/导出/换供应商）+ QUICKSTART 索引 | `bd69525` |
+| R5-3 设定一致性哨兵 | RAG 检索比对角色历史设定，数值确定性比对（非 LLM），`consistency_checks` 表 + 迁移；含 P0 跨租户章节读取修复（`_chapter_text` 归属校验） | `9b29a7d`+`a323b7f`+`0bdd1ae` |
+| R5-4 安心回溯 | 章节快照（save/AI 插入/整章替换/导出前自动）+ 版本历史面板（对比/恢复/删除），每章上限 50 | `8094a5d` |
+| R5-5 多平台导出适配器 | `/v1/documents/{id}/export` 扩展 qidian/jj/zhihu/wechat 平台化 Markdown | `d44fb07` |
+| R5-6 DocLite 超长文档零卡顿 | word_count 增量计算（1.7x）+ EditorStats 防抖/useMemo（2.7x） | `9bac060`+`f121290` |
+
+**测试基线**：Redis 运行后 `726 passed / 1 skipped`（R6-5 并入后）。
+
+### Round 6（进行中）
+
+- R6-5 PerfPulse 性能自监控面板（pi）✅ 已合入：`@_timed` 采集 5 节点耗时（0.6us/节点）+ SSE perf 事件 + 前端状态栏，TDD 5 测试 | `81ebf35`
+- R6-1 章节脑图（Claude）/ R6-2 时间线图谱（opencode）/ R6-3 交稿雷达（codex）/ R6-4 数据可移植网关（kilo）— 任务已定义（`.orca/proposals-r5.md`），待实施
+
+### 结构收敛（2026-08-19）
+
+- **仅保留 `main` 分支**（本地 + gitee + github）；5 个 `ZX466/*` 分支与工作树删除
+- **各 Agent 记忆存档**：`.orca/agent-memory-pi.md`、`.orca/agent-memory-codex.md`、`AGENTS.md`（opencode）、`.orca/agent-boards/*-talking.txt`
+- 后续协作直接在 main 上按能力域分工（见 `.orca/agent-registry.md`）
+
+### 2026-08-17：Round 4（F1-F6 功能轮）
+
+- F1 AI 编剧多轮对话（`task_type=assistant`，后端 `7796aca` + 前端 AssistantPanel）
+- F3 导出（md/txt/epub，`91f0b24` 等）+ F6 统计看板（`4f518b3`，含 `0852923` cast 修复）
+- F4 本地知识库（上传 magic 字节嗅探 + Redis 每 owner 限流 + 每作品存储配额，`e9bb92d`）
+- 前端体验：显示设置 / 主题切换 / 专注按钮 / 编辑器完善
+- 测试基线 649 → 721 → 726
+
+---
+
 ## 2026-07-25：全面体验优化（Phase 1-4）
 
 本次对 project11 进行了系统性的体验优化，覆盖 26 个问题中的 20 个核心问题。

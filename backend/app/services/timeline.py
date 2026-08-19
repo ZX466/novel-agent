@@ -12,6 +12,7 @@ timeline view endpoint.
 from __future__ import annotations
 
 import logging
+import re
 from collections import deque
 from dataclasses import dataclass, field
 
@@ -27,6 +28,14 @@ _WARN_PREDECESSOR = "predecessor"
 _WARN_REVERSE_ORDER = "reverse_order"
 _WARN_CYCLE = "cycle"
 
+# Ordering contract for in_world_date (R6-2 P2): parse YYYY / YYYY-MM /
+# YYYY-MM-DD plus common CJK separators (年/月/日, /, ., -) and sort by
+# (year, month, day). Unparseable values are grouped AFTER all real dates
+# and ordered by their raw string — a documented, deterministic contract.
+_DATE_RE = re.compile(
+    r"^\s*(\d{4})\s*[-/年.]\s*(\d{1,2})?\s*[-/月.]?\s*(\d{1,2})?\s*日?\s*$"
+)
+
 
 @dataclass
 class TimelineDag:
@@ -38,14 +47,30 @@ class TimelineDag:
     topological_ids: list[int] = field(default_factory=list)
 
 
-def _sort_key(pe: PlotEvent) -> tuple:
-    """Deterministic causal sort: in-world date, then chapter, then id.
+def _date_sort_key(value: str | None) -> tuple:
+    """Deterministic date ordering key for ``in_world_date``.
 
-    Undated / unplaced events (empty strings, -1) sort before dated ones so
-    they act as timeline roots.
+    - ``None`` / empty -> (0,)            unplaced events sort first (roots)
+    - parseable date   -> (1, year, month, day)
+    - anything else    -> (2, raw)        after all real dates, lexicographic
+    """
+    if not value:
+        return (0,)
+    match = _DATE_RE.match(value)
+    if match:
+        year = int(match.group(1))
+        month = int(match.group(2) or 1)
+        day = int(match.group(3) or 1)
+        return (1, year, month, day)
+    return (2, value)
+
+
+def _sort_key(pe: PlotEvent) -> tuple:
+    """Deterministic causal sort: normalized in-world date, then chapter,
+    then id. Undated / unplaced events act as timeline roots.
     """
     return (
-        pe.in_world_date or "",
+        _date_sort_key(pe.in_world_date),
         pe.chapter_index if pe.chapter_index is not None else -1,
         pe.id,
     )
@@ -56,13 +81,16 @@ def _violates_causal_order(prev: PlotEvent, cur: PlotEvent) -> bool:
 
     Compares by chapter_index when both are placed (strictly earlier chapter
     required; two events chained within the SAME chapter are valid). Falls
-    back to in_world_date when both carry dates. Mixed signals (one has a
-    date, the other only a chapter) are not comparable — returns False.
+    back to normalized in_world_date when both carry dates. Mixed signals
+    (one has a date, the other only a chapter) are not comparable — returns
+    False.
     """
     if prev.chapter_index is not None and cur.chapter_index is not None:
         return prev.chapter_index > cur.chapter_index
     if prev.in_world_date and cur.in_world_date:
-        return prev.in_world_date > cur.in_world_date
+        return _date_sort_key(prev.in_world_date) > _date_sort_key(
+            cur.in_world_date
+        )
     return False
 
 

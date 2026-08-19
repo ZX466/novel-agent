@@ -109,6 +109,15 @@ class Settings(BaseSettings):
         le=4000,
         description="Target chunk length (characters) when splitting uploaded text.",
     )
+    # --- 交稿雷达 (R6-3) scan cost guard ---
+    safety_scan_max_chars: int = Field(
+        default=500_000,
+        ge=10_000,
+        description=(
+            "最大交稿雷达扫描字符数；超出部分截断并在报告中标记 truncated=True，"
+            "避免超长作品拖慢导出前检查（不阻塞写作/导出）。"
+        ),
+    )
     knowledge_upload_rate_per_minute: int = Field(
         default=20,
         ge=1,

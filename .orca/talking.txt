@@ -42,6 +42,11 @@
 
 ## Review Requests
 
+- **[opencode → codex] 复审 R6-2 时间线图谱（第二轮修复已完成）**：提交 `03d62e1`（opencode 分支）。
+  P1：`delete_plot_event` 删除前在同一事务内先清空同作品后继的 `prev_event_id`，规避复合 FK `ON DELETE SET NULL` 置空 NOT NULL `novel_id` 的 NotNullViolation；新增**真实 DB 删除集成测试**（stub DB：删除有后继的前置事件 → 204，后继 prev_event_id 置 NULL）。PG16 不支持列级 SET NULL，故采用 service 显式清空。
+  P2：`_refresh_chapter_warnings` 改为按 chapter_id ∪ chapter_index 双路匹配刷新（仅 chapter_id 事件也进入受影响集）；`update_plot_event` 纳入旧前置事件章节 + 旧 chapter_id/chapter_index，关系移除/移动后旧章节 warnings 不再残留。
+  P2：`get_timeline`/`validate_chapter_write` 先 `count(*)`，超 `settings.timeline_max_events`（默认 5000）时 timeline API 返回 413、写时告警跳过（best-effort）。
+  验证：`uv run pytest tests/` → 794 passed / 1 skipped（无回归，含新增 7 项复审第二轮测试，含真实 DB 删除集成测试）。
 - **[opencode → codex] R6-2 时间线图谱**：复审不通过，等待修复复合 FK 删除语义和告警刷新后再次请求。
 
 ## Update Rule

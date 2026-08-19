@@ -209,9 +209,22 @@ async def _collect_evidence(
 # --- orchestration -------------------------------------------------------------
 
 
-async def _chapter_text(session: AsyncSession, chapter_id: int) -> str:
-    ch = await session.scalar(select(Chapter).where(Chapter.id == chapter_id))
-    if ch is None:
+async def _chapter_text(
+    session: AsyncSession, chapter_id: int, novel_id: int,
+) -> str:
+    """Return a chapter's content, refusing chapters outside the novel.
+
+    The ownership check is defense-in-depth: the SQL also scopes by
+    novel_id, and the post-fetch guard catches double/session implementations
+    that cannot enforce the predicate. A foreign chapter must be
+    indistinguishable from a missing one (no existence oracle).
+    """
+    ch = await session.scalar(
+        select(Chapter).where(
+            Chapter.id == chapter_id, Chapter.novel_id == novel_id,
+        )
+    )
+    if ch is None or ch.novel_id != novel_id:
         raise ValueError("章节不存在")
     return ch.content_text or ""
 
@@ -240,7 +253,7 @@ async def check_draft(
     """
     text = (content_text or "").strip()
     if not text and chapter_id is not None:
-        text = await _chapter_text(session, chapter_id)
+        text = await _chapter_text(session, chapter_id, novel_id)
     text = text.strip()
     if not text:
         return []

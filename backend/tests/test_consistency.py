@@ -217,6 +217,25 @@ async def test_check_draft_missing_chapter_raises(mock_session):
         await cs.check_draft(mock_session, novel_id=7, owner_key_hash="h", chapter_id=9)
 
 
+@pytest.mark.asyncio
+async def test_check_draft_rejects_foreign_novel_chapter(mock_session):
+    """P0 regression: a chapter belonging to another novel must be refused
+    (no content read, no existence oracle) — same error as a missing one."""
+    foreign = Chapter(
+        id=9, novel_id=999, chapter_index=1, title="t",
+        content_text="李小明今年20岁",
+    )
+    mock_session.set_scalar_results([foreign])
+    mock_session.set_execute_results([_FakeResult(scalars=[])])
+    with patch.object(cs, "retrieve", AsyncMock()) as ret:
+        with pytest.raises(ValueError, match="章节不存在"):
+            await cs.check_draft(
+                mock_session, novel_id=7, owner_key_hash="h", chapter_id=9,
+            )
+    ret.assert_not_awaited()
+    assert mock_session.commits == 0
+
+
 # ===========================================================================
 # list_checks (service)
 # ===========================================================================

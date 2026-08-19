@@ -33,7 +33,8 @@ import {
   type EditorDisplay,
 } from "@/components/EditorDisplaySettings";
 import { EditorToolbar, FindReplaceBar } from "@/components/EditorToolbar";
-import { VersionHistoryDialog, saveSnapshot } from "@/components/VersionHistoryDialog";
+import { VersionHistoryDialog } from "@/components/VersionHistoryDialog";
+import { createSnapshot } from "@/lib/snapshots";
 import { extractEntitiesFromOutline } from "@/lib/extract-entities";
 import { createCharacter } from "@/lib/characters";
 import { createWorldSetting } from "@/lib/world-settings";
@@ -272,9 +273,16 @@ export default function NovelEditorPage() {
       setDoc(updated);
       setDirty(false);
       setSaveState("saved");
-      // Save a local version snapshot for history.
+      // Create a server-side snapshot for history (best-effort).
       if (activeChapter) {
-        saveSnapshot(activeChapter.id, editor.getText(), countWords(editor.getText()));
+        try {
+          await createSnapshot(docId, activeChapter.id, editor.getText(), {
+            title: activeChapter.title,
+            reason: "save",
+          });
+        } catch {
+          // A failed snapshot must never block the save itself.
+        }
       }
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => setSaveState("idle"), 1500);
@@ -503,15 +511,37 @@ export default function NovelEditorPage() {
   // ── Insert AI text ──────────────────────────────────────────────────
 
   const handleInsertIntoEditor = useCallback(
-    (text: string) => {
+    async (text: string) => {
+      // Auto-snapshot before any AI insertion so the author can roll back.
+      if (activeChapter) {
+        try {
+          await createSnapshot(docId, activeChapter.id, editor?.getText() ?? "", {
+            title: activeChapter.title,
+            reason: "insert",
+          });
+        } catch {
+          // Best-effort; never block the insertion on a failed snapshot.
+        }
+      }
       editor?.chain().focus().insertContent(text).run();
     },
-    [editor],
+    [editor, docId, activeChapter],
   );
 
   const handleReplaceInEditor = useCallback(
-    (text: string) => {
+    async (text: string) => {
       if (!editor) return;
+      // Auto-snapshot before an AI replace so the previous text is restorable.
+      if (activeChapter) {
+        try {
+          await createSnapshot(docId, activeChapter.id, editor.getText(), {
+            title: activeChapter.title,
+            reason: "replace",
+          });
+        } catch {
+          // Best-effort; never block the replace on a failed snapshot.
+        }
+      }
       const { from, to } = editor.state.selection;
       if (from !== to) {
         editor.chain().focus().deleteRange({ from, to }).insertContentAt(from, text).run();
@@ -519,7 +549,7 @@ export default function NovelEditorPage() {
         editor.chain().focus().insertContent(text).run();
       }
     },
-    [editor],
+    [editor, docId, activeChapter],
   );
 
   const handleApplyOutline = useCallback(
@@ -973,6 +1003,18 @@ export default function NovelEditorPage() {
                                 if (!doc) return;
                                 setExporting(fmt);
                                 try {
+                                  // Auto-snapshot before exporting so the
+                                  // current draft is recoverable.
+                                  if (activeChapter) {
+                                    try {
+                                      await createSnapshot(docId, activeChapter.id, currentText, {
+                                        title: activeChapter.title,
+                                        reason: "export",
+                                      });
+                                    } catch {
+                                      // Best-effort; never block the export.
+                                    }
+                                  }
                                   await downloadExport(doc.id, fmt);
                                 } catch (e) {
                                   alert(`❌ 导出失败: ${e instanceof Error ? e.message : "未知错误"}`);
@@ -1101,8 +1143,10 @@ export default function NovelEditorPage() {
       {/* Version history dialog */}
       <VersionHistoryDialog
         open={historyOpen}
+        docId={docId}
         chapterId={activeChapter?.id ?? null}
         chapterTitle={activeChapter?.title ?? ""}
+        currentText={currentText}
         onClose={() => setHistoryOpen(false)}
         onRestore={(text) => {
           if (editor) {

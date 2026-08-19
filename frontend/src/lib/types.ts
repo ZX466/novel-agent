@@ -143,6 +143,47 @@ export interface ChapterInput {
 }
 
 // ---------------------------------------------------------------------------
+// Chapter snapshots (R5-4 安心回溯)
+// ---------------------------------------------------------------------------
+
+/** A point-in-time copy of a chapter's text (snapshots API). */
+export interface ChapterSnapshot {
+  id: number;
+  chapter_id: number;
+  title: string;
+  content_text: string;
+  word_count: number;
+  reason: string;
+  created_at: string;
+}
+
+/** Paginated snapshot list returned by GET .../snapshots. */
+export interface SnapshotListResponse {
+  items: ChapterSnapshot[];
+  total: number;
+}
+
+/** Canonical auto-snapshot triggers (matches backend SNAPSHOT_REASONS). */
+export const SNAPSHOT_REASONS = [
+  "save",
+  "insert",
+  "replace",
+  "export",
+  "manual",
+] as const;
+
+export type SnapshotReason = (typeof SNAPSHOT_REASONS)[number];
+
+/** Human-readable label for each snapshot trigger. */
+export const SNAPSHOT_REASON_LABELS: Record<SnapshotReason, string> = {
+  save: "保存",
+  insert: "AI 插入",
+  replace: "替换",
+  export: "导出",
+  manual: "手动",
+};
+
+// ---------------------------------------------------------------------------
 // Characters
 // ---------------------------------------------------------------------------
 

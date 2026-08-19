@@ -4,15 +4,17 @@
 
 ## Current State
 
-✅ **Round 5 全部 6 项已完成并合入 main（tip `0bdd1ae`，已推双远程）**：
-R5-1 创作向导 Wizard（Claude）· R5-2 配方卡（cline）· R5-3 一致性哨兵（opencode，Codex 复审通过）·
-R5-4 安心回溯（codex，cline 通过）· R5-5 多平台导出（kilo）· R5-6 DocLite（pi，cline 通过）。
-测试：**712 passed / 9 failed（均为 Redis 未运行的环境性失败）/ 1 skipped**。
+✅ **Round 5 全部 6 项完成并合入 main（tip `61182f7`，三地同步）**。测试全绿 **721 passed / 1 skipped / 0 failed**（Redis 运行后）。
+🔄 **Round 6 启动（2026-08-19）**：用户确认 Tier 2 精选 5 项，目标延续"完善但简化创作流程"。
 
 ## Action Queue
 
-（无 — Round 5 完成，等待下一轮需求分配）
-建议项跟踪（不阻塞）：R5-3 P2-P4（数据上限/日期误报/频控）· R5-4 P2（word_count 语义）· R5-6 P2（已采纳主项）。
+- [ ] **R6-1 章节脑图**（Claude 实施，评审 codex）— 大纲可视化+拖拽排序+直接续写入口
+- [ ] R6-2 时间线图谱 → opencode（已分配）
+- [ ] R6-3 交稿雷达 → codex（已分配）
+- [ ] R6-4 数据可移植网关 → kilo（已分配）
+- [ ] R6-5 PerfPulse → pi（已分配）
+- [ ] 回收各板完成回复 → 评审 → 合并 main → 推送双远程
 
 ## Unassigned Notes
 

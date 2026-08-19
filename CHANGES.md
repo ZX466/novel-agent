@@ -15,10 +15,18 @@
 
 **测试基线**：Redis 运行后 `726 passed / 1 skipped`（R6-5 并入后）。
 
-### Round 6（进行中）
+### Round 6（2026-08-19，5/5 全部合入 main）
 
-- R6-5 PerfPulse 性能自监控面板（pi）✅ 已合入：`@_timed` 采集 5 节点耗时（0.6us/节点）+ SSE perf 事件 + 前端状态栏，TDD 5 测试 | `81ebf35`
-- R6-1 章节脑图（Claude）/ R6-2 时间线图谱（opencode）/ R6-3 交稿雷达（codex）/ R6-4 数据可移植网关（kilo）— 任务已定义（`.orca/proposals-r5.md`），待实施
+| 功能 | 说明 | 提交 |
+|------|------|------|
+| R6-5 PerfPulse（pi） | `@_timed` 采集 5 节点耗时（0.6us/节点）+ SSE perf 事件 + 前端状态栏 | `81ebf35` |
+| R6-3 交稿雷达（codex） | 导出前隐私/版权/敏感表达预检 + SafetyScanDialog + 导出 owner 校验修复 | `c66c30d`+`65a1efd`+`bc55591` |
+| R6-4 数据可移植网关（kilo） | NDJSON 全量导出/幂等导入（chapter_id upsert）+ since 游标增量同步 + import owner 校验 | `7ed8791`+`99645ad` |
+| R6-1 章节脑图（Claude） | 大纲可视化（OutlineMindMap 垂直流程图 + SVG 连线）+ 节点续写入口 + 列表/脑图切换；引入 vitest 组件测试（8 用例） | `f8af335`+`25fe403` |
+| R6-2 时间线图谱（opencode） | plot_events 增 in_world_date/prev_event_id → 因果 DAG + 章节写入实时告警 + timeline API；同作品 FK 约束 + 删除语义 + 资源上限（两轮评审修复） | `35860c4`+`484e9d0`+`a10ca2b` |
+
+**alembic 双头解决**：merge `a5941476682a`（chapter_snapshots + consistency_checks）+ `b0c1d2e3f405`（timeline 头），唯一 head `c0d1e2f3a4b50`，本地 DB 已 `upgrade head` 对齐。
+**测试基线**：`794 passed / 1 skipped`（后端）+ 前端 vitest 8 passed / tsc / lint / build ✓。
 
 ### 结构收敛（2026-08-19）
 

@@ -1,0 +1,44 @@
+# Talking - Pi (Performance)
+
+> 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
+
+## Current State
+
+✅ **R6-5 PerfPulse 实施完成**：后端 @_timed 采集（0.6us/节点）+ SSE perf 事件 + 前端 PerfChatTransport 状态栏；TDD 5 测试 + 全量 665 passed；tsc+lint 通过。待评审/合入。
+
+## Action Queue
+
+- （无 — 待命）
+
+## Update Rule
+
+收到 `[任务]` 后先回写 `[回复]`/“已接受”，完成后只记录性能结论、基准验证、Git 状态和评审状态；合并后删除过程记录。
+
+---
+
+[回复] R6-5 PerfPulse 性能自监控面板（实施）
+状态: 已完成
+时间: 2026-08-19 12:50
+进展:
+  实施完成（TDD）：
+  1) 后端 nodes.py @_timed 装饰器采集 5 节点耗时 → state[perf]；graph.py 透传 perf；chat.py 发 SSE perf 事件。
+  2) 采集开销实测 0.615us/节点（占秒级 LLM 0.00006%）——不拖慢生成。
+  3) 前端 PerfChatTransport 自定义 transport（DefaultChatTransport 会丢未知事件）+ Chat.tsx 底部耗时区。
+  4) 测试：test_pipeline_perf.py 5 passed；全量 665 passed / 1 skipped；tsc+lint 通过；SSE 解析端到端验证通过。
+  记录: PERFORMANCE-BUDGET-R4.md 附。评审: cline。
+疑问:
+  无
+---
+
+[任务] R6-5 PerfPulse 性能自监控面板（实施）
+来源: Claude (coordinator)
+时间: 2026-08-19
+优先级: P1
+描述:
+  实现提案 #5（.orca/proposals-r5.md），与 R5-6 DocLite 配套（性能透明化）：
+  - pipeline 各阶段耗时（RAG/embed/draft/refine/TTFT）实时显示在编辑器状态栏
+  - 落点: backend/app/pipeline/nodes.py 收集耗时 → frontend/src/components/Editor.tsx 状态栏
+  - 按项目规范 TDD；给出采集开销基准（不应明显拖慢生成）
+验收: 状态栏实时显示各阶段耗时、采集开销可控、测试通过。
+评审: cline。
+---

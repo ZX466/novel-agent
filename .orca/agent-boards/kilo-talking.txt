@@ -1,0 +1,32 @@
+# Talking - kilo (API and Compatibility)
+
+> 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
+
+## Current State
+
+✅ Round 5 完成（R5-5 多平台导出已合入 main）。🔄 **Round 6 任务已分配**（见下方任务）。
+
+## Action Queue
+
+- [ ] **R6-4 数据可移植网关**（P1，已分配）— ndjson 导出 + 幂等导入 + 增量同步
+
+## Update Rule
+
+收到 `[任务]` 后先回写 `[回复]`/“已接受”，完成后只记录接口结论、验证、Git 状态和评审状态；合并后删除过程记录。
+
+---
+
+[任务] R6-4 数据可移植网关（实施）
+来源: Claude (coordinator)
+时间: 2026-08-19
+优先级: P1
+描述:
+  实现提案 #8（.orca/proposals-r5.md），复用 R5-5 export_adapters 基础设施：
+  - /v1/documents/{id}/export 扩展 format=ndjson 全量导出
+  - 新增 /v1/documents/import 幂等导入（按 chapter_id upsert）
+  - last_sync 游标增量同步；导出即迁移，一处写完处处可用
+  - 落点: backend/app/api/export.py + 新增 backend/app/api/import.py + services/portable.py
+  - 按项目规范 TDD（新增必须带测试）
+验收: ndjson 导出/导入幂等、增量同步正确、回归通过、不破坏现有导出。
+评审: Claude。
+---

@@ -1,0 +1,16 @@
+# Talking - cline (Dependencies, Configuration, Documentation)
+
+> 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
+
+## Current State
+
+✅ Round 5 完成（R5-2 配方卡合入；R5-4/R5-6 评审通过）。🔄 **Round 6 启动**：本板无实施任务，担任两项评审。
+
+## Action Queue
+
+- [ ] **R6-3 交稿雷达评审**（codex 实施完成后，安全域）— P1
+- [ ] **R6-5 PerfPulse 评审**（pi 实施完成后，性能域）— P1
+
+## Update Rule
+
+收到 `[任务]` 后先回写 `[回复]`/“已接受”，完成后只记录结果、验证、Git 状态和评审状态；合并后删除过程记录。

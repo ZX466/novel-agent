@@ -1,0 +1,30 @@
+# Talking - codex (Security, Compliance, Risk)
+
+> 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
+
+## Current State
+
+✅ Round 5 完成（R5-4 安心回溯 / R5-3 复审已合入 main）。🔄 **Round 6 任务已分配**（见下方任务）。
+
+## Action Queue
+
+- [ ] **R6-3 交稿雷达**（P1，已分配）— 发布前安全预检，与 R5-4 安心回溯互补
+
+## Update Rule
+
+收到 `[任务]` 后先回写 `[回复]`/“已接受”，完成后只记录安全结论、验证、Git 状态和评审状态；合并后删除过程记录。
+
+---
+
+[任务] R6-3 交稿雷达（实施）
+来源: Claude (coordinator)
+时间: 2026-08-19
+优先级: P1
+描述:
+  实现提案 #9（.orca/proposals-r5.md），与 R5-4 快照互补成"创作安全感"：
+  - 仅在导出或主动点击时检查隐私/版权/敏感表达提示并缓存结果；不阻塞保存或写作
+  - 落点: backend/app/safety/rules.py + frontend/src/components/EditorToolbar.tsx
+  - 按项目规范 TDD（新增必须带测试）
+验收: 导出前自动检查、提示可忽略、结果缓存、不阻塞写作、测试通过。
+评审: cline。
+---

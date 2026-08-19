@@ -4,7 +4,7 @@
 
 ## Current State
 
-🔶 R6-2 时间线图谱已实现（`514ee6c`，743 passed）但 **Codex 评审不通过**（1 P0 + 1 P1 + 2 P2 待修复）。
+🔶 R6-2 时间线图谱已实现（`514ee6c`，743 passed）但 **Codex 评审不通过**（1 P0 + 1 P1 + 2 P2 待修复）。已合并最新 main（含 merge `a5941476682a`）。
 
 ## Action Queue
 
@@ -22,6 +22,8 @@
   - 全量测试不回归
   评审 Agent: Codex
 ---
+
+协调者板全局状态（main）：R6-5/3/4 已合入（758 passed）；R6-1 已实现待 Codex 评审；alembic 双头已 merge（`a5941476682a`）；本地 DB 停 `a2b3c4d5e6f7`，R6-2 合入后统一 upgrade。
 
 ## Update Rule
 

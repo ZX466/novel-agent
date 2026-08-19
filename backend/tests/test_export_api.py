@@ -11,7 +11,8 @@ _AUTH = {"X-API-Key": "test-key"}
 
 
 def test_export_returns_404_for_missing_document(app_client: TestClient) -> None:
-    r = app_client.get("/v1/documents/99/export", params={"format": "md"}, headers=_AUTH)
+    # Shared test DB accumulates ids across runs, so use an id that can never exist.
+    r = app_client.get("/v1/documents/999999/export", params={"format": "md"}, headers=_AUTH)
     assert r.status_code == 404
 
 

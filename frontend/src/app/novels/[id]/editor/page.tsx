@@ -40,6 +40,8 @@ import { createCharacter } from "@/lib/characters";
 import { createWorldSetting } from "@/lib/world-settings";
 import { createPlotEvent } from "@/lib/plot-events";
 import { downloadExport, EXPORT_LABELS, type ExportFormat } from "@/lib/export";
+import { fetchSafetyScan, type SafetyScanReport } from "@/lib/safety";
+import { SafetyScanDialog } from "@/components/SafetyScanDialog";
 
 function countWords(text: string): number {
   if (!text) return 0;
@@ -93,6 +95,55 @@ export default function NovelEditorPage() {
   // Export menu state (F3).
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
+
+  // ── 交稿雷达 (R6-3) state + handlers ─────────────────────────────
+  const [radarOpen, setRadarOpen] = useState(false);
+  const [radarReport, setRadarReport] = useState<SafetyScanReport | null>(null);
+  const [radarLoading, setRadarLoading] = useState(false);
+  const [radarError, setRadarError] = useState<string | null>(null);
+  const [pendingExportFmt, setPendingExportFmt] = useState<ExportFormat | null>(null);
+
+  const runSafetyScan = useCallback(async () => {
+    if (!doc) return;
+    setRadarLoading(true);
+    setRadarError(null);
+    try {
+      const report = await fetchSafetyScan(doc.id);
+      setRadarReport(report);
+    } catch (e) {
+      setRadarError(e instanceof Error ? e.message : "安全检查失败");
+    } finally {
+      setRadarLoading(false);
+    }
+  }, [doc]);
+
+  const handleOpenRadar = useCallback(() => {
+    setPendingExportFmt(null);
+    setRadarReport(null);
+    setRadarError(null);
+    setRadarOpen(true);
+    void runSafetyScan();
+  }, [runSafetyScan]);
+
+  const handleContinueExport = useCallback(async () => {
+    if (!doc || !pendingExportFmt) return;
+    try {
+      await downloadExport(doc.id, pendingExportFmt);
+    } catch (e) {
+      alert(`❌ 导出失败: ${e instanceof Error ? e.message : "未知错误"}`);
+    } finally {
+      setPendingExportFmt(null);
+      setRadarOpen(false);
+    }
+  }, [doc, pendingExportFmt]);
+
+  const radarStatus: "idle" | "scanning" | "clean" | "warn" = radarLoading
+    ? "scanning"
+    : radarReport
+      ? radarReport.findings.length > 0
+        ? "warn"
+        : "clean"
+      : "idle";
 
   // Right panel tab: AI 工具 (AIToolPanel) / AI 编剧 (AssistantPanel, F1).
   const [rightTab, setRightTab] = useState<"tools" | "assistant">("tools");
@@ -881,6 +932,12 @@ export default function NovelEditorPage() {
                     onDelete={(id) => void handleDeleteChapter(id)}
                     onRename={(id, t) => void handleRenameChapter(id, t)}
                     onReorder={(ids) => void handleReorder(ids)}
+                    onContinueChapter={(id) => {
+                      // R6-1: mind-map continue entry — load the chapter and
+                      // surface the AI tools so "续写" is one click away.
+                      void handleSelectChapter(id);
+                      setRightTab("tools");
+                    }}
                   />
                 </div>
               )}
@@ -1015,6 +1072,14 @@ export default function NovelEditorPage() {
                                       // Best-effort; never block the export.
                                     }
                                   }
+                                  // 交稿雷达 (R6-3)：导出前自动预检，提示可忽略，不阻塞导出。
+                                  const preflight = await fetchSafetyScan(doc.id).catch(() => null);
+                                  if (preflight && preflight.findings.length > 0) {
+                                    setPendingExportFmt(fmt);
+                                    setRadarReport(preflight);
+                                    setRadarOpen(true);
+                                    return;
+                                  }
                                   await downloadExport(doc.id, fmt);
                                 } catch (e) {
                                   alert(`❌ 导出失败: ${e instanceof Error ? e.message : "未知错误"}`);
@@ -1080,6 +1145,8 @@ export default function NovelEditorPage() {
             focusActive={focusMode}
             onToggleFocus={() => setFocusMode((v) => !v)}
             onOpenHistory={() => setHistoryOpen(true)}
+            onOpenRadar={handleOpenRadar}
+            radarStatus={radarStatus}
           />
         </section>
 
@@ -1139,6 +1206,21 @@ export default function NovelEditorPage() {
           </div>
         )}
       </div>
+
+      {/* 交稿雷达 (R6-3) dialog */}
+      <SafetyScanDialog
+        open={radarOpen}
+        report={radarReport}
+        loading={radarLoading}
+        error={radarError}
+        pendingExport={pendingExportFmt}
+        onClose={() => {
+          setPendingExportFmt(null);
+          setRadarOpen(false);
+        }}
+        onContinueExport={handleContinueExport}
+        onRescan={runSafetyScan}
+      />
 
       {/* Version history dialog */}
       <VersionHistoryDialog

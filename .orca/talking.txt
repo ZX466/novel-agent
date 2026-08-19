@@ -7,7 +7,7 @@
 ✅ Round 5 完成（6/6 合入，测试全绿）。🔄 Round 6 进行中（2026-08-19 17:50）：
 - ✅ R6-5 PerfPulse（pi）已合入 main（`81ebf35`）
 - ✅ R6-2 时间线图谱（opencode）已实现（`514ee6c`，743 passed / 1 skipped），评审 Codex
-- ✅ R6-4 数据可移植网关（kilo）已实现（`7ed8791`，736 passed / 1 skipped），评审 Claude
+- ✅ R6-4 数据可移植网关（kilo）**已合入 main**（`7ed8791` 功能 + `99645ad` owner 校验修复 + `13c0c5e` 合入，758 passed / 1 skipped，评审 P1 已修复）
 - 🔶 R6-3 交稿雷达（codex）**已 cherry-pick 合入 main**（`c66c30d`/`65a1efd`/`bc55591`，后端 746 passed + 前端 tsc/lint ✓）
 - ❌ R6-1 章节脑图（Claude）未开始
 
@@ -16,7 +16,7 @@
 - [ ] R6-1 章节脑图（Claude 实施，评审 codex）— 未开始
 - [ ] R6-2 → opencode 已完成 → Codex 评审
 - [x] R6-3 → codex 已实现 + cline 评审通过 + **已合入 main**（`c66c30d`/`65a1efd`/`bc55591`）
-- [ ] R6-4 → kilo 已完成 → Claude（本板）评审
+- [x] R6-4 → kilo 已完成 + 评审 P1 已修复 + **已合入 main**（`13c0c5e`，758 passed）
 - [ ] ⚠️ 既有 alembic 双头（`1a2b3c4d5e6f` chapter_snapshots 从未应用，opencode 报告）→ 需合并迁移或改 down_revision
 - [ ] 回收实施结果 → 评审 → 合并 main（cherry-pick）→ 推送双远程
 

@@ -6,11 +6,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { chatEndpoint } from "@/lib/config";
 import { loadProviderConfig, ownerAuthHeaders } from "@/lib/settings";
-import { createWorldSetting, listWorldSettings } from "@/lib/world-settings";
-import { createCharacter, listCharacters } from "@/lib/characters";
-import { getDocument, updateDocument } from "@/lib/documents";
+import {
+  applyCreativeKit,
+  parseCreativeKit,
+  type CreativeKitPackage,
+} from "@/lib/creative-kit";
 import type { EditorDoc } from "@/lib/types";
-import { parseCreativeKit, type CreativeKitPackage } from "@/lib/creative-kit";
 
 interface CreativeKitDialogProps {
   docId: number;
@@ -86,17 +87,53 @@ export function CreativeKitDialog({
     wasGenerating.current = isGenerating;
   }, [isGenerating, latestText]);
 
-  // Escape closes the dialog (modal semantics).
+  // Modal focus semantics: initial focus into the dialog, keydown handling
+  // (Escape close + Tab focus trap), and focus RETURN to the trigger on close.
   const dialogRef = useRef<HTMLDivElement>(null);
+  const lastActiveRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (open) {
+      lastActiveRef.current = document.activeElement as HTMLElement | null;
+      dialogRef.current?.focus();
+    } else if (lastActiveRef.current) {
+      lastActiveRef.current.focus();
+    }
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
-    // Initial focus + focus return on close.
-    dialogRef.current?.focus();
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    const node = dialogRef.current;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab" || !node) return;
+      // Focus trap: keep Tab/Shift+Tab cycling within the dialog's focusables.
+      const focusables = Array.from(
+        node.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute("disabled"));
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || !node.contains(active)) {
+        e.preventDefault();
+        first.focus();
+        return;
+      }
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   if (!open) return null;
@@ -112,81 +149,39 @@ export function CreativeKitDialog({
     setApplying(true);
     setApplyStatus("");
     try {
-      let createdWs = 0;
-      let skippedWs = 0;
-      let createdCh = 0;
-      let skippedCh = 0;
-
-      // Load existing titles/names once; a load failure must abort (not be
-      // silently treated as "nothing exists"), otherwise a retry would create
-      // duplicates. Also dedupe within this kit itself.
-      const [existingWs, existingChars] = await Promise.all([
-        listWorldSettings(docId, { limit: 1000 }),
-        listCharacters(docId, 1000),
-      ]);
-      const wsTitles = new Set(existingWs.items.map((w) => w.title));
-      const charNames = new Set(existingChars.items.map((c) => c.name));
-      const seenWs = new Set<string>();
-      const seenCh = new Set<string>();
-
-      const MAX_LEN = 200; // title/name length guard
-      const MAX_CONTENT = 20000; // content_text length guard
-
-      for (const ws of kit.world_settings.slice(0, 10)) {
-        const title = ws.title.slice(0, MAX_LEN);
-        if (wsTitles.has(title) || seenWs.has(title)) {
-          skippedWs += 1;
-          continue;
-        }
-        seenWs.add(title);
-        await createWorldSetting(docId, {
-          title,
-          category: ws.category,
-          content_text: ws.content_text.slice(0, MAX_CONTENT),
-        });
-        createdWs += 1;
-      }
-      for (const ch of kit.characters.slice(0, 10)) {
-        const name = ch.name.slice(0, MAX_LEN);
-        if (charNames.has(name) || seenCh.has(name)) {
-          skippedCh += 1;
-          continue;
-        }
-        seenCh.add(name);
-        const attributes =
-          ch.attributes && typeof ch.attributes === "object" && !Array.isArray(ch.attributes)
-            ? ch.attributes
-            : undefined;
-        await createCharacter(docId, {
-          name,
-          role: ch.role,
-          description: ch.description?.slice(0, MAX_CONTENT),
-          attributes,
-          arc_summary: ch.arc_summary?.slice(0, MAX_CONTENT),
-        });
-        createdCh += 1;
-      }
-
-      let outlineApplied = false;
-      if (kit.outline.trim()) {
-        const doc = await getDocument(docId);
-        const meta = { ...(doc.metadata_json ?? {}), outline: kit.outline };
-        // merge_metadata keeps any concurrent editor-save keys intact.
-        const updated = await updateDocument(docId, {
-          metadata_json: meta,
-          merge_metadata: true,
-        });
-        // P0: hand the freshest document back so the parent never overwrites
-        // this outline with a stale metadata_json later.
-        onApplied?.(updated);
-        outlineApplied = true;
-      }
-
-      setApplyStatus(
-        `已应用：世界观 ${createdWs}${skippedWs ? `（跳过 ${skippedWs}）` : ""} · ` +
-          `人物 ${createdCh}${skippedCh ? `（跳过 ${skippedCh}）` : ""}` +
-          (outlineApplied ? " · 主线大纲" : ""),
-      );
+      // Single atomic server-side apply: the backend locks the document row,
+      // inserts world settings + characters (unique per title/name) and
+      // PATCH-merges ONLY the outline keys into metadata_json — so an editor
+      // save that races us never gets clobbered by a stale full metadata copy.
+      const res = await applyCreativeKit(docId, {
+        world_settings: kit.world_settings.map((w) => ({
+          title: w.title.slice(0, 200),
+          category: w.category,
+          content_text: w.content_text.slice(0, 20000),
+        })),
+        characters: kit.characters.map((c) => ({
+          name: c.name.slice(0, 200),
+          role: c.role,
+          description: c.description?.slice(0, 20000),
+          attributes:
+            c.attributes &&
+            typeof c.attributes === "object" &&
+            !Array.isArray(c.attributes)
+              ? c.attributes
+              : undefined,
+          arc_summary: c.arc_summary?.slice(0, 20000),
+        })),
+        outline: kit.outline,
+      });
+      const parts = [
+        `世界观 ${res.created_world_settings}${res.skipped_world_settings ? `（跳过 ${res.skipped_world_settings}）` : ""}`,
+        `人物 ${res.created_characters}${res.skipped_characters ? `（跳过 ${res.skipped_characters}）` : ""}`,
+      ];
+      if (res.outline_applied) parts.push("主线大纲");
+      setApplyStatus(`已应用：${parts.join(" · ")}`);
+      // Hand the freshest document back so the parent never overwrites this
+      // outline with a stale metadata_json later.
+      onApplied?.(res.document);
     } catch (err) {
       setApplyStatus(
         `应用失败：${err instanceof Error ? err.message : "未知错误"}`,

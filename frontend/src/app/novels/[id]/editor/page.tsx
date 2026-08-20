@@ -643,14 +643,25 @@ export default function NovelEditorPage() {
     async (outlineText: string) => {
       if (!doc) return;
       try {
-        // Save outline to document metadata
-        const updatedMeta = {
-          ...(doc.metadata_json ?? {}),
-          outline: outlineText,
-          outline_updated_at: new Date().toISOString(),
-        };
-        await updateDocument(docId, { metadata_json: updatedMeta, merge_metadata: true });
-        setDoc({ ...doc, metadata_json: updatedMeta });
+        // Save outline to document metadata. Send ONLY the changed keys —
+        // the server PATCH-merges under a row lock, so a concurrent write to
+        // a different metadata key (e.g. settings) is never clobbered by a
+        // stale full-copy being replayed. Local state still merges in place.
+        await updateDocument(docId, {
+          metadata_json: {
+            outline: outlineText,
+            outline_updated_at: new Date().toISOString(),
+          },
+          merge_metadata: true,
+        });
+        setDoc({
+          ...doc,
+          metadata_json: {
+            ...(doc.metadata_json ?? {}),
+            outline: outlineText,
+            outline_updated_at: new Date().toISOString(),
+          },
+        });
 
         // Auto-create chapters from outline if none exist.
         // Also extract per-chapter summaries from the text between chapter headings.
@@ -761,13 +772,22 @@ export default function NovelEditorPage() {
     async (text: string) => {
       if (!doc) return;
       try {
-        const updatedMeta = {
-          ...(doc.metadata_json ?? {}),
-          outline: text,
-          outline_updated_at: new Date().toISOString(),
-        };
-        await updateDocument(docId, { metadata_json: updatedMeta, merge_metadata: true });
-        setDoc({ ...doc, metadata_json: updatedMeta });
+        // Same send-only-changed-keys contract as handleApplyOutline above.
+        await updateDocument(docId, {
+          metadata_json: {
+            outline: text,
+            outline_updated_at: new Date().toISOString(),
+          },
+          merge_metadata: true,
+        });
+        setDoc({
+          ...doc,
+          metadata_json: {
+            ...(doc.metadata_json ?? {}),
+            outline: text,
+            outline_updated_at: new Date().toISOString(),
+          },
+        });
       } catch (e) {
         alert(e instanceof Error ? e.message : "保存大纲失败");
       }

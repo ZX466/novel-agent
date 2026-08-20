@@ -6,6 +6,9 @@
  * this parser tolerantly extracts it from streamed text (fenced ```json blocks
  * or the first top-level `{...}` region) and drops malformed entries.
  */
+import { ApiError, type EditorDoc } from "@/lib/types";
+import { backendUrl } from "@/lib/config";
+import { ownerAuthHeaders } from "@/lib/settings";
 
 export interface CreativeKitWorldSetting {
   title: string;
@@ -25,6 +28,29 @@ export interface CreativeKitPackage {
   world_settings: CreativeKitWorldSetting[];
   characters: CreativeKitCharacter[];
   outline: string;
+}
+
+/**
+ * Batch-apply request sent to POST /v1/documents/{id}/creative-kit/apply.
+ * The server performs the whole write (world settings + characters + outline)
+ * in ONE transaction — no per-item POST loop, no whole-document metadata
+ * round-trip.
+ */
+export interface CreativeKitApplyRequest {
+  world_settings: CreativeKitWorldSetting[];
+  characters: CreativeKitCharacter[];
+  outline: string;
+}
+
+export interface CreativeKitApplyResponse {
+  created_world_settings: number;
+  skipped_world_settings: number;
+  created_characters: number;
+  skipped_characters: number;
+  outline_applied: boolean;
+  /** Freshest document after the apply — hand it to the parent so it never
+   *  overwrites concurrent changes with a stale metadata_json copy. */
+  document: EditorDoc;
 }
 
 export const EMPTY_KIT: CreativeKitPackage = {
@@ -162,4 +188,39 @@ export function parseCreativeKit(text: string): CreativeKitPackage {
     characters,
     outline: typeof rec.outline === "string" ? rec.outline : "",
   };
+}
+
+/**
+ * Apply a generated kit in one server-side transaction. Returns created /
+ * skipped counts plus the freshest document (see CreativeKitApplyResponse).
+ */
+export async function applyCreativeKit(
+  docId: number,
+  kit: CreativeKitApplyRequest,
+): Promise<CreativeKitApplyResponse> {
+  const res = await fetch(`${backendUrl}/v1/documents/${docId}/creative-kit/apply`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...ownerAuthHeaders(),
+    },
+    body: JSON.stringify(kit),
+  });
+  if (!res.ok) {
+    let detail: unknown;
+    try {
+      const body = await res.json();
+      detail = body?.detail ?? body;
+    } catch {
+      // non-JSON error body
+    }
+    const msg =
+      typeof detail === "string"
+        ? detail
+        : detail && typeof detail === "object" && "detail" in (detail as object)
+          ? String((detail as { detail: unknown }).detail)
+          : `应用失败 (${res.status})`;
+    throw new ApiError(msg, res.status, detail);
+  }
+  return (await res.json()) as CreativeKitApplyResponse;
 }

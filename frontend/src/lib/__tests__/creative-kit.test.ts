@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { EMPTY_KIT, parseCreativeKit } from "@/lib/creative-kit";
+import {
+  applyCreativeKit,
+  EMPTY_KIT,
+  parseCreativeKit,
+} from "@/lib/creative-kit";
 
 const SAMPLE = {
   world_settings: [
@@ -90,5 +94,61 @@ describe("parseCreativeKit", () => {
     expect(kit.world_settings).toHaveLength(1);
     expect(kit.characters[0].name).toBe("张三");
     expect(kit.outline).toContain("第一章");
+  });
+});
+
+describe("applyCreativeKit", () => {
+  const kit = {
+    world_settings: [{ title: "大陆", category: "地理", content_text: "x" }],
+    characters: [{ name: "主角", role: "主角", description: "d" }],
+    outline: "第1章 开局",
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("POSTs the kit to the batch endpoint and returns the response", async () => {
+    const doc = { id: 9, metadata_json: {} };
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        created_world_settings: 1,
+        skipped_world_settings: 0,
+        created_characters: 1,
+        skipped_characters: 0,
+        outline_applied: true,
+        document: doc,
+      }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const res = await applyCreativeKit(9, kit);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/v1/documents/9/creative-kit/apply");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(String(init.body));
+    expect(body.world_settings[0].title).toBe("大陆");
+    expect(body.characters[0].name).toBe("主角");
+    expect(body.outline).toContain("第1章");
+    expect(res.created_characters).toBe(1);
+    expect(res.outline_applied).toBe(true);
+    expect(res.document).toEqual(doc);
+  });
+
+  it("throws an ApiError-carrying message on HTTP failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ detail: "冲突" }),
+      }),
+    );
+    await expect(applyCreativeKit(9, kit)).rejects.toThrow(
+      /请求失败 \(409\)|冲突/,
+    );
   });
 });

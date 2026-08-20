@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api._deps import extract_embedding_stage, load_parent, owner_key_hash, require_api_key
@@ -78,7 +79,12 @@ async def create_character_endpoint(
     """
     await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     payload = payload.model_copy(update={"novel_id": doc_id})
-    c = await create_character(session, payload, stage_config=embedding_stage)
+    try:
+        c = await create_character(session, payload, stage_config=embedding_stage)
+    except IntegrityError:
+        # (novel_id, name) unique constraint — same name already exists.
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="同名角色已存在")
     response.headers["Location"] = f"/v1/documents/{doc_id}/characters/{c.id}"
     return c  # type: ignore[return-value]
 

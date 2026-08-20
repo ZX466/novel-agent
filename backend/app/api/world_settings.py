@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api._deps import extract_embedding_stage, load_parent, owner_key_hash, require_api_key
@@ -77,7 +78,12 @@ async def create_world_setting_endpoint(
     """
     await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     payload = payload.model_copy(update={"novel_id": doc_id})
-    ws = await create_world_setting(session, payload, stage_config=embedding_stage)
+    try:
+        ws = await create_world_setting(session, payload, stage_config=embedding_stage)
+    except IntegrityError:
+        # (novel_id, title) unique constraint — same title already exists.
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="同名世界设定已存在")
     response.headers["Location"] = f"/v1/documents/{doc_id}/world-settings/{ws.id}"
     return ws  # type: ignore[return-value]
 

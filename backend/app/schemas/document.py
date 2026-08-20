@@ -53,6 +53,15 @@ class DocumentUpdate(BaseModel):
     # word_count is derived from content_text on update; not directly settable.
 
 
+class DocumentPatch(DocumentUpdate):
+    """PATCH body plus a merge hint. When ``merge_metadata`` is true, the
+    service PATCH-merges ``metadata_json`` into the current value instead of
+    replacing it — used by the editor save / Creative Kit flows so concurrent
+    writes never clobber unrelated keys like ``outline``."""
+
+    merge_metadata: bool = False
+
+
 class DocumentRead(BaseModel):
     """Full document returned by GET one / POST / PATCH."""
 

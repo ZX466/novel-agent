@@ -168,18 +168,26 @@ async def list_documents(
 
 async def get_document(
     session: AsyncSession, doc_id: int, *, include_deleted: bool = False,
-    owner_key_hash: str | None = None,
+    owner_key_hash: str | None = None, lock: bool = False,
 ) -> Document:
     """Returns the document or raises DocumentNotFound.
 
     By default skips soft-deleted docs so GET on a 回收站 item 404s unless
     the caller explicitly asks for it (e.g. restore preview).
+
+    When ``lock`` is true the row is selected ``FOR UPDATE``: the caller's
+    transaction holds the row lock until commit/rollback, so concurrent
+    writers that also lock (e.g. metadata merge under ``merge_metadata``)
+    serialize — each reads the freshest committed value before writing,
+    preventing lost updates on ``metadata_json``.
     """
     stmt = select(Document).where(Document.id == doc_id)
     if owner_key_hash is not None:
         stmt = stmt.where(Document.owner_key_hash == owner_key_hash)
     if not include_deleted:
         stmt = stmt.where(Document.status == STATUS_ACTIVE)
+    if lock:
+        stmt = stmt.with_for_update()
     doc = await session.scalar(stmt)
     if doc is None:
         raise DocumentNotFound(doc_id)
@@ -210,20 +218,30 @@ async def create_document(
 
 async def update_document(
     session: AsyncSession, doc_id: int, payload: DocumentUpdate,
-    *, owner_key_hash: str | None = None,
+    *, owner_key_hash: str | None = None, merge_metadata: bool = False,
 ) -> Document:
     """Partial update via model_dump(exclude_unset=True). Bumps version.
     Commits. Raises DocumentNotFound if missing.
 
-    Recomputes word_count when content_text changes.
+    When ``merge_metadata`` is true (Creative Kit / editor save flows),
+    ``metadata_json`` is PATCH-merged into the current value instead of
+    replaced wholesale, so concurrent writers can't clobber unrelated keys
+    (like ``outline``). The merge happens under a row lock (SELECT ... FOR
+    UPDATE) so concurrent merges serialize: the second writer blocks until
+    the first commits, then merges on top of the fresh value — no lost
+    updates even for keys that both writers touch. The default (replace)
+    preserves existing behaviour.
     """
-    doc = await get_document(session, doc_id, owner_key_hash=owner_key_hash)
+    merge_requested = (
+        merge_metadata
+        and "metadata_json" in payload.model_dump(exclude_unset=True)
+        and isinstance(payload.metadata_json, dict)
+    )
+    doc = await get_document(
+        session, doc_id, owner_key_hash=owner_key_hash, lock=merge_requested,
+    )
     updates = payload.model_dump(exclude_unset=True)
-    if "metadata_json" in updates and isinstance(updates["metadata_json"], dict):
-        # PATCH semantics for metadata_json: merge into the current value rather
-        # than replacing it wholesale, so concurrent writers (e.g. an in-flight
-        # editor save racing a Creative Kit outline apply) can't clobber keys
-        # (like `outline`) they didn't touch. Payload keys win on conflict.
+    if merge_requested:
         merged = dict(doc.metadata_json or {})
         merged.update(updates["metadata_json"])
         updates["metadata_json"] = merged

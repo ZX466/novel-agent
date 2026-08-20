@@ -112,6 +112,10 @@ export interface DocumentPartial {
   category?: string;
   metadata_json?: Record<string, unknown>;
   cover_url?: string;
+  /** When true, the server PATCH-merges metadata_json instead of replacing it
+   *  (used by editor-save / Creative Kit flows so concurrent writes don't
+   *  clobber unrelated keys like `outline`). */
+  merge_metadata?: boolean;
 }
 
 // ---------------------------------------------------------------------------

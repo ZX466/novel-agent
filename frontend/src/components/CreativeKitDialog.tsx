@@ -171,7 +171,11 @@ export function CreativeKitDialog({
       if (kit.outline.trim()) {
         const doc = await getDocument(docId);
         const meta = { ...(doc.metadata_json ?? {}), outline: kit.outline };
-        const updated = await updateDocument(docId, { metadata_json: meta });
+        // merge_metadata keeps any concurrent editor-save keys intact.
+        const updated = await updateDocument(docId, {
+          metadata_json: meta,
+          merge_metadata: true,
+        });
         // P0: hand the freshest document back so the parent never overwrites
         // this outline with a stale metadata_json later.
         onApplied?.(updated);

@@ -316,13 +316,13 @@ export default function NovelEditorPage() {
         void refreshChapters();
       }
       // Update the document title and writing settings.
-      // Merge with existing metadata_json to preserve outline, outline_updated_at, etc.
+      // PATCH-merge only the changed settings keys with merge_metadata, so an
+      // outline written by Creative Kit (or another tab) is never clobbered by
+      // this save's possibly-stale copy of the whole metadata_json.
       const body: DocumentPartial = {
         title: title.trim() || "未命名",
-        metadata_json: {
-          ...((doc?.metadata_json as Record<string, unknown>) ?? {}),
-          ...(settings as unknown as Record<string, unknown>),
-        },
+        metadata_json: { ...(settings as unknown as Record<string, unknown>) },
+        merge_metadata: true,
       };
       const updated = await updateDocument(docId, body);
       setDoc(updated);
@@ -649,7 +649,7 @@ export default function NovelEditorPage() {
           outline: outlineText,
           outline_updated_at: new Date().toISOString(),
         };
-        await updateDocument(docId, { metadata_json: updatedMeta });
+        await updateDocument(docId, { metadata_json: updatedMeta, merge_metadata: true });
         setDoc({ ...doc, metadata_json: updatedMeta });
 
         // Auto-create chapters from outline if none exist.
@@ -766,7 +766,7 @@ export default function NovelEditorPage() {
           outline: text,
           outline_updated_at: new Date().toISOString(),
         };
-        await updateDocument(docId, { metadata_json: updatedMeta });
+        await updateDocument(docId, { metadata_json: updatedMeta, merge_metadata: true });
         setDoc({ ...doc, metadata_json: updatedMeta });
       } catch (e) {
         alert(e instanceof Error ? e.message : "保存大纲失败");

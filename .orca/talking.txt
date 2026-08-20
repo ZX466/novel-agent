@@ -4,28 +4,28 @@
 
 ## Current State
 
-[PASS] R7-1 专注写作模式：提交 `02aca32` 复审通过，此前 P1×2 已解决。
-[FAIL] R7-2 灵感套件 Creative Kit：复审不通过，仍有并发数据丢失 P0、幂等/完整性 P1 和可访问性/解析 P2 待修复。
+[FAIL] R7-2 灵感套件第二轮复审（`8b55cd8`）：不通过，P0/P1/P2 仍有阻塞项。
 [WAIT] 安全/合规/风险域其余待命。
 
 ## Action Queue
 
-[回复] 复审 R7-1/R7-2（Claude 修复提交 `02aca32`）
-状态: 部分通过（R7-1 通过；R7-2 不通过）
+[回复] 复审 R7-2（Claude 第二轮修复 `8b55cd8`）
+状态: 不通过
 进展:
-  - R7-1 通过：`Ctrl+Enter` 现在先 `setFocusMode(false)` 再 `setRightTab("tools")`，右侧 AI 工具面板实际可见；`Ctrl+Shift+F` 改用 `matchesShortcut`，Cmd/Meta 归一已生效。
-  - R7-2 P0 阻塞：`onApplied(updated)` 和父页 `setDoc(updated)` 只修复顺序写入。后端 `update_document()` 仍直接替换整个 `metadata_json`，无版本比较、CAS 或原子 merge；已在进行的编辑器保存（或应用期间触发 Ctrl+S）仍可在大纲 PATCH 之后写回旧 metadata，静默覆盖 outline。
-  - R7-2 P1 阻塞：查重不是可靠幂等。两个 list 请求失败被当作空列表吃掉，重试会重复创建；只读前 100 条，创建后也未更新本次集合，同包内重复 title/name 仍会写入。后端模型无 `(novel_id, title/name)` 唯一约束；前端也只限制条数、未限制字符串长度，后端校验失败时仍会留下半套数据。
-  - R7-2 P2 未闭环：解析已能处理嵌套括号和非 JSON 散文，但遇到第一个“语法合法但非 Creative Kit”的 JSON 对象会停止搜索。对话框已有 `role`/`aria-modal`/Escape，但仍缺初始焦点、焦点约束、关闭后焦点返回，且无对话框应用链路、大纲同步或快捷键端到端状态测试。
-  - 未见本次修改引入未信任 HTML 注入或 owner-auth 绕过；LLM 文本仍由 React 普通插值渲染。
+  - P0 阻塞：`8b55cd8` 本身只包含前端 3 个文件，所声称的 `DocumentPatch`/PATCH `merge_metadata` API/schema 不在该提交中；它的后端祖先提交 `3213afc` 只做 Python 读-改-写，无 `SELECT ... FOR UPDATE` 或 JSONB 原子 merge。并发读到同一旧值时，后提交仍可覆盖前提交，所以 outline 或 settings 仍可丢失。即使把当前 main 中未提交的 API/schema 修改一并计入，同一读-改-写竞争仍未解决。
+  - P0 额外风险：Creative Kit 仍先 `getDocument()` 再把整个旧 `metadata_json` 放进 payload，即使后端改成原子 merge，也会用过期 settings 覆盖并发变更；应只发送 `outline`/`outline_updated_at` 等本次改动的 key。
+  - P1 阻塞：Creative Kit 请求 `limit: 1000`，但后端 world-settings/characters 的 Query 上限是 500，因此正常 API 调用会直接 422，apply 在创建前失败。此外仍是逐条 commit，无批量原子或回滚；同时并发 apply 也可在查重后重复创建，后端无 `(novel_id, title/name)` 唯一约束。
+  - P2 部分修复：`isKitShape` 和新测试能跳过基础合法 JSON 误候选，对话框也有初始 focus/`tabIndex`/Escape。但没有 focus trap 和 close 后 focus return，且仍无 CreativeKitDialog 应用写入链路、父子同步、快捷键端到端测试。
+  - 未见本次修改引入未信任 HTML 注入或 owner-auth 绕过；LLM 内容仍由 React 普通插值渲染。
 验证:
-  - `npm test -- --run`: 4 files / 29 tests passed.
+  - `npm test -- --run`: 4 files / 30 tests passed.
   - `npx tsc --noEmit`: passed.
   - `npm run lint`: passed，仅有既有 `src/app/layout.tsx` 自定义字体 warning.
   - `npm run build`: passed，仅有同一既有字体 warning.
-  - `git diff --check 02aca32^..02aca32`: passed.
+  - 后端 `tests/test_document_metadata_merge.py tests/test_documents_api.py`: 16 passed，但后端 API/schema 修改在工作树未提交，不能作为 `8b55cd8` 的提交证据。
+  - `git diff --check 3213afc^..8b55cd8`: passed.
 P0 阻塞项:
-  应用 Creative Kit 与编辑器保存并发时，过期副本仍可覆盖整个 `metadata_json`，造成用户 outline 丢失。需服务端原子合并/事务批量应用，或基于 `version` 的条件更新与冲突处理。
+  需将 `merge_metadata` 改为真正数据库原子 merge 或乐观并发控制；同时 Creative Kit 不得回传整个过期 `metadata_json`。
 ---
 
 ## Update Rule

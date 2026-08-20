@@ -219,6 +219,14 @@ async def update_document(
     """
     doc = await get_document(session, doc_id, owner_key_hash=owner_key_hash)
     updates = payload.model_dump(exclude_unset=True)
+    if "metadata_json" in updates and isinstance(updates["metadata_json"], dict):
+        # PATCH semantics for metadata_json: merge into the current value rather
+        # than replacing it wholesale, so concurrent writers (e.g. an in-flight
+        # editor save racing a Creative Kit outline apply) can't clobber keys
+        # (like `outline`) they didn't touch. Payload keys win on conflict.
+        merged = dict(doc.metadata_json or {})
+        merged.update(updates["metadata_json"])
+        updates["metadata_json"] = merged
     if "content_html" in updates and updates["content_html"] is not None:
         updates["content_html"] = sanitize_content_html(updates["content_html"])
     content_changed = "content_text" in updates

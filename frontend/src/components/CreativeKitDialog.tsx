@@ -87,8 +87,11 @@ export function CreativeKitDialog({
   }, [isGenerating, latestText]);
 
   // Escape closes the dialog (modal semantics).
+  const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
+    // Initial focus + focus return on close.
+    dialogRef.current?.focus();
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -114,43 +117,52 @@ export function CreativeKitDialog({
       let createdCh = 0;
       let skippedCh = 0;
 
-      // Idempotent apply: load existing titles/names once and skip duplicates,
-      // so retries after a partial failure never create duplicates.
+      // Load existing titles/names once; a load failure must abort (not be
+      // silently treated as "nothing exists"), otherwise a retry would create
+      // duplicates. Also dedupe within this kit itself.
       const [existingWs, existingChars] = await Promise.all([
-        listWorldSettings(docId, { limit: 100 }).catch(() => ({ items: [] as { title: string }[], total: 0 })),
-        listCharacters(docId, 100).catch(() => ({ items: [] as { name: string }[], total: 0 })),
+        listWorldSettings(docId, { limit: 1000 }),
+        listCharacters(docId, 1000),
       ]);
       const wsTitles = new Set(existingWs.items.map((w) => w.title));
       const charNames = new Set(existingChars.items.map((c) => c.name));
+      const seenWs = new Set<string>();
+      const seenCh = new Set<string>();
 
-      // Cap payloads: at most 10 entries each, attributes must be a plain object.
+      const MAX_LEN = 200; // title/name length guard
+      const MAX_CONTENT = 20000; // content_text length guard
+
       for (const ws of kit.world_settings.slice(0, 10)) {
-        if (wsTitles.has(ws.title)) {
+        const title = ws.title.slice(0, MAX_LEN);
+        if (wsTitles.has(title) || seenWs.has(title)) {
           skippedWs += 1;
           continue;
         }
+        seenWs.add(title);
         await createWorldSetting(docId, {
-          title: ws.title,
+          title,
           category: ws.category,
-          content_text: ws.content_text,
+          content_text: ws.content_text.slice(0, MAX_CONTENT),
         });
         createdWs += 1;
       }
       for (const ch of kit.characters.slice(0, 10)) {
-        if (charNames.has(ch.name)) {
+        const name = ch.name.slice(0, MAX_LEN);
+        if (charNames.has(name) || seenCh.has(name)) {
           skippedCh += 1;
           continue;
         }
+        seenCh.add(name);
         const attributes =
           ch.attributes && typeof ch.attributes === "object" && !Array.isArray(ch.attributes)
             ? ch.attributes
             : undefined;
         await createCharacter(docId, {
-          name: ch.name,
+          name,
           role: ch.role,
-          description: ch.description,
+          description: ch.description?.slice(0, MAX_CONTENT),
           attributes,
-          arc_summary: ch.arc_summary,
+          arc_summary: ch.arc_summary?.slice(0, MAX_CONTENT),
         });
         createdCh += 1;
       }
@@ -184,10 +196,12 @@ export function CreativeKitDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onClose} />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="灵感套件 Creative Kit"
-        className="relative z-10 w-[720px] max-w-[92vw] max-h-[86vh] flex flex-col rounded-lg border shadow-2xl"
+        tabIndex={-1}
+        className="relative z-10 w-[720px] max-w-[92vw] max-h-[86vh] flex flex-col rounded-lg border shadow-2xl outline-none"
         style={{ background: "var(--surface)", borderColor: "var(--border-hairline)" }}
       >
         {/* Header */}

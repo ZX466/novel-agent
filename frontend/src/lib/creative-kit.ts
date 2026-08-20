@@ -80,21 +80,40 @@ function tryParse(raw: string): unknown | null {
   }
 }
 
+/**
+ * True when the parsed object looks like a Creative Kit (carries at least one
+ * of the kit's top-level arrays/fields). Used to skip "legal JSON but not a
+ * kit" objects (e.g. prose wrapped in braces) while scanning candidates.
+ */
+function isKitShape(data: unknown): boolean {
+  const rec = asRecord(data);
+  return (
+    Array.isArray(rec.world_settings) ||
+    Array.isArray(rec.characters) ||
+    typeof rec.outline === "string"
+  );
+}
+
 export function parseCreativeKit(text: string): CreativeKitPackage {
   const trimmed = text.trim();
   if (!trimmed) return EMPTY_KIT;
 
   // Prefer a fenced ```json block; otherwise try candidate {...} regions in
-  // order until one parses (brace-depth aware, prose-brace tolerant).
+  // order until one parses AND has a kit shape (brace-depth aware, prose-brace
+  // tolerant, skips legal-but-unrelated JSON objects).
   let data: unknown | null = null;
   const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fence) {
     data = tryParse(fence[1].trim());
+    if (!isKitShape(data)) data = null;
   }
   if (data === null) {
     for (const region of extractJsonRegions(trimmed)) {
-      data = tryParse(region);
-      if (data !== null) break;
+      const cand = tryParse(region);
+      if (cand !== null && isKitShape(cand)) {
+        data = cand;
+        break;
+      }
     }
   }
   if (data === null) return EMPTY_KIT;

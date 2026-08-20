@@ -82,4 +82,13 @@ describe("parseCreativeKit", () => {
     expect(kit.world_settings).toHaveLength(1);
     expect(kit.characters[0].name).toBe("张三");
   });
+
+  it("skips a legal-but-unrelated JSON object before the kit JSON", () => {
+    const decoy = '{"foo": 1, "bar": [2]}';
+    const text = `元数据：${decoy}\n设定包：${JSON.stringify(SAMPLE)}`;
+    const kit = parseCreativeKit(text);
+    expect(kit.world_settings).toHaveLength(1);
+    expect(kit.characters[0].name).toBe("张三");
+    expect(kit.outline).toContain("第一章");
+  });
 });

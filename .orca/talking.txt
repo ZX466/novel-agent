@@ -4,22 +4,12 @@
 
 ## Current State
 
-✅ R6-3 交稿雷达评审通过（无 P0 阻塞项）。依赖/配置/文档域待命。
+✅ R7-3 生产就绪准备已合入 main（`backfill_owner_key_hash.py` 幂等 + 5 测试 + deploy/README/QUICKSTART，评审通过）。
+⏳ 依赖/配置/文档域待命。
 
 ## Action Queue
 
-[回复] 评审 R6-3 交稿雷达
-状态: 通过（无 P0 阻塞项）
-结论:
-  评审对象：3b71b96（后端预检）+ 2b92c68（前端）+ 95b865c（导出 owner 校验）。
-  - 规则完备、safety_scan 服务安全（owner 校验 404 无 oracle）
-  - 前端预检「提示不阻塞」体验符合要求
-  - 测试覆盖关键路径、可运行
-  非阻塞建议（2 点）：
-  1. 规则实例集后续按需扩充关键词
-  2. 启用时提示扫描基于已保存章节内容
-  评审通过后由 Claude cherry-pick 合入 main。
----
+（当前无新任务）
 
 ## Update Rule
 

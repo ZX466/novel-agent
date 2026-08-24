@@ -5,21 +5,20 @@
 ## Current State
 
 ✅ Round 5 完成（6/6 合入）。🎉 **Round 6 全部完成（5/5 合入 main，794 passed + E2E 全通过）**。
-🔄 **Round 7 启动（2026-08-19，主题：沉浸创作 + 起点生成 + 生产就绪）**：
-- ✅ R7-1 专注写作模式（Claude）**codex 复审通过**（`8b55cd8` 及此前）
-- 🔶 R7-2 灵感套件（Claude）**第三轮修复完成**（`e7dcfcc`：FOR UPDATE 原子 merge + 批量 apply 端点 + 唯一约束 + 焦点）→ **codex 已受理，复审中**；协调者自测已绿（backend 17 + frontend 18 passed）
-- ✅ R7-3 生产就绪准备（cline）**已合入 main**（回填脚本 + 5 测试，Claude 评审通过）
-- ✅ **main 已推送 Gitee**；⚠️ **GitHub 待补推**（2026-08-23 网络阻断，用户将稍后手动 `git push origin main`；本地领先 origin 若干板同步提交，以最新 main 为准）
-- ⚠️ 腾讯云服务器已到期（2026-08-16）：真实部署待恢复后执行，本轮做脚本/文档/本地验证
+✅ **Round 7 全部完成（R7-1/R7-2/R7-3，2026-08-24 codex 复审 R7-2 通过）**：
+- ✅ R7-1 专注写作模式（Claude）**codex 复审通过**
+- ✅ R7-2 灵感套件（Claude）**codex 复审通过**（`e7dcfcc` 第三轮修复：FOR UPDATE 原子 merge + 批量 apply 端点 + 唯一约束 + 焦点；P0/P1/P2 + 安全复核无阻塞）
+- ✅ R7-3 生产就绪准备（cline）已合入 main（回填脚本 + 5 测试 + 部署文档）
+- ✅ **main 已推送双远程**（Gitee + GitHub 0/0）
+- ⚠️ 腾讯云服务器已到期（2026-08-16）：真实部署待恢复后执行
 
 ## Action Queue
 
 - [x] R6-1/2/3/4/5 → 全部合入 main（Round 6 闭环）
 - [x] alembic 双头 → 已 merge（`a5941476682a` + `b0c1d2e3f405`，唯一 head `c0d1e2f3a4b50`）
-- [x] **R7-1 专注写作模式**（Claude）codex 复审通过
-- [ ] **R7-2 灵感套件**（Claude）已第三轮修复（`e7dcfcc`）→ **codex 复审**（用户决定先推送，评审仍挂起）
-- [x] **R7-3 生产就绪准备** → 已合入 main（评审通过）
-- [x] 回收实施结果 → 评审 → 合并 main（cherry-pick）→ 推送双远程（`818bfdb` 已推送）
+- [x] **R7 三项全部完成**：R7-1 复审通过 / R7-2 复审通过（2026-08-24）/ R7-3 已合入
+- [x] 推送双远程（含 codex 通过后板同步）
+- [ ] **生产部署**（恢复腾讯云或换机）→ `API_KEYS`、`alembic upgrade head`、`owner_key_hash` 回填、**生产库 world_settings/characters 归一化检查**（codex 非阻塞备注）— 待用户/Claude 排期，其他 Agent 不自行执行
 
 ## Unassigned Notes
 

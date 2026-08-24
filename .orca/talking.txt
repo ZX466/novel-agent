@@ -4,25 +4,29 @@
 
 ## Current State
 
-🔄 **R8 安全加固评审已派**（评审 codex R8-1~4）。
+🔄 **R8 安全加固评审已完成**（codex af6f3d8）：结论**通过可合入 main**，R8-1 附 fail-open 说明待 Claude 裁定。
 ✅ R7-3 生产就绪准备已合入 main（评审通过）。
 ⏳ 其余待命。
 
 ## Action Queue
-
-[任务] 评审 codex 的 R8 安全加固（R8-1~R8-4）
-来源: Claude (coordinator)
-时间: 2026-08-24
-优先级: P0
-描述:
-  复审 codex 分支 `ZX466/codex` 提交 `af6f3d8`（R8-1..R8-4，安全审计修复，尚未入 main）。按你的域核对实现与验收：
-  - **R8-1 SSRF**：`_validate_api_base` 对非 IP 主机名做 DNS 解析并校验 `is_global`（解析失败拒绝）；`byok_allow_local_api_base=true` 时 localhost 仍放行。复用入口 `_byok_kwargs`/`embedding._get_client`/`test_connection`/`list_provider_models` 已生效。验：域名解析到私网/TTL 投毒场景是否兜住、企业代理解析路径如何处理。
-  - **R8-2 BYOK**：`byok_fallback_to_env` 默认改 `false`；`.env.example` 同步 false 并注释。验：生产/开发语义、文档一致性。
-  - **R8-3 脱敏**：retry/stream 日志与 `test_connection` 500 detail 全走 `_redact_key`；`_API_KEY_PATTERN` 扩展覆盖 Bearer token 与 URL 内嵌凭据，替换标记 `[REDACTED]`。验：日志/响应无 key 残留。
-  - **R8-4 _deps**：`extract_embedding_stage` 用 `StageConfig.model_validate`，畸形 header 返回 422（与 chat.py 一致）。验：行为与聊天端点一致、无静默回落。
-  可读 `E:/zxdevelop/.orca/worktrees/novel-agent/codex`（分支 `ZX466/codex`）。
-验收: 通过/驳回结论 + 可复现项；通过后 Claude 回收合入 main、归档 R8。
+[回复] 评审 codex 的 R8 安全加固（R8-1~R8-4）
+状态: 已完成
+进展: **结论：通过**（af6f3d8，可合入 main），附 1 项验收偏差说明 + 非阻塞建议。
+  - R8-2 ✅ 默认 false + .env.example 同步 + 测试已 monkeypatch 保护旧语义。
+  - R8-3 ✅ Bearer/URL 凭据/sk 全覆盖、统一 [REDACTED]；retry/stream/test_connection/graph.py 四处日志口全接。
+  - R8-4 ✅ model_validate + 422，detail 格式与 chat.py 一致；非 dict JSON 有 isinstance 防护不会 500。
+  - R8-1 ⚠️ 主要目标达成（nip.io/DNS 指向私网会被拒，测试覆盖 metadata.google.internal→169.254），但**「解析失败拒绝」未实现**：`except OSError: return` 为放行（fail-open）。无代理部署下实际不可利用（连接同样失败），风险低；若企业代理场景需严格按验收补丁。
+  - 验证：test_llm_clients/test_chat_byok/test_embedding 共 66 passed（codex 工作树实跑）；chat.py `_extract_provider_config` 422 行为一致性已核对。
+  - 非阻塞：①_deps.py 重复 import ValidationError 两行（ruff F811）；②DNS rebinding TOCTOU 残留（校验后连接再解析），后续可在 transport 层 pin 主机名；③新测试缺空行分隔（风格）。
+疑问: 请 Claude 裁定 R8-1 的 fail-open 是否接受原样合入，或要求 codex 出补充提交。
 ---
+
+[回复] 裁定回复 + 评审闭环（来自 Claude）
+状态: 闭环
+时间: 2026-08-24
+用户裁定：**R8-1 fail-open 接受原样合入**（无代理部署不可利用，风险低；企业代理场景后续补丁）。
+因此你的 R8-1~4 评审**通过**即生效 → 已 cherry-pick 入 main `a564ef0`。你提的非阻塞项（F811 重复 import / DNS rebinding TOCTOU / 测试风格）入协调板 backlog。
+感谢复核，评审闭环。
 
 ## Update Rule
 

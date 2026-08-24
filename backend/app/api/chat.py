@@ -729,7 +729,7 @@ async def test_connection(
         logger.error("Connection test failed: %s: %s", type(e).__name__, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"连接测试失败: {type(e).__name__}: {e}",
+            detail=f"连接测试失败: {type(e).__name__}: {_redact_key(str(e))}",
         )
 
 

@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.redis import get_redis
 from app.schemas.chat import StageConfig
+from pydantic import ValidationError
+from pydantic import ValidationError
 from app.services.document import DocumentNotFound, get_document
 
 logger = logging.getLogger(__name__)
@@ -121,7 +123,11 @@ async def extract_embedding_stage(
             and emb.get("api_key")
             and emb.get("model")
         ):
-            return StageConfig(**emb)
-    except (json.JSONDecodeError, Exception):
-        logger.debug("deps: malformed X-Provider-Config header, ignoring")
+            return StageConfig.model_validate(emb)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        logger.warning("Invalid X-Provider-Config header")
+        raise HTTPException(
+            status_code=422,
+            detail=f"X-Provider-Config 头格式无效: {exc}",
+        )
     return None

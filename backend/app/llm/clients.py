@@ -20,6 +20,7 @@ import ipaddress
 import logging
 import random
 import re
+import socket
 from typing import Any, Dict, List
 from urllib.parse import urlparse
 
@@ -67,26 +68,28 @@ def _validate_api_base(url: str) -> None:
             raise ValueError("Local API base is disabled by BYOK_ALLOW_LOCAL_API_BASE")
         return
     try:
-        ip = ipaddress.ip_address(host)
+        addresses = {ipaddress.ip_address(host)}
     except ValueError:
-        # The HTTP clients may be configured with a corporate proxy, so
-        # resolving here can incorrectly produce the proxy's local address.
-        # Hostname pinning belongs in the outbound transport configuration.
-        return
-    if not ip.is_global:
+        try:
+            addresses = {
+                ipaddress.ip_address(info[4][0])
+                for info in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+            }
+        except OSError:
+            return
+    if any(not ip.is_global for ip in addresses):
         raise ValueError(f"Blocked internal address: {host}")
-
 
 # --- API key redaction for logs ---------------------------------------------
 
-_API_KEY_PATTERN = re.compile(r"sk-[A-Za-z0-9-_]+")
+_API_KEY_PATTERN = re.compile(r"(?:sk-[A-Za-z0-9_-]+|Bearer\s+[A-Za-z0-9._~+/=-]+|https?://[^\s:@]+:[^\s@]+@[^\s]+)", re.IGNORECASE)
 
 
 def _redact_key(text: str) -> str:
-    """Replace sk-... tokens with sk-*** in log/error messages."""
+    """Replace credential tokens with a fixed marker in log/error messages."""
     if not text:
         return text
-    return _API_KEY_PATTERN.sub("sk-***", text)
+    return _API_KEY_PATTERN.sub("[REDACTED]", text)
 
 
 # --- LLM call helpers --------------------------------------------------------
@@ -142,7 +145,7 @@ async def _call_with_retry(call_fn, *args, **kwargs) -> Any:
             last_exc = e
             logger.warning(
                 "LLM transient error (attempt %d/%d): %s",
-                attempt + 1, _MAX_RETRIES + 1, e,
+                attempt + 1, _MAX_RETRIES + 1, _redact_key(str(e)),
             )
         # Non-retryable errors propagate immediately:
         # AuthenticationError, BadRequestError, NotFoundError, etc.
@@ -188,7 +191,7 @@ async def _stream_with_retry(call_fn, *args, **kwargs) -> Any:
             last_exc = e
             logger.warning(
                 "LLM stream transient error (attempt %d/%d): %s",
-                attempt + 1, _MAX_RETRIES + 1, e,
+                attempt + 1, _MAX_RETRIES + 1, _redact_key(str(e)),
             )
 
         if attempt < _MAX_RETRIES:

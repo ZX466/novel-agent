@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # --- BYOK (Bring Your Own Key) controls ---
     byok_fallback_to_env: bool = Field(
-        default=True,
+        default=False,
         description=(
             "If true, fall back to .env LLM credentials when the request "
             "carries no X-Provider-* headers. Set to false to require BYOK "

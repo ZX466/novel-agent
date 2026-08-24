@@ -13,8 +13,8 @@
 - ⚠️ 腾讯云服务器已到期（2026-08-16）：真实部署待恢复后执行
 
 🔴 **Round 8 启动（2026-08-24，安全加固）**：整仓安全审计确认 4 高危（H1 SSRF 主机名绕过 / H2 生产纯 HTTP 明文 / H3 聊天 RAG 跨租户越权读 / H4 BYOK 回落配额烧损）+
-日志脱敏缺漏。分派：
-- R8-1~R8-4（SSRF / BYOK 默认 false / key 脱敏 / _deps 422）→ **codex 已受理**
+日志脱敏缺漏。**实施已全部完成（6/6），在交叉评审**：
+- R8-1~R8-4（SSRF / BYOK 默认 false / key 脱敏 / _deps 422）→ codex **完成**（分支 `af6f3d8`）→ **cline 评审已派**
 - R8-5（H3 chat+assistant+retrieval 按 owner+novel 双层过滤）→ Claude **完成**（`52ccd2e`）
 - R8-6（H2 nginx 443/TLS 强制 HTTPS + L4 443 对齐 + HSTS）→ Claude **完成**（`d527da7`，CSP 暂缓注明）
 - R8-5/6 → **待 codex 复审**

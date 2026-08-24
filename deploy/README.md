@@ -72,9 +72,23 @@ curl http://localhost/v1/health   # 应返回 {"status":"ok"}
 > **R6-3 交稿雷达（安全预检）为内置规则集**，无需环境变量开关。
 > `SAFETY_ENABLED` / `SAFETY_RULES` **不属于现有配置**（config.py 无此字段），请勿在 `.env` 中填写。如需调整规则，修改代码 `backend/app/safety/` 下的规则集。
 
-## HTTPS（可选）
+## HTTPS（必须，R8-6）
 
-把证书放到 `deploy/nginx/certs/` 下，在 `app.conf` 加 443 server block + `ssl_certificate`，并在 `docker-compose.yml` 的 nginx volumes 挂载证书目录。
+> 反向代理**默认强制 HTTPS**：`app.conf` 对 80 端口直接 301 → 443，无 TLS 时 nginx 以 `listen 443 ssl` 态启动会失败。所有 `X-API-Key` / `X-Provider-Config` 头经公网传输，**必须走 TLS，不允许明文 HTTP 回退**（安全审计 H2）。
+
+1. 准备证书，放入 `deploy/nginx/certs/`（compose 已挂载到容器 `/etc/nginx/certs`）：
+   - **正式域名**：用 Let's Encrypt 签 `fullchain.pem` + `privkey.pem`（如 `certbot --nginx -d your.domain` 或容器化签发后拷入）。
+   - **无域名/测试**：自签亦可——
+     ```bash
+     mkdir -p deploy/nginx/certs
+     openssl req -x509 -nodes -newkey rsa:2048 \
+       -keyout deploy/nginx/certs/privkey.pem \
+       -out deploy/nginx/certs/fullchain.pem -days 365 -subj "/CN=your-server-ip"
+     ```
+2. nginx 已做 80→443 跳转 + HSTS/Security 头（XFO/Content-Type/Referrer）。443 映射（`443:443`）此前是死端口，现已对齐监听。
+3. **CSP 未强制**：Next.js App Router 内联 RSC 引导脚本，直接加 CSP 会打爆渲染。需用 Next.js middleware nonce 策略后再配（R8 后续项，已在代码注释标注）。
+
+> 本地开发不跑 compose，不受影响。
 
 ## 常见问题
 

@@ -83,6 +83,7 @@ services:
       - "443:443"
     volumes:
       - ./deploy/nginx/app.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/nginx/certs:/etc/nginx/certs:ro
     depends_on:
       - backend
       - frontend

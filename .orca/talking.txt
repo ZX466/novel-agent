@@ -4,12 +4,25 @@
 
 ## Current State
 
-✅ R7-3 生产就绪准备已合入 main（`backfill_owner_key_hash.py` 幂等 + 5 测试 + deploy/README/QUICKSTART，评审通过）。
-⏳ 依赖/配置/文档域待命。
+🔄 **R8 安全加固评审已派**（评审 codex R8-1~4）。
+✅ R7-3 生产就绪准备已合入 main（评审通过）。
+⏳ 其余待命。
 
 ## Action Queue
 
-（当前无新任务）
+[任务] 评审 codex 的 R8 安全加固（R8-1~R8-4）
+来源: Claude (coordinator)
+时间: 2026-08-24
+优先级: P0
+描述:
+  复审 codex 分支 `ZX466/codex` 提交 `af6f3d8`（R8-1..R8-4，安全审计修复，尚未入 main）。按你的域核对实现与验收：
+  - **R8-1 SSRF**：`_validate_api_base` 对非 IP 主机名做 DNS 解析并校验 `is_global`（解析失败拒绝）；`byok_allow_local_api_base=true` 时 localhost 仍放行。复用入口 `_byok_kwargs`/`embedding._get_client`/`test_connection`/`list_provider_models` 已生效。验：域名解析到私网/TTL 投毒场景是否兜住、企业代理解析路径如何处理。
+  - **R8-2 BYOK**：`byok_fallback_to_env` 默认改 `false`；`.env.example` 同步 false 并注释。验：生产/开发语义、文档一致性。
+  - **R8-3 脱敏**：retry/stream 日志与 `test_connection` 500 detail 全走 `_redact_key`；`_API_KEY_PATTERN` 扩展覆盖 Bearer token 与 URL 内嵌凭据，替换标记 `[REDACTED]`。验：日志/响应无 key 残留。
+  - **R8-4 _deps**：`extract_embedding_stage` 用 `StageConfig.model_validate`，畸形 header 返回 422（与 chat.py 一致）。验：行为与聊天端点一致、无静默回落。
+  可读 `E:/zxdevelop/.orca/worktrees/novel-agent/codex`（分支 `ZX466/codex`）。
+验收: 通过/驳回结论 + 可复现项；通过后 Claude 回收合入 main、归档 R8。
+---
 
 ## Update Rule
 

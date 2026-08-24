@@ -9,7 +9,7 @@
 - ✅ R7-1 专注写作模式（Claude）**codex 复审通过**
 - ✅ R7-2 灵感套件（Claude）**codex 复审通过**（`e7dcfcc` 第三轮修复：FOR UPDATE 原子 merge + 批量 apply 端点 + 唯一约束 + 焦点；P0/P1/P2 + 安全复核无阻塞）
 - ✅ R7-3 生产就绪准备（cline）已合入 main（回填脚本 + 5 测试 + 部署文档）
-- ✅ **main 已推 Gitee 0/0**；⚠️ **GitHub 待补推 1 个板提交**（`9e742ca` R8 分派记录，2026-08-24 断连，恢复后 `git push origin main`）
+- ✅ **main 已推 Gitee 0/0**；⚠️ **GitHub 待补推**（2026-08-24 起断连，恢复后 `git push origin main`，以最新 main 为准）
 - ⚠️ 腾讯云服务器已到期（2026-08-16）：真实部署待恢复后执行
 
 🔴 **Round 8 启动（2026-08-24，安全加固）**：整仓安全审计确认 4 高危（H1 SSRF 主机名绕过 / H2 生产纯 HTTP 明文 / H3 聊天 RAG 跨租户越权读 / H4 BYOK 回落配额烧损）+

@@ -14,11 +14,20 @@
 
 🔴 **Round 8 启动（2026-08-24，安全加固）**：整仓安全审计确认 4 高危（H1 SSRF 主机名绕过 / H2 生产纯 HTTP 明文 / H3 聊天 RAG 跨租户越权读 / H4 BYOK 回落配额烧损）+
 日志脱敏缺漏。分派：
-- R8-1~R8-4（SSRF / BYOK 默认 false / key 脱敏 / _deps 422）→ **codex 板已分派**（评审 cline）
-- R8-5（H3 chat+assistant+retrieval 按 owner+novel 双层过滤）→ Claude 自担
-- R8-6（H2 nginx 443/TLS 强制 HTTPS + L4 443 对齐 + L5 CSP/HSTS）→ Claude 自担
+- R8-1~R8-4（SSRF / BYOK 默认 false / key 脱敏 / _deps 422）→ **codex 已受理**
+- R8-5（H3 chat+assistant+retrieval 按 owner+novel 双层过滤）→ Claude **完成**（`52ccd2e`）
+- R8-6（H2 nginx 443/TLS 强制 HTTPS + L4 443 对齐 + HSTS）→ Claude **完成**（`d527da7`，CSP 暂缓注明）
+- R8-5/6 → **待 codex 复审**
 
 ## Action Queue
+
+[回复] 接受 R8-5 / R8-6
+状态: 已接受
+时间: 2026-08-24
+Claude 接受自担项，按审计结论执行：
+- R8-5（P0）chat/assistant/retrieval 按 owner+novel 双层过滤，堵跨租户越权读
+- R8-6（P1）nginx 443/TLS 强制 HTTPS + L4 443 对齐 + CSP/HSTS
+完成后回 `[回复]` 请求 codex 复审。
 
 - [x] R6-1/2/3/4/5 → 全部合入 main（Round 6 闭环）
 - [x] alembic 双头 → 已 merge（`a5941476682a` + `b0c1d2e3f405`，唯一 head `c0d1e2f3a4b50`）

@@ -9,33 +9,26 @@
 - ✅ R7-1 专注写作模式（Claude）**codex 复审通过**
 - ✅ R7-2 灵感套件（Claude）**codex 复审通过**（`e7dcfcc` 第三轮修复：FOR UPDATE 原子 merge + 批量 apply 端点 + 唯一约束 + 焦点；P0/P1/P2 + 安全复核无阻塞）
 - ✅ R7-3 生产就绪准备（cline）已合入 main（回填脚本 + 5 测试 + 部署文档）
-- ✅ **main 已推 Gitee 0/0**；⚠️ **GitHub 待补推**（2026-08-24 起断连，恢复后 `git push origin main`，以最新 main 为准）
+- ✅ **main 已推双远程**（Gitee + GitHub 0/0）
 - ⚠️ 腾讯云服务器已到期（2026-08-16）：真实部署待恢复后执行
 
 🔴 **Round 8 启动（2026-08-24，安全加固）**：整仓安全审计确认 4 高危（H1 SSRF 主机名绕过 / H2 生产纯 HTTP 明文 / H3 聊天 RAG 跨租户越权读 / H4 BYOK 回落配额烧损）+
 日志脱敏缺漏。**实施已全部完成（6/6），在交叉评审**：
-- R8-1~R8-4（SSRF / BYOK 默认 false / key 脱敏 / _deps 422）→ codex **完成**（分支 `af6f3d8`）→ **cline 评审已派**
+- R8-1~R8-4（SSRF / BYOK 默认 false / key 脱敏 / _deps 422）→ codex ✅ + cline 评审通过 ✅ → **已合入 main `a564ef0`**（用户裁定 R8-1 fail-open 接受原样合入，风险已记）
 - R8-5（H3 chat+assistant+retrieval 按 owner+novel 双层过滤）→ Claude **完成**（`52ccd2e`）
 - R8-6（H2 nginx 443/TLS 强制 HTTPS + L4 443 对齐 + HSTS）→ Claude **完成**（`d527da7`，CSP 暂缓注明）
-- R8-5/6 → **待 codex 复审**
+- R8-5/6 → **待 codex 复审** → 通过后归档 R8
 
 ## Action Queue
-
-[回复] 接受 R8-5 / R8-6
-状态: 已接受
-时间: 2026-08-24
-Claude 接受自担项，按审计结论执行：
-- R8-5（P0）chat/assistant/retrieval 按 owner+novel 双层过滤，堵跨租户越权读
-- R8-6（P1）nginx 443/TLS 强制 HTTPS + L4 443 对齐 + CSP/HSTS
-完成后回 `[回复]` 请求 codex 复审。
 
 - [x] R6-1/2/3/4/5 → 全部合入 main（Round 6 闭环）
 - [x] alembic 双头 → 已 merge（`a5941476682a` + `b0c1d2e3f405`，唯一 head `c0d1e2f3a4b50`）
 - [x] **R7 三项全部完成**：R7-1 复审通过 / R7-2 复审通过（2026-08-24）/ R7-3 已合入
 - [x] 推送双远程（含 codex 通过后板同步）
 - [ ] **生产部署**（恢复腾讯云或换机）→ `API_KEYS`、`alembic upgrade head`、`owner_key_hash` 回填、**生产库 world_settings/characters 归一化检查**（codex 非阻塞备注）— 待用户/Claude 排期，其他 Agent 不自行执行
-- [ ] **R8 安全加固**：codex 板 R8-1~4（已分派）；Claude 自担 R8-5（chat IDOR 双层过滤）、R8-6（nginx TLS/CSP/HSTS）→ 复审交叉（codex 项→cline，Claude 项→codex）
-- [ ] R8 完成后：回归基线（816/39）→ 评审核实 → 合并 → 推双远程 → 审计闭环
+- [ ] **R8 收尾**：R8-5/6 codex 复审 → 通过后归档 R8 + 推双远程
+- [ ] **审计遗留（低危/未派）**：L1 迁移自动 · L2 依赖锁定 · L3 _event_stream ValueError 误报 · L5 CSP(nonce 策略) · L6 CI 安全门禁 · L8 API_KEYS 缺省 503 引导
+- [ ] **cline 非阻塞**：_deps F811 重复 import · DNS rebinding TOCTOU（transport 层 pin）· 测试风格
 
 ## Unassigned Notes
 

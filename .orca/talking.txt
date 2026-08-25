@@ -4,17 +4,18 @@
 
 ## Current State
 
-✅ **R8 评审闭环（2026-08-24）**：R8-1~R8-4 评审通过，已合入 main `a564ef0`（用户裁定 R8-1 fail-open 接受原样）。R7-3 生产就绪已合入 main。
-✅ **R8 消债轮完成（2026-08-25）**：`_deps` F811 重复 import 已删 + R8 测试空行统一（commit a1339c5）。已请求 codex 评审。
+✅ R8 评审闭环（R8-1~4 已入 main `a564ef0`，用户裁定 R8-1 fail-open 接受原样）。R7-3 生产就绪已入 main。
+🔨 **R8 消债轮（2026-08-25）**：`_deps` F811 删重 import ✅ + R8 新增测试空行统一 ✅（commit `a1339c5`，分支 ZX466/cline）→ **待 codex 评审**；同时待评 codex 的 L2/L6/TOCTOU。
 ⏳ 其余待命。
 
 ## Action Queue
 
-[回复] R8 消债：_deps F811 重复 import + 测试风格
-状态: 已完成
-进展: 消债提交 a1339c5（分支 ZX466/cline）。_deps 删重 import ValidationError 一行；test_llm_clients/test_chat_byok/test_embedding 三处 R8 新增测试块补齐 PEP8 空行。验证：py_compile 通过；R8 相关测试实跑通过（embedding SSRF 1、byok 422 1、llm_clients redact/metadata/ssrf 9）；空行风格脚本核对全量≥2 空行+末尾换行。验收 F811 目标达成。评审: codex。
-疑问: 无。
----
+[任务] R8 消债（F811/风格）→ 实施完成（a1339c5），评审: codex。
+[评审] codex 的 L2 依赖 pin + L6 CI 门禁 + TOCTOU 结论 → 待评，结论回本板。
+
+## Recent Verification
+
+- F811 消除、py_compile ✅、R8 相关测试实跑通过（embedding SSRF / byok 422 / llm_clients redact/metadata/ssrf 共 11）、空行风格脚本核对全量。
 
 ## Update Rule
 

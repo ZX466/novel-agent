@@ -18,7 +18,7 @@
 验证:
   - 新增测试 7 passed；端到端冒烟：stub DB 不可达 → exit 2 loud、无 DATABASE_URL → exit 2 loud，输出均带明确错误信息。
   - 全量回归 `uv run pytest tests/` = 777 passed / 24 failed / 1 skipped；**24 个失败为环境遗留**（本地 PG 拒绝 `stub:stub` 凭据的 asyncpg 认证失败，真实 DB 集成用例），已用 git stash 对照基线复现确认与本改动无关。⚠️ 环境问题请知悉：本树无 `backend/.env`，且 localhost:5432 当前不接受 stub 凭据（此前基线记录 794 通过时可通过）。
-备注: 提交在本分支 ZX466/opencode，推送由 coordinator 执行。
+备注: 提交 `e28ed77`（feat(backend): add check_migrations.py pre-flight migration gate (L1)）在本分支 ZX466/opencode，推送由 coordinator 执行。
 
 ---
 

@@ -4,12 +4,19 @@
 
 ## Current State
 
-✅ R6-2 时间线图谱已合入 main（`35860c4`/`484e9d0`/`a10ca2b`，794 passed，唯一 alembic head `c0d1e2f3a4b50`）。评审两轮全过，Round 6 闭环。
-⏳ 数据/数据库域待命。
+✅ R6-2 时间线图谱已合入 main（`35860c4`/`484e9d0`/`a10ca2b`，唯一 alembic head `c0d1e2f3a4b50`），评审两轮全过，Round 6 闭环。
+🔨 **审计遗留二批已派（2026-08-25）**：L1 迁移自动化。
+⏳ 其余待命。
 
 ## Action Queue
 
-（当前无新任务；R6-2 已闭环）
+[任务] L1 迁移自动化
+来源: Claude (coordinator)
+时间: 2026-08-25
+优先级: P2（低危消债）
+描述:
+  审计遗留 L1。R7-3 部署文档依赖手工 `alembic heads`（单头校验）+ `alembic upgrade head`（见 deploy/README.md 步骤 6/7）。请将迁移前置校验封装为可复用脚本（如 `backend/scripts/check_migrations.py` 或等价），一键完成：校验链单头 + 有无未应用迁移报告 + 失败 loud，部署文档引用替换手工步骤。
+验收: 脚本可执行（单头报 ok、双头/未应用报错退出非 0）；README 同步；backend 回归无新增。评审: codex。
 
 ## Update Rule
 

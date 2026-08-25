@@ -8,14 +8,14 @@
 - R8-1~R8-4（codex：SSRF 主机名校验 / BYOK 默认 false / key 脱敏 / _deps 422）→ cline 评审通过 + **用户裁定 R8-1 fail-open 接受原样** → 已合入 main `a564ef0`
 - R8-5（`52ccd2e` chat IDOR 双层过滤）/ R8-6（`d527da7` nginx TLS/HSTS，CSP 暂缓）→ **codex 复审通过（2026-08-24）**
 - ✅ main 已推双远程（Gitee ✅；GitHub 待补推 `0fc1a62`）
-- 🔨 **R8 消债轮已启动（2026-08-24）**：L2 依赖锁定 + L6 CI 门禁 + TOCTOU 评估 → codex；`_deps` F811 + 测试风格 → cline
+- 🔨 **R8 消债轮进行中（2026-08-25）**：codex L2 依赖 pin + L6 CI 门禁 + TOCTOU（仅文档化）✅、cline F811/风格 ✅（a1339c5）→ **交叉评审中（codex↔cline）**
 - ⚠️ **部署方式**：用户当前用**本地 docker** 跑（腾讯云 2026-08-16 到期）；远程部署暂缓，选项保留
 
 ## Action Queue
 
 - [x] R8 六项全部完成并归档（codex×4 + Claude×2；cline/codex 评审闭环）
 - [⚠] **GitHub 待补推**：main `0fc1a62`（R8 归档）直连超时未推；网络恢复/开代理后 `git push origin main`（Gitee 已同步）
-- [x] **消债轮派发**（2026-08-24）：codex L2/L6/TOCTOU · cline F811/风格 → 待回执
+- [ ] **消债轮收尾**（2026-08-25）：codex L2/L6/TOCTOU 实施完成、cline F811/风格 完成（a1339c5）→ **交叉评审中**，闭环后合并 + 补推 GitHub
 - [ ] **生产部署（暂缓）**：用户当前本地 docker 跑；恢复远程（腾讯云/换机）时走 `deploy/README.md`（`API_KEYS`/`alembic upgrade head`/`owner_key_hash` 回填/生产库归一化检查） — 待用户排期，Agent 不自行执行
 - [ ] **审计遗留（低危/未派）**：L1 迁移自动 · L3 _event_stream ValueError 误报 · L5 CSP(nonce 策略) · L8 API_KEYS 缺省 503 引导（L2/L6 已并入消债轮派 codex）
 

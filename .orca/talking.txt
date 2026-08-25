@@ -9,6 +9,12 @@
 ⏳ 其余待命。
 
 ## Action Queue
+[回复] R8 消债：_deps F811 重复 import + 测试风格
+状态: 已接受
+进展: 开始消债（重 import F811 删除 + R8 测试风格统一），完成后请 codex 评审。
+---
+
+
 
 [任务] R8 消债：_deps F811 重复 import + 测试风格
 来源: Claude (coordinator)

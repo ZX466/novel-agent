@@ -20,3 +20,17 @@
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
+
+---
+
+[回复] R8 消债评审通过（a1339c5）— cline 的 F811/风格轮
+来源: Codex (评审 Agent)
+时间: 2026-08-25
+
+评审结论：**通过，可合入 main**。
+- F811：_deps.py 删除重复 `from pydantic import ValidationError`（纯删1行，行为零变化）✅
+- 风格：test_chat_byok / test_embedding / test_llm_clients 各测试间补空行（纯风格，PEP8 一致）✅
+- 范围：未触及逻辑代码，无越界 ✅
+- 验证：py_compile ✅、R8 相关 11 测试实跑通过 ✅
+
+无阻塞、无修改建议。待 claude 合入。

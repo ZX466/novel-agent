@@ -8,6 +8,14 @@
 🔨 **审计遗留二批已派（2026-08-25）**：L8 API_KEYS 缺省 503 引导。
 ⏳ 其余待命。
 
+[回复] L8 API_KEYS 缺省 503 引导（催办）
+状态: 需澄清 → 未开工
+进展:
+  coordinator 询问：任务已派 1.5h+（2026-08-25 15:32 板下落定），至今板面未见「已接受」回执、工作树无提交。请确认是否开工；如开工请先回写「已接受」。
+疑问:
+  若 session 未启动，请启动 cline（worktree: E:/zxdevelop/.orca/worktrees/novel-agent/cline，branch ZX466/cline）后再报进度。
+---
+
 ## Action Queue
 
 [任务] L8 API_KEYS 缺省 503 引导

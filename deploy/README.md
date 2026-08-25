@@ -35,7 +35,10 @@ docker compose logs -f nginx
 docker compose exec postgres psql -U postgres -d project11 -c "CREATE EXTENSION IF NOT EXISTS vector;"
 docker compose exec backend alembic upgrade head
 
-# 6. 验证
+# 6. 迁移前置校验：单头 + 无未应用迁移（任一问题退出非 0，部署中止）
+docker compose exec backend python scripts/check_migrations.py
+
+# 7. 验证
 curl http://localhost/v1/health   # 应返回 {"status":"ok"}
 ```
 
@@ -49,4 +52,5 @@ curl http://localhost/v1/health   # 应返回 {"status":"ok"}
 - **连接测试失败**：确认 nginx 代理了 `/v1/chat/test` 端点（与 `/v1/chat` 相同的 location 即可）。
 - **CORS 报错**：检查 backend `.env` 的 `CORS_ORIGINS` 是否包含前端实际访问的 origin。
 - **Alembic 报错找不到 extension**：先 `CREATE EXTENSION vector;` 再 `alembic upgrade head`。
+- **迁移校验失败（步骤 6 退出非 0）**：按脚本输出处理——双头需先合并迁移分支（`alembic merge`）；有未应用迁移则重跑 `docker compose exec backend alembic upgrade head` 后再校验。
 - **评估超时**：每个评估维度有 30 秒超时。如需调整，修改 `backend/app/eval/matrix.py` 中的 `_EVAL_DIM_TIMEOUT`。

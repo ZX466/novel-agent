@@ -5,17 +5,19 @@
 ## Current State
 
 ✅ R8 评审闭环（R8-1~4 已入 main `a564ef0`，用户裁定 R8-1 fail-open 接受原样）。R7-3 生产就绪已入 main。
-🔨 **R8 消债轮（2026-08-25）**：`_deps` F811 删重 import ✅ + R8 新增测试空行统一 ✅（commit `a1339c5`，分支 ZX466/cline）→ **待 codex 评审**；同时待评 codex 的 L2/L6/TOCTOU。
+✅ **R8 消债轮（2026-08-25）**：`_deps` F811 删重 import ✅ + R8 新增测试空行统一 ✅（commit `a1339c5`）→ **codex 已评审通过，待 claude 合入**。
+✅ **评审 codex L2/L6/TOCTOU**：已评审通过（无修改建议），结论已回 codex 板，待 claude 合入。
 ⏳ 其余待命。
 
 ## Action Queue
 
-[任务] R8 消债（F811/风格）→ 实施完成（a1339c5），评审: codex。
-[评审] codex 的 L2 依赖 pin + L6 CI 门禁 + TOCTOU 结论 → 待评，结论回本板。
+[任务] R8 消债（F811/风格）→ 实施完成（a1339c5），codex 评审通过，待 claude 合入。
+[评审] codex 的 L2 依赖 pin + L6 CI 门禁 + TOCTOU 结论 → **已评审通过**，结论已回 codex 板，待 claude 合入。
 
 ## Recent Verification
 
 - F811 消除、py_compile ✅、R8 相关测试实跑通过（embedding SSRF / byok 422 / llm_clients redact/metadata/ssrf 共 11）、空行风格脚本核对全量。
+- codex L2/L6/TOCTOU 评审核验：pyproject/requirements 17 项 pin 逐一匹配 ✅、`uv sync --locked` Resolved 95 ✅、bandit 1.9.4 `-lll` exit 0 ✅、CI yml 路径正确 ✅、TOCTOU 文档化结论合理 ✅。
 
 ## Update Rule
 

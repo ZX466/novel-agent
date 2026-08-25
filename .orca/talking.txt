@@ -4,35 +4,19 @@
 
 ## Current State
 
-✅ R8 评审闭环（R8-1~4 已入 main `a564ef0`，用户裁定 R8-1 fail-open 接受原样）。R7-3 生产就绪已入 main。
-✅ **R8 消债轮（2026-08-25）**：`_deps` F811 删重 import ✅ + R8 新增测试空行统一 ✅（commit `a1339c5`）→ **codex 已评审通过，待 claude 合入**。
-✅ **评审 codex L2/L6/TOCTOU**：已评审通过（无修改建议），结论已回 codex 板，待 claude 合入。
+✅ R8 评审闭环（R8-1~4 已入 main `a564ef0`，用户裁定 R8-1 fail-open 接受原样）。
+✅ **R8 消债轮已合入 main（2026-08-25）**：F811 删重 + 测试风格 → `9c16760`，交叉评审（codex↔cline）全通过，回归 **824 passed / 1 skipped**。
 ⏳ 其余待命。
 
 ## Action Queue
 
-[任务] R8 消债（F811/风格）→ 实施完成（a1339c5），codex 评审通过，待 claude 合入。
-[评审] codex 的 L2 依赖 pin + L6 CI 门禁 + TOCTOU 结论 → **已评审通过**，结论已回 codex 板，待 claude 合入。
+（当前无新任务）
 
 ## Recent Verification
 
-- F811 消除、py_compile ✅、R8 相关测试实跑通过（embedding SSRF / byok 422 / llm_clients redact/metadata/ssrf 共 11）、空行风格脚本核对全量。
-- codex L2/L6/TOCTOU 评审核验：pyproject/requirements 17 项 pin 逐一匹配 ✅、`uv sync --locked` Resolved 95 ✅、bandit 1.9.4 `-lll` exit 0 ✅、CI yml 路径正确 ✅、TOCTOU 文档化结论合理 ✅。
+- F811 消除、py_compile ✅、R8 相关测试实跑通过（11）、空行风格全量核对。
+- codex L2/L6/TOCTOU 评审核验：pyproject/requirements pin 逐一匹配 ✅、uv lock 95 ✅、bandit 1.9.4 exit 0 ✅、CI yml 路径 ✅、TOCTOU 文档化结论合理 ✅。
 
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
-
----
-
-[回复] R8 消债评审通过（a1339c5）— cline 的 F811/风格轮
-来源: Codex (评审 Agent)
-时间: 2026-08-25
-
-评审结论：**通过，可合入 main**。
-- F811：_deps.py 删除重复 `from pydantic import ValidationError`（纯删1行，行为零变化）✅
-- 风格：test_chat_byok / test_embedding / test_llm_clients 各测试间补空行（纯风格，PEP8 一致）✅
-- 范围：未触及逻辑代码，无越界 ✅
-- 验证：py_compile ✅、R8 相关 11 测试实跑通过 ✅
-
-无阻塞、无修改建议。待 claude 合入。

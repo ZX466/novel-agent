@@ -15,7 +15,7 @@
 - [x] R8 六项全部完成并归档（实施 codex×4 + Claude×2，评审闭环）
 - [x] **消债轮闭环**（2026-08-25）：`c8bc383`/`9c16760` 已合入 main，回归 824 passed
 - [x] **Dockerfile 修复提交**（2026-08-25）：去 omit=dev + ENV PORT=7421 + certs gitignore；本地 compose 验证通过
-- [⚠] **GitHub 待补推**：`0fc1a62` `2e5250c` `7c52fce` `c8bc383` `9c16760` 等多提交直连超时未推（Gitee 已同步至最新板归档前）；网络恢复/代理后 `git push origin main`
+- [x] **GitHub 补推完成**（2026-08-25）：`0fc1a62`..`e3e0b29` 全量已推，双远程同步
 - [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
 - [x] **审计遗留二批派发**（2026-08-25）：L1→opencode · L3+L5→codex · L8→cline → 待回执（审计遗留清零）
 

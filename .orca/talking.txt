@@ -4,18 +4,23 @@
 
 ## Current State
 
-✅ R8 评审闭环（R8-1~4 已入 main `a564ef0`，用户裁定 R8-1 fail-open 接受原样）。
-✅ **R8 消债轮已合入 main（2026-08-25）**：F811 删重 + 测试风格 → `9c16760`，交叉评审（codex↔cline）全通过，回归 **824 passed / 1 skipped**。
+✅ R8 评审闭环（R8-1~4 已入 main `a564ef0`）。**R8 消债轮（F811/风格）已合入 main `9c16760`**，回归 824 passed。
+🔨 **审计遗留二批已派（2026-08-25）**：L8 API_KEYS 缺省 503 引导。
 ⏳ 其余待命。
 
 ## Action Queue
 
-（当前无新任务）
+[任务] L8 API_KEYS 缺省 503 引导
+来源: Claude (coordinator)
+时间: 2026-08-25
+优先级: P2（低危消债）
+描述:
+  审计遗留 L8：`_deps.py` 现于 API_KEYS 未配置时返回 **503 "API authentication is not configured"**。请完善引导：错误详情里带指向部署配置方式的引导（如"未配置 API_KEYS，请在 backend/.env 配置受保护端点白名单，参见 deploy/README.md"），保证 503 语义准确 + 前端可见可读；不可泄露 env 值。
+验收: 缺省态 503 + 明确引导文案（测试断言）；有配置时行为不变；backend 回归无新增。评审: codex。
 
 ## Recent Verification
 
-- F811 消除、py_compile ✅、R8 相关测试实跑通过（11）、空行风格全量核对。
-- codex L2/L6/TOCTOU 评审核验：pyproject/requirements pin 逐一匹配 ✅、uv lock 95 ✅、bandit 1.9.4 exit 0 ✅、CI yml 路径 ✅、TOCTOU 文档化结论合理 ✅。
+- R8 消债：F811 消除、py_compile ✅、R8 相关测试实跑通过（11）、空行风格全量核对；codex L2/L6/TOCTOU 评审核验均 ✅。
 
 ## Update Rule
 

@@ -123,3 +123,5 @@ temp
 /.*/
 !/.orca/
 !/.orca/**
+!/.github/
+!/.github/**

@@ -359,10 +359,10 @@ A: 每个评估维度有 30 秒超时保护。超时的维度返回 0.5 分 fall
 A: 确认已先点击"应用大纲"保存大纲。生成正文时会自动从文档 metadata 读取大纲作为参考上下文。
 
 **Q: `litellm` 安装失败？**
-A: 确认 `pyproject.toml` 中 `litellm<1.91`。1.91+ 引入 Rust 组件。
+A: 确认 `pyproject.toml` 中 `litellm==1.90.7`（<1.91 硬约束仍满足）。1.91+ 引入 Rust 组件。
 
 **Q: 怎么重建虚拟环境？**
-A: `cd backend && rm -r .venv && uv sync`。
+A: `cd backend && rm -r .venv && uv sync --locked`。
 
 ---
 
@@ -371,7 +371,7 @@ A: `cd backend && rm -r .venv && uv sync`。
 - **AGENTS.md**：AI 协作原则见 [AGENTS.md](AGENTS.md)
 - **提交规范**：Conventional Commits（`feat:` / `fix:` / `refactor:` / `docs:`）
 - **测试要求**：新增功能必须带测试，覆盖率 ≥ 80%
-- **关键约束**：不换框架、LiteLLM 是唯一 LLM 入口、`litellm<1.91` 硬性 pin、Python 依赖用 uv 管理
+- **关键约束**：不换框架、LiteLLM 是唯一 LLM 入口、`litellm==1.90.7`（<1.91 硬约束仍满足） 硬性 pin、Python 依赖用 uv 管理；直接依赖全部 `==` 精确 pin，版本以 `backend/uv.lock` 为准
 
 ---
 

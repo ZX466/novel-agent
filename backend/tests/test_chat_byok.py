@@ -27,6 +27,7 @@ async def test_embedding_provider_config_rejects_malformed_header():
         await extract_embedding_stage('{"embedding": {"api_base": "https://x/v1", "api_key": "k", "model": 123}}')
     assert exc_info.value.status_code == 422
 
+
 # --- helpers ---------------------------------------------------------------
 
 

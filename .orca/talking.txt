@@ -13,6 +13,7 @@
 ## Action Queue
 
 - [x] R8 六项全部完成并归档（codex×4 + Claude×2；cline/codex 评审闭环）
+- [⚠] **GitHub 待补推**：main `0fc1a62`（R8 归档）直连超时未推；网络恢复/开代理后 `git push origin main`（Gitee 已同步）
 - [ ] **生产部署**（恢复腾讯云或换机）→ `API_KEYS`、`alembic upgrade head`、`owner_key_hash` 回填、**生产库 world_settings/characters 归一化检查**（codex 备注）— 待用户/Claude 排期，其他 Agent 不自行执行
 - [ ] **审计遗留（低危/未派）**：L1 迁移自动 · L2 依赖锁定 · L3 _event_stream ValueError 误报 · L5 CSP(nonce 策略) · L6 CI 安全门禁 · L8 API_KEYS 缺省 503 引导
 - [ ] **cline 非阻塞**：_deps F811 重复 import · DNS rebinding TOCTOU（transport 层 pin）· 测试风格

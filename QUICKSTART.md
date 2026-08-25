@@ -55,6 +55,8 @@ uv venv .venv --python 3.11
 .\.venv\Scripts\Activate.ps1
 uv pip install -r requirements.txt
 alembic upgrade head
+alembic heads                  # R7-3 生产就绪：必须只输出一个 head（c0d1e2f3a4b50）
+python -m scripts.backfill_owner_key_hash   # R7-3 幂等回填 owner_key_hash（可重复执行）
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -92,6 +94,7 @@ npm run dev
 
 ## 常见坑
 
+- **`alembic upgrade head` 报 "Multiple head revisions"**：迁移链分叉（如 `1a2b3c4d5e6f` 与 `f6a7b8c9d0e1` 并存）。用 `alembic heads` 核对，保持单一 head（当前应为 `c0d1e2f3a4b50`）；分叉需先合并链再升级。
 - **`litellm` 安装失败**：requirements.txt 已 pin `litellm<1.91`（1.91+ 引入 Rust 组件），不要手动升级。
 - **CORS 报错**：检查 `backend/.env` 的 `CORS_ORIGINS` 是否含 `http://localhost:7421`。
 - **本机 Docker 只用于"数据库容器"**：`docker-compose.local.yml`（本地 PG+Redis）可跑；不要跑 `docker-compose.yml`（那是腾讯云服务器全栈部署专用）。

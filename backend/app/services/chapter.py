@@ -56,6 +56,41 @@ async def _maybe_embed_chapter(
         )
 
 
+async def _attach_timeline_warnings(
+    session: AsyncSession, ch: Chapter,
+) -> None:
+    """Real-time timeline conflict warnings (R6-2), persisted on the chapter.
+
+    Best-effort: any failure is logged and never breaks the write. Only when
+    the write produces warnings is ``metadata_json["timeline_warnings"]``
+    updated, so clean writes leave the chapter's metadata untouched.
+    """
+    try:
+        from app.services.timeline import validate_chapter_write
+        warnings = await validate_chapter_write(
+            session,
+            novel_id=ch.novel_id,
+            chapter_index=ch.chapter_index,
+            chapter_id=ch.id,
+        )
+    except Exception:
+        logger.warning(
+            "chapter: timeline validation failed for chapter_id=%s — "
+            "conflict warnings disabled for this write",
+            ch.id, exc_info=True,
+        )
+        return
+    if not warnings:
+        return
+    metadata = dict(ch.metadata_json or {})
+    metadata["timeline_warnings"] = [
+        {"kind": w.kind, "event_id": w.event_id, "detail": w.detail}
+        for w in warnings
+    ]
+    ch.metadata_json = metadata
+    await session.commit()
+
+
 async def list_chapters(
     session: AsyncSession,
     *,
@@ -122,6 +157,7 @@ async def create_chapter(
     await _maybe_embed_chapter(session, ch, stage_config=stage_config)
     await session.commit()
     await session.refresh(ch)  # re-load after embedding flush expires updated_at
+    await _attach_timeline_warnings(session, ch)
     return ch
 
 
@@ -144,6 +180,7 @@ async def update_chapter(
         await _maybe_embed_chapter(session, ch, stage_config=stage_config)
     await session.commit()
     await session.refresh(ch)  # re-load after embedding flush expires updated_at
+    await _attach_timeline_warnings(session, ch)
     return ch
 
 

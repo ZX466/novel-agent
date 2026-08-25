@@ -17,6 +17,11 @@ interface EditorToolbarProps {
   onToggleFocus: () => void;
   /** Version history button. */
   onOpenHistory: () => void;
+
+  /** 交稿雷达 (R6-3): open the pre-export safety preflight dialog. */
+  onOpenRadar: () => void;
+  /** Radar button state — drives active/badge styling. */
+  radarStatus?: "idle" | "scanning" | "clean" | "warn";
 }
 
 export function EditorToolbar({
@@ -29,6 +34,8 @@ export function EditorToolbar({
   focusActive,
   onToggleFocus,
   onOpenHistory,
+  onOpenRadar,
+  radarStatus = "idle",
 }: EditorToolbarProps) {
   return (
     <div
@@ -82,6 +89,28 @@ export function EditorToolbar({
         title="查找替换 (Ctrl+H)"
       />
 
+      {/* 交稿雷达 (R6-3) — pre-export safety preflight */}
+      <div className="relative">
+        <ToolbarIcon
+          icon={
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 12 L16.5 5.5" />
+              <path d="M12 3 a9 9 0 0 1 9 9" />
+              <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none" />
+            </svg>
+          }
+          active={radarStatus === "scanning" || radarStatus === "warn"}
+          onClick={onOpenRadar}
+          title="交稿雷达"
+        />
+        {radarStatus === "warn" && (
+          <span
+            className="absolute top-0 right-0 w-2 h-2 rounded-full"
+            style={{ background: "var(--danger)" }}
+          />
+        )}
+      </div>
       {/* Version history */}
       <ToolbarIcon
         icon={

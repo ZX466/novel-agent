@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.config import settings
-from app.llm import embedding
+from app.llm import embedding, clients
 from app.schemas.chat import StageConfig
 
 
@@ -369,3 +369,15 @@ async def test_embed_batch_reuses_cached_texts(monkeypatch):
     assert gc.await_count == 1
     # Only the miss reached the API — the cached "a" is served locally.
     assert fake_client.embeddings.create.call_args.kwargs["input"] == ["b"]
+@pytest.mark.asyncio
+async def test_embed_text_rejects_hostname_resolving_to_private_ip(monkeypatch):
+    monkeypatch.setattr(
+        clients.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [(None, None, None, None, ("127.0.0.1", 0))],
+    )
+    stage = _make_stage(api_base="https://host.docker.internal/v1")
+
+    with pytest.raises(ValueError, match="Blocked internal address"):
+        await embedding.embed_text("hello", stage_config=stage)
+

@@ -29,6 +29,7 @@ from typing import Any, AsyncIterator
 from langgraph.graph import END, START, StateGraph
 
 from app.config import settings
+from app.llm.clients import _redact_key
 from app.pipeline.nodes import (
     draft_node,
     evaluate_node,
@@ -242,7 +243,7 @@ async def stream_pipeline(
                 perf=perf,
             )
         except Exception as e:
-            logger.error("stream_pipeline: pipeline task failed: %s", e)
+            logger.error("stream_pipeline: pipeline task failed: %s", _redact_key(str(e)))
             pipeline_error = e
         finally:
             await token_queue.put(None)  # sentinel: pipeline done
@@ -262,7 +263,7 @@ async def stream_pipeline(
         if pipeline_error is not None:
             raise pipeline_error
     except Exception as e:
-        logger.warning("True streaming failed (%s), falling back to chunking: %s", type(e).__name__, e)
+        logger.warning("True streaming failed (%s), falling back to chunking: %s", type(e).__name__, _redact_key(str(e)))
         # Fallback: run pipeline to completion and chunk the result
         if not pipeline_task.done():
             pipeline_task.cancel()

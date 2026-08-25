@@ -37,7 +37,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.session import get_db
-from app.api._deps import enforce_chat_rate_limit, enforce_chat_test_rate_limit
+from app.api._deps import (
+    enforce_chat_rate_limit,
+    enforce_chat_test_rate_limit,
+    load_parent,
+    owner_key_hash,
+)
 from app.llm.clients import _redact_key, _validate_api_base
 from app.pipeline import stream_pipeline
 from app.schemas.chat import ProviderConfig, StageConfig
@@ -160,9 +165,17 @@ def _strip_routing_tags(text: str) -> str:
     return text.strip()
 
 
-async def _load_work_context(session, req: "ChatRequest") -> str:
-    """Fetch the assistant's work context (outline or chapters) from the DB."""
-    from app.services.document import get_document
+async def _load_work_context(
+    session, req: "ChatRequest", *, owner: str | None = None
+) -> str:
+    """Fetch the assistant's work context (outline or chapters) from the DB.
+
+    `owner` (owner_key_hash of the caller) scopes every access: the referenced
+    novel must belong to the caller or a 404 is raised — mirrors the
+    `load_parent`+owner gating used by all other write/read endpoints and
+    closes the cross-tenant IDOR in the assistant path (H3).
+    """
+    from app.services.document import DocumentNotFound, get_document
     from app.services.chapter import list_chapters
 
     if not req.context_doc_id:
@@ -173,9 +186,17 @@ async def _load_work_context(session, req: "ChatRequest") -> str:
     )
 
     if req.context_mode == "outline":
-        doc = await get_document(session, req.context_doc_id)
+        try:
+            doc = await get_document(session, req.context_doc_id, owner_key_hash=owner)
+        except DocumentNotFound:
+            raise HTTPException(status_code=404, detail="作品不存在")
         outline = (doc.metadata_json or {}).get("outline")
         return str(outline or "")[:max_chars]
+
+    try:
+        await get_document(session, req.context_doc_id, owner_key_hash=owner)
+    except DocumentNotFound:
+        raise HTTPException(status_code=404, detail="作品不存在")
 
     chapters, _ = await list_chapters(
         session, novel_id=req.context_doc_id, limit=500, offset=0
@@ -192,6 +213,8 @@ async def _build_assistant_topic(
     messages: List[ChatMessage],
     session,
     req: "ChatRequest",
+    *,
+    owner: str | None = None,
 ) -> str:
     """Assemble conversation history + work context into the draft topic.
 
@@ -211,7 +234,7 @@ async def _build_assistant_topic(
     if not turns:
         return ""
 
-    context = await _load_work_context(session, req)
+    context = await _load_work_context(session, req, owner=owner)
 
     parts: list[str] = []
     if context:
@@ -415,12 +438,17 @@ async def chat(
     _api_key: str = Depends(enforce_chat_rate_limit),
 ) -> StreamingResponse:
     """Runs the three-stage pipeline and streams the final answer."""
+    owner = owner_key_hash(_api_key)
     novel_id = _extract_novel_id(req.messages) or req.context_doc_id
+    # Ownership gate before any DB/LLM work: a caller may only chat about /
+    # RAG-retrieve novels they own. Closes the chat-pipeline cross-tenant
+    # IDOR (only CRUD endpoints verified owner before this fix).
+    await _guard_novel_owner(session, novel_id, owner)
     task_type = _extract_task_type(req.messages, req.task_type)
 
     if task_type == "assistant":
         # F1: server-assembled multi-turn prompt (conversation + work context).
-        topic = await _build_assistant_topic(req.messages, session, req)
+        topic = await _build_assistant_topic(req.messages, session, req, owner=owner)
     else:
         topic = _extract_topic(req.messages)
 
@@ -508,6 +536,19 @@ def _extract_novel_id(messages: List[ChatMessage]) -> int | None:
                 return None
         break
     return None
+
+
+async def _guard_novel_owner(session, novel_id: int | None, owner: str) -> None:
+    """Raise 404 unless the caller owns the referenced novel.
+
+    Guards the RAG/retrieval path: the pipeline scopes retrieval by
+    ``novel_id`` (chapters/characters/worlds/knowledge have no owner column),
+    so verifying the novel belongs to the caller at entry is the single
+    ownership gate that closes the cross-tenant IDOR (H3).
+    """
+    if novel_id is None:
+        return
+    await load_parent(session, novel_id, owner_hash=owner)
 
 
 class ModelsListRequest(BaseModel):
@@ -688,7 +729,7 @@ async def test_connection(
         logger.error("Connection test failed: %s: %s", type(e).__name__, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"连接测试失败: {type(e).__name__}: {e}",
+            detail=f"连接测试失败: {type(e).__name__}: {_redact_key(str(e))}",
         )
 
 

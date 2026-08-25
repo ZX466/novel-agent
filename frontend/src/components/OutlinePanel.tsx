@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import type { ChapterListItem } from "@/lib/types";
+import { OutlineMindMap } from "@/components/OutlineMindMap";
 
 interface OutlinePanelProps {
   chapters: ChapterListItem[];
@@ -17,6 +18,8 @@ interface OutlinePanelProps {
   onDelete: (chapterId: number) => void;
   onRename: (chapterId: number, newTitle: string) => void;
   onReorder: (orderedIds: Array<{ id: number; chapter_index: number }>) => void;
+  /** R6-1: jump straight from the mind map into continuing this chapter. */
+  onContinueChapter?: (chapterId: number) => void;
 }
 
 export function OutlinePanel({
@@ -32,7 +35,9 @@ export function OutlinePanel({
   onDelete,
   onRename,
   onReorder,
+  onContinueChapter,
 }: OutlinePanelProps) {
+  const [view, setView] = useState<"list" | "mindmap">("list");
   const [contextMenu, setContextMenu] = useState<{
     chapterId: number;
     x: number;
@@ -84,9 +89,10 @@ export function OutlinePanel({
     const toIdx = chapters.findIndex((c) => c.id === toId);
     if (fromIdx === -1 || toIdx === -1) return;
 
-    // Build reordered list: remove fromId, insert at toIdx position.
+    // Build reordered list: remove fromId, insert at corrected toIdx position
+    // (indices at/after fromIdx shift down by one after removal).
     const reordered = chapters.filter((c) => c.id !== fromId);
-    reordered.splice(toIdx, 0, chapters[fromIdx]);
+    reordered.splice(toIdx > fromIdx ? toIdx - 1 : toIdx, 0, chapters[fromIdx]);
 
     // Assign new sequential indices.
     const orderedIds = reordered.map((c, i) => ({
@@ -142,6 +148,32 @@ export function OutlinePanel({
           大纲
         </span>
         <span className="flex-1" />
+        {/* View toggle: list / mind map (R6-1) */}
+        <div
+          className="flex items-center rounded-sm border"
+          style={{ borderColor: "var(--border-hairline)" }}
+        >
+          {(
+            [
+              { key: "list", label: "列表" },
+              { key: "mindmap", label: "脑图" },
+            ] as const
+          ).map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              onClick={() => setView(v.key)}
+              aria-pressed={view === v.key}
+              className="px-sp-2 py-px text-[10px] font-medium transition-colors"
+              style={{
+                color: view === v.key ? "var(--fg)" : "var(--muted)",
+                background: view === v.key ? "var(--surface-2)" : "transparent",
+              }}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           onClick={onAdd}
@@ -244,7 +276,27 @@ export function OutlinePanel({
         )}
       </div>
 
-      {/* Chapter list */}
+      {/* Chapter list — list view or mind-map view (R6-1) */}
+      {view === "mindmap" ? (
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {loading ? (
+            <div className="p-sp-3 space-y-sp-2">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-[14px] rounded-[3px]" style={{ background: "linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.8s infinite" }} />
+              ))}
+            </div>
+          ) : (
+            <OutlineMindMap
+              chapters={chapters}
+              activeChapterId={activeChapterId}
+              onSelect={onSelect}
+              onContinue={onContinueChapter ?? onSelect}
+              onReorder={onReorder}
+              onAdd={onAdd}
+            />
+          )}
+        </div>
+      ) : (
       <div className="flex-1 overflow-y-auto min-h-0">
         {loading && (
           <div className="p-sp-3 space-y-sp-2">
@@ -385,6 +437,7 @@ export function OutlinePanel({
           </div>
         )}
       </div>
+      )}
 
       {/* Context menu overlay */}
       {contextMenu && (

@@ -29,6 +29,7 @@ from app.schemas.novel_memory import (
 )
 from app.services.plot_event import (
     PlotEventNotFound,
+    PlotEventPredecessorNotFound,
     create_plot_event,
     delete_plot_event,
     get_plot_event,
@@ -78,7 +79,10 @@ async def create_plot_event_endpoint(
     """
     await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
     payload = payload.model_copy(update={"novel_id": doc_id})
-    pe = await create_plot_event(session, payload, stage_config=embedding_stage)
+    try:
+        pe = await create_plot_event(session, payload, stage_config=embedding_stage)
+    except PlotEventPredecessorNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     response.headers["Location"] = f"/v1/documents/{doc_id}/plot-events/{pe.id}"
     return pe  # type: ignore[return-value]
 
@@ -118,9 +122,12 @@ async def update_plot_event_endpoint(
         raise HTTPException(status_code=404, detail="情节事件不存在")
     if existing.novel_id != doc_id:
         raise HTTPException(status_code=404, detail="情节事件不存在")
-    pe = await update_plot_event(
-        session, event_id, payload, stage_config=embedding_stage,
-    )
+    try:
+        pe = await update_plot_event(
+            session, event_id, payload, stage_config=embedding_stage,
+        )
+    except PlotEventPredecessorNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return pe  # type: ignore[return-value]
 
 

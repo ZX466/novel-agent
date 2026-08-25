@@ -33,13 +33,18 @@ import {
   type EditorDisplay,
 } from "@/components/EditorDisplaySettings";
 import { EditorToolbar, FindReplaceBar } from "@/components/EditorToolbar";
+import { FocusModeBar } from "@/components/FocusModeBar";
+import { CreativeKitDialog } from "@/components/CreativeKitDialog";
 import { VersionHistoryDialog } from "@/components/VersionHistoryDialog";
+import { matchesShortcut } from "@/lib/shortcuts";
 import { createSnapshot } from "@/lib/snapshots";
 import { extractEntitiesFromOutline } from "@/lib/extract-entities";
 import { createCharacter } from "@/lib/characters";
 import { createWorldSetting } from "@/lib/world-settings";
 import { createPlotEvent } from "@/lib/plot-events";
 import { downloadExport, EXPORT_LABELS, type ExportFormat } from "@/lib/export";
+import { fetchSafetyScan, type SafetyScanReport } from "@/lib/safety";
+import { SafetyScanDialog } from "@/components/SafetyScanDialog";
 
 function countWords(text: string): number {
   if (!text) return 0;
@@ -94,10 +99,60 @@ export default function NovelEditorPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
 
+  // ── 交稿雷达 (R6-3) state + handlers ─────────────────────────────
+  const [radarOpen, setRadarOpen] = useState(false);
+  const [radarReport, setRadarReport] = useState<SafetyScanReport | null>(null);
+  const [radarLoading, setRadarLoading] = useState(false);
+  const [radarError, setRadarError] = useState<string | null>(null);
+  const [pendingExportFmt, setPendingExportFmt] = useState<ExportFormat | null>(null);
+
+  const runSafetyScan = useCallback(async () => {
+    if (!doc) return;
+    setRadarLoading(true);
+    setRadarError(null);
+    try {
+      const report = await fetchSafetyScan(doc.id);
+      setRadarReport(report);
+    } catch (e) {
+      setRadarError(e instanceof Error ? e.message : "安全检查失败");
+    } finally {
+      setRadarLoading(false);
+    }
+  }, [doc]);
+
+  const handleOpenRadar = useCallback(() => {
+    setPendingExportFmt(null);
+    setRadarReport(null);
+    setRadarError(null);
+    setRadarOpen(true);
+    void runSafetyScan();
+  }, [runSafetyScan]);
+
+  const handleContinueExport = useCallback(async () => {
+    if (!doc || !pendingExportFmt) return;
+    try {
+      await downloadExport(doc.id, pendingExportFmt);
+    } catch (e) {
+      alert(`❌ 导出失败: ${e instanceof Error ? e.message : "未知错误"}`);
+    } finally {
+      setPendingExportFmt(null);
+      setRadarOpen(false);
+    }
+  }, [doc, pendingExportFmt]);
+
+  const radarStatus: "idle" | "scanning" | "clean" | "warn" = radarLoading
+    ? "scanning"
+    : radarReport
+      ? radarReport.findings.length > 0
+        ? "warn"
+        : "clean"
+      : "idle";
+
   // Right panel tab: AI 工具 (AIToolPanel) / AI 编剧 (AssistantPanel, F1).
   const [rightTab, setRightTab] = useState<"tools" | "assistant">("tools");
   const [findOpen, setFindOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [kitOpen, setKitOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedText, setSelectedText] = useState("");
   const [extracting, setExtracting] = useState(false);
@@ -223,7 +278,7 @@ export default function NovelEditorPage() {
   // Ctrl+Shift+F for focus mode.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === "F") {
+      if (matchesShortcut(e, "Ctrl+Shift+F")) {
         e.preventDefault();
         setFocusMode((p) => !p);
       }
@@ -261,13 +316,13 @@ export default function NovelEditorPage() {
         void refreshChapters();
       }
       // Update the document title and writing settings.
-      // Merge with existing metadata_json to preserve outline, outline_updated_at, etc.
+      // PATCH-merge only the changed settings keys with merge_metadata, so an
+      // outline written by Creative Kit (or another tab) is never clobbered by
+      // this save's possibly-stale copy of the whole metadata_json.
       const body: DocumentPartial = {
         title: title.trim() || "未命名",
-        metadata_json: {
-          ...((doc?.metadata_json as Record<string, unknown>) ?? {}),
-          ...(settings as unknown as Record<string, unknown>),
-        },
+        metadata_json: { ...(settings as unknown as Record<string, unknown>) },
+        merge_metadata: true,
       };
       const updated = await updateDocument(docId, body);
       setDoc(updated);
@@ -297,6 +352,38 @@ export default function NovelEditorPage() {
 
   const handleSave = useCallback(() => {
     if (dirty) void performSave();
+  }, [dirty, performSave]);
+
+  // R7-1 focus-mode shortcut suite: Ctrl+S save, Ctrl+\ focus toggle,
+  // Ctrl+F find, Ctrl+Enter continue-writing entry (surface AI tools).
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (matchesShortcut(e, "Ctrl+S")) {
+        e.preventDefault();
+        if (dirty) void performSave();
+        return;
+      }
+      if (matchesShortcut(e, "Ctrl+\\")) {
+        e.preventDefault();
+        setFocusMode((p) => !p);
+        return;
+      }
+      if (matchesShortcut(e, "Ctrl+F")) {
+        e.preventDefault();
+        setFindOpen((p) => !p);
+        return;
+      }
+      if (matchesShortcut(e, "Ctrl+Enter")) {
+        e.preventDefault();
+        // The AI tool panel is hidden in focus mode; exit it so the user can
+        // reach the continue-writing entry (matches the bar's hint text).
+        setFocusMode(false);
+        setRightTab("tools");
+        return;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [dirty, performSave]);
 
   // Cleanup timeout.
@@ -556,14 +643,25 @@ export default function NovelEditorPage() {
     async (outlineText: string) => {
       if (!doc) return;
       try {
-        // Save outline to document metadata
-        const updatedMeta = {
-          ...(doc.metadata_json ?? {}),
-          outline: outlineText,
-          outline_updated_at: new Date().toISOString(),
-        };
-        await updateDocument(docId, { metadata_json: updatedMeta });
-        setDoc({ ...doc, metadata_json: updatedMeta });
+        // Save outline to document metadata. Send ONLY the changed keys —
+        // the server PATCH-merges under a row lock, so a concurrent write to
+        // a different metadata key (e.g. settings) is never clobbered by a
+        // stale full-copy being replayed. Local state still merges in place.
+        await updateDocument(docId, {
+          metadata_json: {
+            outline: outlineText,
+            outline_updated_at: new Date().toISOString(),
+          },
+          merge_metadata: true,
+        });
+        setDoc({
+          ...doc,
+          metadata_json: {
+            ...(doc.metadata_json ?? {}),
+            outline: outlineText,
+            outline_updated_at: new Date().toISOString(),
+          },
+        });
 
         // Auto-create chapters from outline if none exist.
         // Also extract per-chapter summaries from the text between chapter headings.
@@ -674,13 +772,22 @@ export default function NovelEditorPage() {
     async (text: string) => {
       if (!doc) return;
       try {
-        const updatedMeta = {
-          ...(doc.metadata_json ?? {}),
-          outline: text,
-          outline_updated_at: new Date().toISOString(),
-        };
-        await updateDocument(docId, { metadata_json: updatedMeta });
-        setDoc({ ...doc, metadata_json: updatedMeta });
+        // Same send-only-changed-keys contract as handleApplyOutline above.
+        await updateDocument(docId, {
+          metadata_json: {
+            outline: text,
+            outline_updated_at: new Date().toISOString(),
+          },
+          merge_metadata: true,
+        });
+        setDoc({
+          ...doc,
+          metadata_json: {
+            ...(doc.metadata_json ?? {}),
+            outline: text,
+            outline_updated_at: new Date().toISOString(),
+          },
+        });
       } catch (e) {
         alert(e instanceof Error ? e.message : "保存大纲失败");
       }
@@ -812,6 +919,16 @@ export default function NovelEditorPage() {
         </>
       )}
 
+      {/* Focus mode slim bar (R7-1): title + save + exit + shortcut hints. */}
+      {focusMode && (
+        <FocusModeBar
+          title={title || "未命名作品"}
+          dirty={dirty}
+          onSave={handleSave}
+          onExit={() => setFocusMode(false)}
+        />
+      )}
+
       {/* Three-column body */}
       <div
         className={`flex-1 grid min-h-0${focusMode ? " focus-mode" : ""}`}
@@ -863,6 +980,25 @@ export default function NovelEditorPage() {
                   </button>
                 );
               })}
+              {/* Creative Kit entry (R7-2) */}
+              <button
+                type="button"
+                onClick={() => setKitOpen(true)}
+                title="✨ 灵感套件 — 一键生成世界观/人物/主线"
+                className="flex-1 py-sp-2 text-center transition-colors"
+                style={{
+                  color: kitOpen ? "var(--accent)" : "var(--muted)",
+                  fontSize: "13px",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = "var(--fg)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = "var(--muted)";
+                }}
+              >
+                ✨
+              </button>
             </div>
             {/* Tab body */}
             <div className="flex-1 min-h-0 overflow-hidden">
@@ -881,6 +1017,12 @@ export default function NovelEditorPage() {
                     onDelete={(id) => void handleDeleteChapter(id)}
                     onRename={(id, t) => void handleRenameChapter(id, t)}
                     onReorder={(ids) => void handleReorder(ids)}
+                    onContinueChapter={(id) => {
+                      // R6-1: mind-map continue entry — load the chapter and
+                      // surface the AI tools so "续写" is one click away.
+                      void handleSelectChapter(id);
+                      setRightTab("tools");
+                    }}
                   />
                 </div>
               )}
@@ -1015,6 +1157,14 @@ export default function NovelEditorPage() {
                                       // Best-effort; never block the export.
                                     }
                                   }
+                                  // 交稿雷达 (R6-3)：导出前自动预检，提示可忽略，不阻塞导出。
+                                  const preflight = await fetchSafetyScan(doc.id).catch(() => null);
+                                  if (preflight && preflight.findings.length > 0) {
+                                    setPendingExportFmt(fmt);
+                                    setRadarReport(preflight);
+                                    setRadarOpen(true);
+                                    return;
+                                  }
                                   await downloadExport(doc.id, fmt);
                                 } catch (e) {
                                   alert(`❌ 导出失败: ${e instanceof Error ? e.message : "未知错误"}`);
@@ -1080,6 +1230,8 @@ export default function NovelEditorPage() {
             focusActive={focusMode}
             onToggleFocus={() => setFocusMode((v) => !v)}
             onOpenHistory={() => setHistoryOpen(true)}
+            onOpenRadar={handleOpenRadar}
+            radarStatus={radarStatus}
           />
         </section>
 
@@ -1140,6 +1292,21 @@ export default function NovelEditorPage() {
         )}
       </div>
 
+      {/* 交稿雷达 (R6-3) dialog */}
+      <SafetyScanDialog
+        open={radarOpen}
+        report={radarReport}
+        loading={radarLoading}
+        error={radarError}
+        pendingExport={pendingExportFmt}
+        onClose={() => {
+          setPendingExportFmt(null);
+          setRadarOpen(false);
+        }}
+        onContinueExport={handleContinueExport}
+        onRescan={runSafetyScan}
+      />
+
       {/* Version history dialog */}
       <VersionHistoryDialog
         open={historyOpen}
@@ -1153,6 +1320,19 @@ export default function NovelEditorPage() {
             editor.chain().setContent(text, false).run();
             setDirty(true);
           }
+        }}
+      />
+
+      {/* Creative Kit dialog (R7-2) */}
+      <CreativeKitDialog
+        docId={docId}
+        open={kitOpen}
+        onClose={() => setKitOpen(false)}
+        onApplied={(updated) => {
+          // Refresh the parent document copy so a later save never overwrites
+          // the applied outline with stale metadata_json (P0 fix).
+          setDoc(updated);
+          setPanelRefreshKey((k) => k + 1);
         }}
       />
     </div>

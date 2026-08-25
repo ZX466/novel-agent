@@ -97,6 +97,10 @@ def test_load_work_context_selected_mode(monkeypatch) -> None:
         _FakeChapter(3, "第三章", "不应出现"),
     ]
     monkeypatch.setattr(
+        "app.services.document.get_document",
+        _fake_async(lambda: _FakeDoc({})),
+    )
+    monkeypatch.setattr(
         "app.services.chapter.list_chapters",
         _fake_async(lambda: (chapters, 3)),
     )
@@ -112,6 +116,10 @@ def test_load_work_context_hard_cap(monkeypatch) -> None:
     req = _Req(doc_id=7, mode="selected", chapter_ids=None, max_chars=20)
     chapters = [_FakeChapter(1, "第一章", "A" * 100)]
     monkeypatch.setattr(
+        "app.services.document.get_document",
+        _fake_async(lambda: _FakeDoc({})),
+    )
+    monkeypatch.setattr(
         "app.services.chapter.list_chapters",
         _fake_async(lambda: (chapters, 1)),
     )
@@ -119,6 +127,85 @@ def test_load_work_context_hard_cap(monkeypatch) -> None:
         _load_work_context(session=None, req=req)
     )
     assert len(out) == 20
+
+
+# --- R8-5 (H3): cross-tenant ownership gate for the chat pipeline -----------
+
+def test_load_work_context_requires_owned_document_outline(monkeypatch) -> None:
+    """Assistant context reader must reject another owner's novel (outline mode)."""
+    from fastapi import HTTPException
+    from app.services.document import DocumentNotFound
+
+    async def _raise(*a, **k):
+        raise DocumentNotFound(9)
+
+    monkeypatch.setattr("app.services.document.get_document", _raise)
+    with pytest.raises(HTTPException) as ei:
+        asyncio.run(
+            _load_work_context(session=None, req=_Req(doc_id=9, mode="outline"), owner="other-owner-hash")
+        )
+    assert ei.value.status_code == 404
+
+
+def test_load_work_context_scopes_get_document_by_owner(monkeypatch) -> None:
+    """The ownership gate passes owner_key_hash=owner into get_document."""
+    seen: dict = {}
+
+    async def _capture(session, doc_id, **kwargs):
+        seen.update(kwargs)
+        return _FakeDoc({"outline": "大纲"})
+
+    monkeypatch.setattr("app.services.document.get_document", _capture)
+    out = asyncio.run(
+        _load_work_context(session=None, req=_Req(doc_id=7, mode="outline"), owner="abc")
+    )
+    assert seen.get("owner_key_hash") == "abc"
+    assert out == "大纲"
+
+
+def test_load_work_context_rejects_foreign_novel_in_chapter_mode(monkeypatch) -> None:
+    """Chapters mode also gates on ownership before listing any chapters."""
+    from fastapi import HTTPException
+    from app.services.document import DocumentNotFound
+
+    listed: list = []
+
+    async def _raise(*a, **k):
+        raise DocumentNotFound(9)
+
+    async def _list(session, **kwargs):
+        listed.append(kwargs.get("novel_id"))
+        return [], 0
+
+    monkeypatch.setattr("app.services.document.get_document", _raise)
+    monkeypatch.setattr("app.services.chapter.list_chapters", _list)
+    with pytest.raises(HTTPException) as ei:
+        asyncio.run(
+            _load_work_context(
+                session=None,
+                req=_Req(doc_id=9, mode="selected", chapter_ids=[1]),
+                owner="other",
+            )
+        )
+    assert ei.value.status_code == 404
+    assert listed == []  # foreign novel's chapters must never be listed
+
+
+def test_guard_novel_owner_allows_owned_and_blocks_foreign(monkeypatch) -> None:
+    """Entry guard: no novel id is a no-op; a foreign novel raises 404."""
+    from fastapi import HTTPException
+    from app.api import chat as chat_mod
+
+    async def _check(session, doc_id, *, owner_hash=None):
+        if owner_hash != "mine":
+            raise HTTPException(status_code=404, detail="作品不存在")
+
+    monkeypatch.setattr(chat_mod, "load_parent", _check)
+    result = asyncio.run(chat_mod._guard_novel_owner(None, None, "mine"))
+    assert result is None
+    with pytest.raises(HTTPException) as ei:
+        asyncio.run(chat_mod._guard_novel_owner(None, 1, "other"))
+    assert ei.value.status_code == 404
 
 
 def _fake_async(fn):

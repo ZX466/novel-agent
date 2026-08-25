@@ -14,9 +14,18 @@ from typing import AsyncIterator
 import httpx
 import litellm
 import pytest
+from fastapi import HTTPException
 
 from app.schemas.chat import ProviderConfig, StageConfig
 
+
+@pytest.mark.asyncio
+async def test_embedding_provider_config_rejects_malformed_header():
+    from app.api._deps import extract_embedding_stage
+
+    with pytest.raises(HTTPException) as exc_info:
+        await extract_embedding_stage('{"embedding": {"api_base": "https://x/v1", "api_key": "k", "model": 123}}')
+    assert exc_info.value.status_code == 422
 
 # --- helpers ---------------------------------------------------------------
 
@@ -156,6 +165,9 @@ async def test_full_header_forwards_provider_config(async_app_client, monkeypatc
 
 @pytest.mark.asyncio
 async def test_missing_header_falls_back_to_none(async_app_client, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "byok_fallback_to_env", True)
     captured: dict[str, object] = {}
 
     async def _spy(topic, provider_config=None, **kwargs) -> AsyncIterator[str]:

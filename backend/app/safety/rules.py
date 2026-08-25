@@ -22,6 +22,9 @@ Categories (used for reporting / aggregation):
   - hate:          hate speech slurs
   - pii:           emails / phone numbers / ID cards (redact before logging)
   - profanity:      swear words (severity=INFO by default)
+  - copyright:     URLs / attribution statements (交稿雷达 preflight, WARNING)
+  - privacy:       QQ / WeChat identifiers (交稿雷达 preflight, WARNING)
+  - sensitive:     common platform-compliance terms (交稿雷达 preflight, WARNING)
 """
 from __future__ import annotations
 
@@ -220,6 +223,42 @@ _DEFAULT_RULE_DEFS: list[dict] = [
         "severity": Severity.INFO,
         "category": "profanity",
         "description": "中文常见粗口。",
+    },
+    {
+        # 交稿雷达 (R6-3) preflight: 导出前提示隐私/版权/敏感表达，可忽略不阻塞。
+        "name": "copyright_url",
+        "pattern": r"https?://[^\s\"'<>，。；、！？]+",
+        "severity": Severity.WARNING,
+        "category": "copyright",
+        "description": "正文出现外部链接，导出前确认是否涉及转载/引用。",
+    },
+    {
+        "name": "copyright_statement",
+        "pattern": r"(版权所有|版权所有©|未经授权|禁止转载|谢绝转载|转载自|摘录自|节选自|改编自|来源[:：]\s*\S+)",
+        "severity": Severity.WARNING,
+        "category": "copyright",
+        "description": "疑似版权声明/引用来源表述。",
+    },
+    {
+        "name": "privacy_qq",
+        "pattern": r"(?:QQ|qq|扣扣|企鹅|QQ群|Q群)\s*[:：]?\s*[1-9]\d{4,10}",
+        "severity": Severity.WARNING,
+        "category": "privacy",
+        "description": "疑似 QQ 号。",
+    },
+    {
+        "name": "privacy_wechat",
+        "pattern": r"(?:wxid_[A-Za-z0-9_-]{5,32}|(?:微信|微信号|WeChat|wechat|VX|V信|V信号)\s*[:：]?\s*[A-Za-z][A-Za-z0-9_-]{5,19})",
+        "severity": Severity.WARNING,
+        "category": "privacy",
+        "description": "疑似微信号/微信 ID。",
+    },
+    {
+        "name": "sensitive_platform",
+        "pattern": r"(赌博|博彩|赌场|毒品|吸毒|制毒|贩毒|传销|诈骗|裸聊|色情交易|代孕|器官买卖|人口买卖)",
+        "severity": Severity.WARNING,
+        "category": "sensitive",
+        "description": "常见平台审核敏感表达（保守起步集，可按需扩展）。",
     },
 ]
 

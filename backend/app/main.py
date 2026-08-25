@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import importlib
 import re
 from contextlib import asynccontextmanager
 
@@ -18,14 +19,17 @@ from app.api import chat as chat_router_module
 from app.api import chapters as chapters_router_module
 from app.api import characters as characters_router_module
 from app.api import consistency as consistency_router_module
+from app.api import creative_kit as creative_kit_router_module
 from app.api import documents as documents_router_module
 from app.api import health as health_router_module
 from app.api import knowledge_docs as knowledge_docs_router_module
 from app.api import plot_events as plot_events_router_module
 from app.api import retrieval as retrieval_router_module
+from app.api import safety as safety_router_module
 from app.api import snapshots as snapshots_router_module
 from app.api import export as export_router_module
 from app.api import stats as stats_router_module
+from app.api import timeline as timeline_router_module
 from app.api import world_settings as world_settings_router_module
 from app.config import settings
 from app.core.redis import close_redis, get_redis
@@ -133,11 +137,17 @@ app.include_router(characters_router_module.router)
 app.include_router(world_settings_router_module.router)
 app.include_router(plot_events_router_module.router)
 app.include_router(retrieval_router_module.router)
+app.include_router(safety_router_module.router)
 app.include_router(export_router_module.router)
+# `import.py` collides with the `import` keyword, so load it via importlib.
+import_router_module = importlib.import_module("app.api.import")
+app.include_router(import_router_module.router)
 app.include_router(stats_router_module.router)
 app.include_router(knowledge_docs_router_module.router)
 app.include_router(snapshots_router_module.router)
 app.include_router(consistency_router_module.router)
+app.include_router(creative_kit_router_module.router)
+app.include_router(timeline_router_module.router)
 
 
 @app.exception_handler(Exception)

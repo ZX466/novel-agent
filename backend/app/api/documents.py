@@ -25,6 +25,7 @@ from app.db.session import get_db
 from app.schemas.document import (
     DocumentCreate,
     DocumentListResponse,
+    DocumentPatch,
     DocumentRead,
     DocumentUpdate,
 )
@@ -108,13 +109,19 @@ async def get_document_endpoint(
 @router.patch("/{doc_id}", response_model=DocumentRead)
 async def patch_document_endpoint(
     doc_id: int,
-    payload: DocumentUpdate,
+    payload: DocumentPatch,
     session: AsyncSession = Depends(get_db),
     api_key: str = Depends(require_api_key),
 ) -> DocumentRead:
     """Partial update. Bumps version. 404 if missing."""
     try:
-        return await update_document(session, doc_id, payload, owner_key_hash=owner_key_hash(api_key))  # type: ignore[return-value]
+        core = payload.model_dump(exclude_unset=True)
+        merge = core.pop("merge_metadata", False)
+        update_payload = DocumentUpdate(**core)
+        return await update_document(
+            session, doc_id, update_payload,
+            owner_key_hash=owner_key_hash(api_key), merge_metadata=merge,
+        )  # type: ignore[return-value]
     except DocumentNotFound:
         raise HTTPException(status_code=404, detail="作品不存在")
 

@@ -6,16 +6,14 @@
 
 ✅ Round 5/6/7 全部完成。🎉 **Round 8（安全加固）已归档（2026-08-24）**。
 ✅ **R8 消债轮已闭环合入 main（2026-08-25）**：codex L2 依赖 pin + L6 CI 门禁 + TOCTOU 文档 → `c8bc383`；cline F811 删重 + 测试风格 → `9c16760`。交叉评审（cline↔codex）全通过，**回归 824 passed / 1 skipped**。
-⚠️ **本地 docker 验证中（用户本地起栈）**：
-- 发现 frontend Dockerfile `npm ci --omit=dev` 排除 typescript/tailwind/postcss → Next build 解析不了 `@/*`；已改 Dockerfile（去 omit=dev）→ 待 build 验证 → 提交
-- `deploy/nginx/certs/` 已生成自签证书（应 gitignore）；compose 构建后台进行中
+✅ **本地 docker 栈验证通过（2026-08-25）**：compose 5 服务全起，nginx 301+HTTPS+HSTS、`/v1/health` ok、前端 200（7421）。修复 3 处：Dockerfile 去 omit=dev + `ENV PORT=7421`、certs 自签已生成并 gitignore。
 - ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
 
 ## Action Queue
 
 - [x] R8 六项全部完成并归档（实施 codex×4 + Claude×2，评审闭环）
 - [x] **消债轮闭环**（2026-08-25）：`c8bc383`/`9c16760` 已合入 main，回归 824 passed
-- [ ] **Dockerfile 修复提交**（本地验证 build 通过后：commit Dockerfile + gitignore `deploy/nginx/certs/`）
+- [x] **Dockerfile 修复提交**（2026-08-25）：去 omit=dev + ENV PORT=7421 + certs gitignore；本地 compose 验证通过
 - [⚠] **GitHub 待补推**：`0fc1a62` `2e5250c` `7c52fce` `c8bc383` `9c16760` 等多提交直连超时未推（Gitee 已同步至最新板归档前）；网络恢复/代理后 `git push origin main`
 - [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
 - [ ] **审计遗留（低危/未派）**：L1 迁移自动 · L3 _event_stream ValueError 误报 · L5 CSP(nonce 策略) · L8 API_KEYS 缺省 503 引导

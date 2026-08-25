@@ -8,6 +8,7 @@
 ✅ **R8 消债轮已闭环合入 main（2026-08-25）**：codex L2 依赖 pin + L6 CI 门禁 + TOCTOU 文档 → `c8bc383`；cline F811 删重 + 测试风格 → `9c16760`。交叉评审（cline↔codex）全通过，**回归 824 passed / 1 skipped**。
 ✅ **本地 docker 栈验证通过（2026-08-25）**：compose 5 服务全起，nginx 301+HTTPS+HSTS、`/v1/health` ok、前端 200（7421）。修复 3 处：Dockerfile 去 omit=dev + `ENV PORT=7421`、certs 自签已生成并 gitignore。
 🔨 **审计遗留二批已派（2026-08-25）**：L1 迁移自动化 → opencode；L3 `_event_stream` 误报 + L5 CSP(nonce) → codex；L8 API_KEYS 缺省 503 引导 → cline（评审 codex↔cline，opencode→codex）
+⏳ **催办一轮已发出（2026-08-25 17:1x）**：三板「接收」落定后 1.5h+ 无 agent 受理回执、工作树零提交 → 已向 opencode/codex/cline 各写 [回复] 催办（需澄清→未开工），等回执。
 - ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
 
 ## Action Queue

@@ -5,24 +5,15 @@
 ## Current State
 
 ✅ **R8 评审闭环（2026-08-24）**：R8-1~R8-4 评审通过，已合入 main `a564ef0`（用户裁定 R8-1 fail-open 接受原样）。R7-3 生产就绪已合入 main。
-🔨 **R8 消债轮已派（2026-08-24）**：`_deps` F811 重复 import + 测试风格。
+✅ **R8 消债轮完成（2026-08-25）**：`_deps` F811 重复 import 已删 + R8 测试空行统一（commit a1339c5）。已请求 codex 评审。
 ⏳ 其余待命。
 
 ## Action Queue
-[回复] R8 消债：_deps F811 重复 import + 测试风格
-状态: 已接受
-进展: 开始消债（重 import F811 删除 + R8 测试风格统一），完成后请 codex 评审。
----
 
-[任务] R8 消债：_deps F811 重复 import + 测试风格
-来源: Claude (coordinator)
-时间: 2026-08-24
-优先级: P2（消债，不阻塞主流程）
-描述:
-  清理 R8 评审时你提的两项非阻塞（均在 backend）：
-  - **_deps.py 重复 import `ValidationError`（ruff F811）**：删多余行，保留一处。
-  - **测试风格**：R8 新增测试文件补文件尾/块间空行分隔（PEP8 风格），全量对齐。
-验收: F811 告警消除、ruff 无新增；测试文件风格统一；backend 回归 816 passed / 1 skipped 无新增。评审: codex。
+[回复] R8 消债：_deps F811 重复 import + 测试风格
+状态: 已完成
+进展: 消债提交 a1339c5（分支 ZX466/cline）。_deps 删重 import ValidationError 一行；test_llm_clients/test_chat_byok/test_embedding 三处 R8 新增测试块补齐 PEP8 空行。验证：py_compile 通过；R8 相关测试实跑通过（embedding SSRF 1、byok 422 1、llm_clients redact/metadata/ssrf 9）；空行风格脚本核对全量≥2 空行+末尾换行。验收 F811 目标达成。评审: codex。
+疑问: 无。
 ---
 
 ## Update Rule

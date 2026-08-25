@@ -171,6 +171,7 @@ def test_validate_api_base_rejects_hostname_resolving_to_private_ip(monkeypatch)
     with pytest.raises(ValueError, match="Blocked internal address"):
         clients._validate_api_base("https://metadata.google.internal/v1")
 
+
 def test_validate_api_base_rejects_cloud_metadata():
     with pytest.raises(ValueError, match="Blocked internal address"):
         clients._validate_api_base("http://169.254.169.254/v1")
@@ -247,6 +248,7 @@ def test_redact_key_redacts_bearer_and_url_credentials():
     assert "eyJhbGci" not in redacted
     assert "password" not in redacted
     assert "[REDACTED]" in redacted
+
 
 def test_redact_key_redacts_sk_token():
     assert clients._redact_key("error: sk-abc123xyz happened") == "error: [REDACTED] happened"

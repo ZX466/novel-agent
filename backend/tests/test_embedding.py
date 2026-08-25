@@ -369,6 +369,8 @@ async def test_embed_batch_reuses_cached_texts(monkeypatch):
     assert gc.await_count == 1
     # Only the miss reached the API — the cached "a" is served locally.
     assert fake_client.embeddings.create.call_args.kwargs["input"] == ["b"]
+
+
 @pytest.mark.asyncio
 async def test_embed_text_rejects_hostname_resolving_to_private_ip(monkeypatch):
     monkeypatch.setattr(

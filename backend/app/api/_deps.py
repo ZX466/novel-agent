@@ -14,7 +14,6 @@ from app.config import settings
 from app.core.redis import get_redis
 from app.schemas.chat import StageConfig
 from pydantic import ValidationError
-from pydantic import ValidationError
 from app.services.document import DocumentNotFound, get_document
 
 logger = logging.getLogger(__name__)

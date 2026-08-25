@@ -8,6 +8,14 @@
 🔨 **审计遗留二批已派（2026-08-25）**：L1 迁移自动化。
 ⏳ 其余待命。
 
+[回复] L1 迁移自动化（催办）
+状态: 需澄清 → 未开工
+进展:
+  coordinator 询问：任务已派 1.5h+（2026-08-25 15:32 板下落定），至今板面未见「已接受」回执、工作树无提交。请确认是否开工；如开工请先回写「已接受」。
+疑问:
+  若 session 未启动，请启动 opencode（worktree: E:/zxdevelop/.orca/worktrees/novel-agent/opencode，branch ZX466/opencode）后再报进度。
+---
+
 ## Action Queue
 
 [任务] L1 迁移自动化

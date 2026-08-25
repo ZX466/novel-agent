@@ -4,24 +4,26 @@
 
 ## Current State
 
-✅ Round 5/6/7 全部完成。🎉 **Round 8（安全加固）全部完成（6/6）并归档（2026-08-24）**：
-- R8-1~R8-4（codex：SSRF 主机名校验 / BYOK 默认 false / key 脱敏 / _deps 422）→ cline 评审通过 + **用户裁定 R8-1 fail-open 接受原样** → 已合入 main `a564ef0`
-- R8-5（`52ccd2e` chat IDOR 双层过滤）/ R8-6（`d527da7` nginx TLS/HSTS，CSP 暂缓）→ **codex 复审通过（2026-08-24）**
-- ✅ main 已推双远程（Gitee ✅；GitHub 待补推 `0fc1a62`）
-- 🔨 **R8 消债轮进行中（2026-08-25）**：codex L2 依赖 pin + L6 CI 门禁 + TOCTOU（仅文档化）✅、cline F811/风格 ✅（a1339c5）→ **交叉评审中（codex↔cline）**
-- ⚠️ **部署方式**：用户当前用**本地 docker** 跑（腾讯云 2026-08-16 到期）；远程部署暂缓，选项保留
+✅ Round 5/6/7 全部完成。🎉 **Round 8（安全加固）已归档（2026-08-24）**。
+✅ **R8 消债轮已闭环合入 main（2026-08-25）**：codex L2 依赖 pin + L6 CI 门禁 + TOCTOU 文档 → `c8bc383`；cline F811 删重 + 测试风格 → `9c16760`。交叉评审（cline↔codex）全通过，**回归 824 passed / 1 skipped**。
+⚠️ **本地 docker 验证中（用户本地起栈）**：
+- 发现 frontend Dockerfile `npm ci --omit=dev` 排除 typescript/tailwind/postcss → Next build 解析不了 `@/*`；已改 Dockerfile（去 omit=dev）→ 待 build 验证 → 提交
+- `deploy/nginx/certs/` 已生成自签证书（应 gitignore）；compose 构建后台进行中
+- ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
 
 ## Action Queue
 
-- [x] R8 六项全部完成并归档（codex×4 + Claude×2；cline/codex 评审闭环）
-- [⚠] **GitHub 待补推**：main `0fc1a62`（R8 归档）直连超时未推；网络恢复/开代理后 `git push origin main`（Gitee 已同步）
-- [ ] **消债轮收尾**（2026-08-25）：codex L2/L6/TOCTOU 实施完成、cline F811/风格 完成（a1339c5）→ **交叉评审中**，闭环后合并 + 补推 GitHub
-- [ ] **生产部署（暂缓）**：用户当前本地 docker 跑；恢复远程（腾讯云/换机）时走 `deploy/README.md`（`API_KEYS`/`alembic upgrade head`/`owner_key_hash` 回填/生产库归一化检查） — 待用户排期，Agent 不自行执行
-- [ ] **审计遗留（低危/未派）**：L1 迁移自动 · L3 _event_stream ValueError 误报 · L5 CSP(nonce 策略) · L8 API_KEYS 缺省 503 引导（L2/L6 已并入消债轮派 codex）
+- [x] R8 六项全部完成并归档（实施 codex×4 + Claude×2，评审闭环）
+- [x] **消债轮闭环**（2026-08-25）：`c8bc383`/`9c16760` 已合入 main，回归 824 passed
+- [ ] **Dockerfile 修复提交**（本地验证 build 通过后：commit Dockerfile + gitignore `deploy/nginx/certs/`）
+- [⚠] **GitHub 待补推**：`0fc1a62` `2e5250c` `7c52fce` `c8bc383` `9c16760` 等多提交直连超时未推（Gitee 已同步至最新板归档前）；网络恢复/代理后 `git push origin main`
+- [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
+- [ ] **审计遗留（低危/未派）**：L1 迁移自动 · L3 _event_stream ValueError 误报 · L5 CSP(nonce 策略) · L8 API_KEYS 缺省 503 引导
 
 ## Unassigned Notes
 
 - **回执统一写 `.orca/talking.txt`**；`.orca/agent-boards/` 为历史存档，不再写入。
+- **本地 docker 栈**：backend/frontend 用现有本地 PG/Redis（`project11-postgres-local`/`redis-local`），compose 内部服务名不冲突。
 
 ## Update Rule
 

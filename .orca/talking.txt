@@ -29,7 +29,7 @@
 ---
 
 - 🔨 **待 cline 评审 L3/L5**（评审人：cline）。评审通过后由 coordinator 合入 main + 双远程推送。
-- ⏳ 待 opencode L1 修正后复评。
+- ✅ **L1 复评通过（2026-08-26）**：opencode 修正 33959cc（捕获 CommandError → UnknownRevisionError → exit2）；9/9 测试过，活 DB 冒烟 exit2。已回 opencode 板。
 
 ## Update Rule
 

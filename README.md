@@ -1,363 +1,138 @@
 # Project11 — AI 小说创作平台
 
-AI 小说创作平台：三阶段 LLM 流水线（草稿 → 精修 → 评估）+ 实时流式输出 + BYOK 多 provider + RAG 记忆检索 + 多 Agent 系统。
+三阶段 LLM 流水线（草稿 → 精修 → 评估）+ 实时流式输出 + BYOK 多 provider + RAG 记忆检索。
 
-> 想**5 分钟跑起来**？直接看 [QUICKSTART.md](QUICKSTART.md)（极简上手路径）。
-> 完整部署见 [deploy/README.md](deploy/README.md)。
+> **5 分钟跑起来**：[QUICKSTART.md](QUICKSTART.md) ｜ **服务器部署**：[deploy/README.md](deploy/README.md) ｜ **上手配方**：[docs/recipes/index.md](docs/recipes/index.md)
 
 ## 技术栈
 
 | 层 | 选型 |
 |---|---|
 | 后端 | Python 3.11 + FastAPI + LangGraph + LiteLLM |
-| LLM | DeepSeek-V4-Flash (草稿) → Qwen-Max (精修) → Claude Sonnet (评估)，用户可 BYOK 自选 |
-| 数据库 | PostgreSQL 16 + pgvector + Redis（**本地 Docker 容器**） |
-| 前端 | Next.js 14 + TailwindCSS + Tiptap + Vercel AI SDK v5 |
-| 依赖管理 | **uv**（Python 虚拟环境 + 依赖锁定） |
-| 部署 | 本地：Docker Compose 全栈（nginx+PG+Redis+后端+前端）；服务器：见 [deploy/README.md](deploy/README.md) |
+| LLM | BYOK：草稿 DeepSeek / 精修 Qwen / 评估 Claude（可自选） |
+| 数据库 | PostgreSQL 16 + pgvector + Redis |
+| 前端 | Next.js 14 + TailwindCSS + Tiptap |
+| 依赖 | Python 用 uv（`backend/pyproject.toml`），Node 用 npm |
 
-> **本地环境**：一键 `docker compose up -d --build` 启动完整五服务栈（nginx 80/443 + PostgreSQL 16 + Redis + FastAPI 后端 + Next.js 前端），浏览器访问 `https://localhost`。开发迭代（代码热重载）见「替代：本地进程模式」。
-> **Python 环境**：容器外开发用 `uv` 管理（`backend/pyproject.toml`），虚拟环境在 `backend/.venv`。
+## 快速开始
+
+前置：Docker Desktop（WSL2 后端）。
+
+```powershell
+# 1. 容器密钥（根目录，强密码）
+Copy-Item .env.example .env          # 编辑 POSTGRES_PASSWORD / REDIS_PASSWORD（≥20 字符）
+
+# 2. API Key（后端）
+cd backend && Copy-Item .env.example .env   # 填 DEEPSEEK_API_KEY / DASHSCOPE_API_KEY 等
+
+# 3. 构建启动全栈（nginx + PG + Redis + backend + frontend）
+docker compose up -d --build
+
+# 4. 初始化数据库
+docker compose exec backend alembic upgrade head
+docker compose exec backend python scripts/check_migrations.py
+```
+
+访问 **https://localhost** → 点击 ⚙ 配置 API Key → 开始写作。
+健康检查：`curl -k https://localhost/v1/health` → `{"status":"ok"}`
+
+> 本地进程热重载（改代码免 rebuild）：`uv run uvicorn app.main:app --reload --port 8000` + `npm run dev`，DB 仍用 compose 栈。
+
+## 常用命令
+
+```powershell
+docker compose up -d          # 启动全栈
+docker compose down           # 停止（保留数据卷）
+docker compose down -v        # 停止并清卷（需重新迁移）
+docker compose logs -f backend
+docker compose exec backend alembic upgrade head   # 更新后补迁移
+```
 
 ## 核心特性
 
-### 🔴 P0 已解决
+- **task_type 路由**：按任务走最少 pipeline 阶段（续写 ~2s 出首字，不走评估循环）
+- **真流式输出**：逐 token 经 SSE 实时推送，前端逐字渲染
+- **阶段级降级**：单阶段失败跳过并标注，pipeline 继续
+- **BYOK**：三段各配独立 provider，快速预设 + 连接测试
+- **RAG 记忆检索**：章节/角色/世界观/剧情四集合 pgvector 检索，小说设定优先
+- **多 Agent 系统**：大纲角色 / 章节编辑 / 评估矩阵 / 安全审核
+- **作品导出**：md / txt / epub（零新依赖）
+- **写作工具**：生成总纲 / 续写 / 扩写 / 重写 / 降AI / 编剧对话 / 知识库 / 统计看板
 
-- **task_type 智能路由**：根据任务类型自动选择最少的 pipeline 阶段。续写只跑 draft + safety（~2秒），不再跑完整 refine→evaluate 循环
-- **真流式输出**：LLM 逐 token 生成时实时推送到前端，用户从第 1 秒起就能看到文字出现，不再白屏等待
-- **阶段级降级**：任一 LLM 阶段失败时自动跳过并标注，pipeline 继续运行直到输出结果
-
-### 🟠 P1 已解决
-
-- **选中文字操作**：选中编辑器中的文字后点击 AI 工具，直接对选中内容进行扩写/重写/降AI
-- **RAG 上下文注入**：refine 阶段也注入角色/世界观/剧情记忆，不再"盲改"
-- **上下文扩展**：RAG 检索从 top_k=3 扩大到 5，输出限制从 4000→8000 字符
-- **大纲关联题目**：大纲生成时自动携带小说标题，不再生成与题目无关的内容
-- **生成正文注入大纲**：生成正文和续写时自动附带已保存的大纲作为参考上下文
-- **路由标签清理**：后端 `_extract_topic()` 剥离 `[novel:N]` 和 `[task:TYPE]` 标签，LLM 只看到干净的用户 prompt
-
-### 🟡 P2 已解决
-
-- **BYOK 快速配置模板**：3 种预设（DeepSeek+Qwen+Claude / 全 OpenAI / 全 DashScope），一键填充
-- **推荐 model 下拉**：每个阶段旁边提供推荐模型列表
-- **连接测试**：配置完 API Key 后可直接测试连接，不用发真实消息验证
-- **阶段级错误信息**：错误信息精确到哪个阶段（draft/refine/evaluate）出了问题
-- **评估超时保护**：每个评估维度 30 秒超时，单个维度失败不影响其他维度
-- **refine 循环上限**：最多 5 次迭代，防止无限震荡
-
-### 🟢 前端体验
-
-- **闪烁光标**：流式生成时文字末尾显示闪烁光标，视觉反馈清晰
-- **打字指示器**：等待首个 token 时显示三点动画
-- **替换选中**：选中文字后可直接用 AI 输出替换，不用手动删除
-- **保存门槛降低**：只需配好 1 个阶段即可保存，不必三阶段全填
-- **大纲状态清理**：应用大纲后自动清除 AI 面板状态，防止残留文本被误插入正文
-
-### 🔵 Round 4 新增（2026-08-17 本轮交付）
-
-- **F1 AI 编剧对话助手**：多轮对话界面，自动注入章节/大纲上下文，生成结果可一键插入正文（复用 /v1/chat，协议见 kilo 接口设计）
-- **F3 作品导出**：作品页一键导出 `md / txt / epub` 三种格式，端点 `GET /v1/documents/{id}/export?format=md|txt|epub`（EPUB 用标准库 zip 容器生成，零新依赖，评估见 [backend/docs/EXPORT-EPUB-DEPS.md](backend/docs/EXPORT-EPUB-DEPS.md)）
-- **F4 本地知识库**：上传参考资料（白名单类型 + 大小上限），自动 ~800 字分块 + embedding 入库；RAG 检索时与小说记忆合并，**小说设定优先**；支持上传/列表/删除
-- **F6 写作统计看板**：近 30 天字数曲线、连续写作天数、今日目标达成，端点 `GET /v1/stats/dashboard`（基于 documents/chapters 的 updated_at + word_count 聚合）
-- **写作体验增强**：编辑器字体/行距/夜间护眼、专注模式增强、自动保存反馈、打字机逐字回显、快捷键体系
-
----
-
-## 目录
+## 目录结构
 
 ```
-project11/
-├── backend/              # FastAPI + LangGraph 后端
-│   ├── alembic/          # 数据库迁移
-│   ├── app/
-│   │   ├── agents/       # 角色化 Agent（Plotter/Character/Editor/Safety）
-│   │   ├── api/          # REST 端点（chat/documents/chapters/...）
-│   │   ├── eval/         # 多维度评估矩阵
-│   │   ├── llm/          # LLM 客户端（litellm 封装 + embedding）
-│   │   ├── models/       # SQLAlchemy ORM
-│   │   ├── pipeline/     # LangGraph 三阶段流水线（核心）
-│   │   ├── planner/      # DAG 编排器 + 任务模板
-│   │   ├── safety/       # 内容安全规则引擎
-│   │   ├── schemas/      # Pydantic 模型
-│   │   ├── services/     # 业务逻辑层
-│   │   └── tools/        # Agent 工具注册表
-│   ├── tests/
-│   ├── pyproject.toml    # uv 依赖声明（唯一权威）
-│   └── requirements.txt  # 兼容旧工具（内容与 pyproject.toml 同步）
-├── frontend/             # Next.js 14 前端
-│   └── src/
-│       ├── app/          # 页面路由
-│       ├── components/   # UI 组件
-│       ├── hooks/        # React hooks
-│       └── lib/          # 工具函数 + 类型定义
-├── deploy/               # 服务器部署配置
-├── docker-compose.yml    # 全栈 compose（nginx + PG + Redis + backend + frontend，本地/服务器通用）
-└── docker-compose.local.yml  # 旧版：仅本地数据库（PG + Redis），已被全栈 compose 取代，停止使用
+backend/                # FastAPI + LangGraph
+  app/                  # 核心代码
+    agents/             # 角色化 Agent
+    api/                # REST 端点
+    pipeline/           # 三阶段流水线（核心）
+    planner/            # DAG 编排器
+    eval/               # 评估矩阵
+    safety/             # 内容安全
+    services/           # 业务逻辑
+  alembic/              # 数据库迁移
+  scripts/              # 工具脚本（check_migrations 等）
+  tests/
+  pyproject.toml        # uv 依赖声明（唯一权威）
+frontend/               # Next.js 14
+  src/app/              # 页面路由
+  src/components/       # UI 组件
+deploy/                 # 服务器部署（nginx 等）
+docker-compose.yml      # 全栈 compose
+docker-compose.local.yml  # 已废弃（仅旧版本地 DB），勿用
 ```
 
----
+## 架构
 
-## 一、首次配置（从零开始）
+**Pipeline 路由**：
 
-> 假设：Windows 本地开发。需要 [uv](https://docs.astral.sh/uv/) 和 [Docker Desktop](https://www.docker.com/products/docker-desktop/)（WSL2 后端，用于跑 PG/Redis 容器）。
-
-### 前置检查
-
-```powershell
-uv --version        # 应有输出，如 uv 0.x.x
-docker info         # 应显示 Server 信息（Docker Desktop 已启动）
+```text
+generate: retrieval → draft → refine → evaluate → [loop] → safety
+continue: retrieval → draft → safety
+rewrite:  refine → safety
+outline:  retrieval → draft → safety
 ```
 
-### 步骤 1：配置容器密钥（根目录 .env）
+**BYOK**：前端 `X-Provider-Config` 头上传分段凭证，后端 SSRF 校验 api_base，日志脱敏。
+**RAG**：retrieval_node 在 draft 前语义检索，注入 draft/refine 提示词。
 
-```powershell
-# 在项目根目录，首次创建容器密钥（强密码，.env 不入库）
-Copy-Item .env.example .env
-# 编辑 .env 设置 POSTGRES_PASSWORD / REDIS_PASSWORD（≥20 字符，缺失即启动失败）
-```
-
-> **安全**：容器密码必须来自根目录 `.env`，无默认弱密码；后端容器内 `DATABASE_URL`/`REDIS_URL` 由 compose 自动指向内部 `postgres`/`redis` 服务，无需手工配置（也不暴露到宿主端口）。
-
-### 步骤 2：配置后端环境（API Key）
-
-```powershell
-cd backend
-Copy-Item .env.example .env
-# 编辑 .env 填入真实 API Key（如 DEEPSEEK_API_KEY / DASHSCOPE_API_KEY）
-# DATABASE_URL / REDIS_URL 容器内由 compose 覆盖为内部服务地址，忽略本文件默认值
-```
-
-### 步骤 3：构建并启动全栈 compose
-
-```powershell
-# 在项目根目录。首次构建镜像 + 启动 5 服务（postgres / redis / backend / frontend / nginx）
-docker compose up -d --build
-
-# 验证（postgres/redis 应 healthy）
-docker compose ps
-```
-
-> 首次会自动拉取基础镜像并构建容器（网络慢可配置 Docker 镜像加速器，见常见问题）。数据持久化在 Docker 卷 `pg_data` / `redis_data`，删除容器不丢数据；端口仅 nginx 暴露 80/443，其余服务对宿主隐藏。
-
-### 步骤 4：初始化数据库（迁移）
-
-```powershell
-docker compose exec backend alembic upgrade head
-docker compose exec backend python scripts/check_migrations.py   # 校验单头 + 无未应用（失败退出非 0）
-```
-
-### 步骤 5：访问
-
-浏览器打开 **https://localhost**（nginx TLS 443 → 前端）→ 点击 ⚙ 配置 API Key → 开始写作。
-
-> 健康检查：`curl -k https://localhost/v1/health` 应返回 `{"status":"ok"}`。
-
-### 替代：本地进程模式（开发热重载）
-
-> 代码迭代用 compose 每次 rebuild 较慢；如需热重载可在 **compose 之外**起本地进程（仅代码热重载，DB 仍用 compose 栈）：
-```powershell
-cd backend  && uv sync && uv run uvicorn app.main:app --reload --port 8000   # 终端 1（需先本地配 DB 连接）
-cd frontend && npm install && npm run dev                                     # 终端 2
-```
-> 该模式要求本地能连到数据库（如把 compose 的 postgres/redis 端口映射到宿主或用远程 DB）。日常若只想"跑起来"，直接用上方步骤 3 的全栈即可。
-
----
-
-## 二、日常启动
-
-```powershell
-# 项目根目录，直接启/停全栈（已构建过则无需 --build）
-docker compose up -d          # 启动（含已存在的镜像）
-docker compose down           # 停止并删除容器（数据卷保留）
-docker compose down -v        # 连数据卷一起删（彻底重置，需重新迁移）
-```
-
-**看日志 / 保全**：
-```powershell
-docker compose logs -f backend    # 后端日志
-docker compose exec backend alembic upgrade head   # 代码更新后补迁移
-```
-
-**清理无用镜像/容器**：
-```powershell
-docker image prune               # 删悬空镜像
-docker container prune           # 删已停止容器
-```
-
----
-
-## 三、BYOK 配置指南
-
-### 快速配置（推荐新用户）
-
-1. 打开设置对话框
-2. 点击预设按钮（如"推荐：DeepSeek + Qwen + Claude"）
-3. 只需填写 API Key，api_base 和 model 已自动填充
-4. 点击"测试连接"验证
-5. 保存
-
-### 自定义配置
-
-每个阶段可指向不同的 provider：
-
-| 阶段 | 推荐模型 | 用途 |
-|------|---------|------|
-| Draft 草稿 | deepseek-v4-flash / gpt-4o-mini | 低成本生成初稿 |
-| Refine 精修 | qwen-max / gpt-4o | 中文编辑能力强 |
-| Evaluate 评估 | claude-sonnet-4-5 / gpt-4o | 推理稳定，T=0 |
-| Embedding | text-embedding-3-small / text-embedding-v4 | RAG 记忆检索 |
-
----
-
-## 四、AI 工具使用
-
-编辑器右侧提供 6 个 AI 工具：
-
-| 工具 | 说明 | Pipeline 路由 |
-|------|------|--------------|
-| 📋 生成总纲 | 为整部小说生成大纲结构 | outline（仅 draft + safety） |
-| ✨ 生成正文 | 根据总纲生成正文段落 | generate（完整 pipeline） |
-| ✍️ 续写 | 从当前末尾续写下文 | continue（仅 draft + safety） |
-| 📝 扩写 | 扩写选中或末尾段落 | rewrite（仅 refine + safety） |
-| 🔄 重写 | 重写当前段落 | rewrite（仅 refine + safety） |
-| 🧹 降AI | 降低 AI 检测率 | polish（仅 refine + safety） |
-
-**上下文注入**：AI 工具自动注入以下上下文，确保生成内容与小说主题一致：
-- **小说标题**：大纲生成时携带标题，不再"空穴来风"
-- **大纲内容**：生成正文和续写时自动附带已保存的大纲作为参考
-- **编辑器文本**：续写/扩写/重写使用当前章节末尾 3000 字作为上下文
-- **选中文字**：扩写/重写/降AI 针对选中内容而非全文
-
-**大纲应用流程**：点击"应用大纲"后自动执行：
-1. 大纲保存到文档 metadata
-2. 自动识别并创建章节（正则匹配 `第X章` / `1.` 格式）
-3. 自动提取角色、世界观、剧情事件（通过独立的 `extract` 任务）
-4. 清除 AI 面板状态，防止残留文本被误插入正文
-
----
-
-## 五、架构设计
-
-### 5.1 Pipeline 架构
-
-```
-用户输入 → task_type 路由
-  │
-  ├─ "generate": retrieval → draft → refine → evaluate → [loop] → safety
-  ├─ "continue": retrieval → draft → safety  （快速，~2秒出首字）
-  ├─ "rewrite":  refine → safety
-  └─ "outline":  retrieval → draft → safety
-```
-
-**真流式实现**：draft_node 和 refine_node 使用 `stream=True` 调用 LLM，每个 token 通过 `on_token` 回调放入 asyncio.Queue，`stream_pipeline` 实时 yield 给前端。前端 `useChat` 逐 token 更新 UI。
-
-**阶段级降级**：evaluate_node 失败时返回 `fallback_mode=True, score=0.5`，pipeline 继续到 safety_check 而非整体崩溃。
-
-**Prompt 上下文注入**：`buildPrompt()` 根据工具类型动态组装上下文（小说标题、大纲内容、章节文本、选中文字），`_extract_topic()` 在传给 LLM 前剥离内部路由标签 `[novel:N]` 和 `[task:TYPE]`。
-
-### 5.2 BYOK 三阶段独立凭证
-
-前端通过 `X-Provider-Config` 头部上传 `ProviderConfig { draft, refine, evaluate, embedding? }`，每个 StageConfig 各自携带 `api_base / api_key / model / extra_headers`。后端 SSRF 校验 api_base，key 在日志中脱敏。
-
-### 5.3 RAG 记忆检索
-
-四个记忆集合（章节/角色/世界观/剧情事件）均带 pgvector 向量列。retrieval_node 在 draft 前执行语义检索，结果注入 draft_node 和 refine_node 的系统提示词。
-
-### 5.4 多 Agent 系统
-
-| 模块 | 职责 |
-|------|------|
-| `agents/plotter.py` | 大纲生成 / 世界观构建 / 一致性检查 |
-| `agents/character.py` | 角色档案生成 |
-| `agents/editor.py` | 章节写作 / 精修 / 最终润色 |
-| `planner/orchestrator.py` | DAG 编排器，按拓扑序执行子任务 |
-| `eval/matrix.py` | 6 维并行评估（连贯性/角色一致性/文笔/情节/世界观/跨章节） |
-| `safety/` | 规则引擎 + LLM 内容安全审核 |
-
----
-
-## 六、API 端点
+## API 一览
 
 | 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/v1/chat` | 流式聊天（SSE），支持 task_type 路由 |
-| POST | `/v1/chat/test` | 连接测试，验证 API Key 和模型 |
+|---|---|---|
+| POST | `/v1/chat` | 流式聊天（SSE，含 task_type 路由） |
+| POST | `/v1/chat/test` | 连接测试 |
 | GET | `/v1/health` | 健康检查 |
-| CRUD | `/v1/documents/...` | 文档管理 |
-| CRUD | `/v1/documents/{id}/chapters/...` | 章节管理 |
-| CRUD | `/v1/documents/{id}/characters/...` | 角色管理 |
-| CRUD | `/v1/documents/{id}/world-settings/...` | 世界观管理 |
-| CRUD | `/v1/documents/{id}/plot-events/...` | 剧情事件管理 |
+| CRUD | `/v1/documents/...` / `chapters/` / `characters/` / `world-settings/` / `plot-events/` | 作品内容管理 |
 | POST | `/v1/documents/{id}/retrieve` | RAG 语义检索 |
-| GET | `/v1/documents/{id}/export?format=md\|txt\|epub` | **F3 作品导出**（Round 4，附件下载，Content-Disposition 文件名） |
-| GET | `/v1/stats/dashboard` | **F6 写作统计看板**（Round 4，近 30 天字数曲线/连续天数/今日达成） |
-| POST/GET/DELETE | `/v1/documents/{id}/knowledge-docs`（以合并实现为准，详见 `/docs`） | **F4 本地知识库**（Round 4，上传/列表/删除，RAG 检索合并） |
+| GET | `/v1/documents/{id}/export?format=md|txt|epub` | 作品导出 |
+| GET | `/v1/stats/dashboard` | 写作统计 |
+| CRUD | `/v1/documents/{id}/knowledge-docs` | 知识库 |
 
-> 除 `/v1/health` 外的受保护端点均需 `X-API-Key` 请求头（`API_KEYS` 白名单模式，见 `.env.example`）。
+> 除 `/v1/health` 外受保护端点均需 `X-API-Key`（`API_KEYS` 白名单，见 `.env.example`）。`API_KEYS` 未配置时返回 503 引导文案。
 
----
-
-## 七、验证清单
+## 验证清单
 
 | 项 | 期望 |
 |---|---|
-| `docker compose ps` | 5 容器均 running（postgres/redis healthy，frontend/backend/nginx up） |
+| `docker compose ps` | 5 容器 running，postgres/redis healthy |
 | `curl -k https://localhost/v1/health` | `{"status":"ok"}` |
-| 浏览器 https://localhost | 显示小说编辑器界面 |
-| 配置 BYOK → 测试连接 | 显示 ✅ 连接成功 |
-| 点击"续写" | ~1-2 秒后文字逐字出现，带闪烁光标 |
-| 选中文字 → 扩写 | 只处理选中内容 |
-| 评估阶段 Key 无效 | 提示"evaluate: API Key 无效"而非笼统错误 |
-| 点击"生成总纲" | 大纲内容与小说标题相关，不再是通用模板 |
-| 点击"应用大纲" | 大纲保存、章节创建、实体提取成功，AI 面板清空 |
-| 点击"生成正文" | AI 根据已保存大纲生成正文，而非凭空编写 |
-| 作品页 → 导出 md/txt/epub | 下载对应格式文件，文件名带作品标题（F3） |
-| 知识库上传参考资料 | 分块 + embedding 入库成功，列表中可见（F4） |
-| 统计看板 | 显示字数曲线 / 连续写作天数 / 今日目标（F6） |
-| AI 编剧对话 → 插入正文 | 多轮对话结果可一键插入编辑器（F1） |
+| 浏览器 https://localhost | 编辑器界面 |
+| 配置 BYOK → 测试连接 | ✅ 连接成功 |
+| 点击"续写" | ~1-2s 后文字逐字出现 |
 
----
+## 常见问题
 
-## 八、常见问题
+- **拉取镜像慢/失败**：配置 Docker 镜像加速器（Docker Desktop → Settings → Docker Engine 加 `registry-mirrors`，如 `docker.xuanyuan.me` / `docker.1ms.run`）。
+- **Redis 连接失败**：`docker compose ps` 确认容器 running，否则 `docker compose up -d`。
+- **迁移双头**：用 `check_migrations.py` / `alembic heads` 核对，分叉先合并链再升级。
+- **`litellm` 升级失败**：`litellm==1.90.7`（<1.91 硬约束，1.91+ 引入 Rust 组件）。
+- **重建虚拟环境**：`cd backend && rm -r .venv && uv sync --locked`。
 
-**Q: `docker compose` 拉取镜像失败？**
-A: 国内网络需配置 Docker 镜像加速器（Docker Desktop → Settings → Docker Engine 加 `registry-mirrors`）。
+## 开发约定
 
-**Q: 后端启动报 Redis 连接失败？**
-A: 确认容器在跑：`docker compose ps`。如容器已停，先 `docker compose up -d`。
-
-**Q: 续写还是白屏很久？**
-A: 检查 task_type 是否正确传递。续写应走 `continue` 路由（仅 draft + safety），不走完整 pipeline。
-
-**Q: 流式输出不实时？**
-A: 确认后端 `stream_pipeline` 使用 `on_token` 回调而非旧的 4 字符切块。检查浏览器 Network 面板的 SSE 连接是否正常。
-
-**Q: CORS 报错？**
-A: compose 模式后端容器内 CORS 已由 `docker-compose.yml` 覆盖（含 `https://localhost`）；本地进程模式需在 `backend/.env` 的 `CORS_ORIGINS` 加 `http://localhost:7421`。
-
-**Q: 评估超时？**
-A: 每个评估维度有 30 秒超时保护。超时的维度返回 0.5 分 fallback，不影响其他维度。
-
-**Q: 生成正文时 AI 不按大纲写？**
-A: 确认已先点击"应用大纲"保存大纲。生成正文时会自动从文档 metadata 读取大纲作为参考上下文。
-
-**Q: `litellm` 安装失败？**
-A: 确认 `pyproject.toml` 中 `litellm==1.90.7`（<1.91 硬约束仍满足）。1.91+ 引入 Rust 组件。
-
-**Q: 怎么重建虚拟环境？**
-A: `cd backend && rm -r .venv && uv sync --locked`。
-
----
-
-## 九、贡献指南
-
-- **AGENTS.md**：AI 协作原则见 [AGENTS.md](AGENTS.md)
-- **提交规范**：Conventional Commits（`feat:` / `fix:` / `refactor:` / `docs:`）
-- **测试要求**：新增功能必须带测试，覆盖率 ≥ 80%
-- **关键约束**：不换框架、LiteLLM 是唯一 LLM 入口、`litellm==1.90.7`（<1.91 硬约束仍满足） 硬性 pin、Python 依赖用 uv 管理；直接依赖全部 `==` 精确 pin，版本以 `backend/uv.lock` 为准
-
----
-
-## 十、服务器部署
-
-见 [deploy/README.md](deploy/README.md)（仅腾讯云服务器，本地开发不涉及）。
+- **提交**：Conventional Commits（`feat:` / `fix:` / `docs:` / `chore:` 等）
+- **测试**：新增功能必带测试，覆盖率 ≥ 80%
+- **依赖**：不换框架；LiteLLM 是唯一 LLM 入口且 `==` 精确 pin；Python 依赖用 uv，版本以 `backend/uv.lock` 为准
+- **AI 协作**：[AGENTS.md](AGENTS.md)

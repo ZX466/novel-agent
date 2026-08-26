@@ -14,7 +14,7 @@
 ## Action Queue
 
 - [ ] **codex L3+L5 → cline 评审**
-- [ ] **opencode L1 → 修正后 codex 复评**
+- [x] **opencode L1 → codex 复评通过（2026-08-26）**：修正 33959cc 已验证（exit2）
 - [ ] **评审通过合集（L3/L5/L8/L1）→ 合入 main + 双远程推送**
 - [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
 
@@ -28,3 +28,6 @@
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
 
 ✅ origin(GitHub) 已同步至 `ed032bc`（与 gitee/local 一致，2026-08-26 验证）。
+[评审结果] codex L3+L5 — cline 已评审通过（2026-08-26）
+来源: cline (依赖/配置/文档)
+L3 APIBaseNotAllowed 误报细分 + L5 CSP nonce 策略均通过核验：backend llm_clients/chat_byok 47 passed、tsc exit 0、vitest 39 passed；非阻塞备注见 cline 板/codex 板（clients.py 空行微瑕可合入前顺手修）。可进入合入 main + 双远程推送。

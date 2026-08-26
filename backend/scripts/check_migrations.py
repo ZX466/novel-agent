@@ -15,7 +15,8 @@ Exit codes:
     0  ok (single head, nothing unapplied)
     1  check failed (zero/multiple heads, or unapplied revisions)
     2  configuration error (DATABASE_URL missing, unreadable chain,
-       database unreachable)
+       database unreachable, or the DB records a revision that is not
+       in the local chain)
 
 Usage:
     cd backend && uv run python scripts/check_migrations.py
@@ -31,6 +32,7 @@ from pathlib import Path
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
+from alembic.util import CommandError
 from dotenv import load_dotenv
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
@@ -40,6 +42,10 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 EXIT_OK = 0
 EXIT_CHECK_FAILED = 1
 EXIT_CONFIG_ERROR = 2
+
+
+class UnknownRevisionError(Exception):
+    """The DB records a revision missing from the local migration chain."""
 
 
 def load_database_url(root: Path = BACKEND_ROOT) -> str | None:
@@ -79,11 +85,26 @@ async def fetch_current_revision(
 
 
 def _collect_ancestry(script: ScriptDirectory, revision_id: str) -> set[str]:
-    """All revisions reachable from `revision_id` via down_revision links."""
+    """All revisions reachable from `revision_id` via down_revision links.
+
+    Raises UnknownRevisionError when `revision_id` (i.e. a revision recorded
+    in the DB's alembic_version) does not exist in the local chain — that is
+    a deployment/configuration mismatch, not a failed health check.
+    """
     ancestry: set[str] = set()
     stack = [revision_id]
     while stack:
-        rev = script.get_revision(stack.pop())
+        rev_id = stack.pop()
+        try:
+            rev = script.get_revision(rev_id)
+        except CommandError as exc:
+            raise UnknownRevisionError(
+                f"revision {rev_id!r} is recorded in the database but not "
+                "present in the local alembic/versions chain — the DB was "
+                "migrated by different code. Align the deployed code with "
+                "the database (or restore the missing migration file) "
+                "before running migrations."
+            ) from exc
         if rev is None or rev.revision in ancestry:
             continue
         ancestry.add(rev.revision)
@@ -98,7 +119,11 @@ def _collect_ancestry(script: ScriptDirectory, revision_id: str) -> set[str]:
 def collect_unapplied(
     script: ScriptDirectory, current: str | tuple[str, ...] | None
 ) -> list[str]:
-    """Revisions present in the chain but not reachable from `current`."""
+    """Revisions present in the chain but not reachable from `current`.
+
+    Raises UnknownRevisionError for a DB revision missing from the local
+    chain (configuration error -> exit code 2).
+    """
     targets = [current] if isinstance(current, str) else list(current or [])
     applied: set[str] = set()
     for target in targets:
@@ -147,7 +172,11 @@ def main(root: Path = BACKEND_ROOT) -> int:
         )
         return EXIT_CONFIG_ERROR
 
-    unapplied = collect_unapplied(script, current)
+    try:
+        unapplied = collect_unapplied(script, current)
+    except UnknownRevisionError as exc:
+        print(f"[check-migrations] ERROR: {exc}", file=sys.stderr)
+        return EXIT_CONFIG_ERROR
     if unapplied:
         current_desc = ", ".join(targets) if (targets := _as_tuple(current)) else "(empty)"
         print(

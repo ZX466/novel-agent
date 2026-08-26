@@ -17,6 +17,7 @@ from scripts.check_migrations import (
     EXIT_CHECK_FAILED,
     EXIT_CONFIG_ERROR,
     EXIT_OK,
+    UnknownRevisionError,
     build_script_directory,
     collect_unapplied,
     main,
@@ -93,6 +94,32 @@ def test_unreadable_chain_is_config_error(tmp_path, monkeypatch):
     )
     # tmp_path/alembic does not exist -> ScriptDirectory raises.
     assert main(tmp_path) == EXIT_CONFIG_ERROR
+
+
+def test_unknown_db_revision_is_config_error(monkeypatch, capsys):
+    """DB stamped with a revision absent from the local chain -> clean exit 2
+    with an explanatory message (no uncaught CommandError crash)."""
+    monkeypatch.setattr(
+        "scripts.check_migrations.load_database_url", lambda root: "postgresql+asyncpg://stub"
+    )
+
+    async def fake_fetch(url: str):
+        return "deadbeefcafe"  # not in the real chain
+
+    monkeypatch.setattr(
+        "scripts.check_migrations.fetch_current_revision", fake_fetch
+    )
+    exit_code = main()
+    assert exit_code == EXIT_CONFIG_ERROR
+    err = capsys.readouterr().err
+    assert "deadbeefcafe" in err
+    assert "not present in the local alembic/versions chain" in err
+
+
+def test_collect_unapplied_raises_on_unknown_revision():
+    script = build_script_directory()
+    with pytest.raises(UnknownRevisionError):
+        collect_unapplied(script, "deadbeefcafe")
 
 
 def test_collect_unapplied_walks_merge_chain():

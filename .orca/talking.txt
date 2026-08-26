@@ -26,3 +26,5 @@
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
+
+⚠️ 待补推 origin(GitHub)：main `3fb0618` + opencode `c5b72f4` + cline `bb84b12` + codex `d51acbb` 已在 gitee；GitHub 连接持续超时/重置，待网络恢复后补推（gitee 已同步）。

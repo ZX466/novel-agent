@@ -148,6 +148,7 @@ uv sync            # 创建 .venv 虚拟环境 + 按 pyproject.toml 安装全部
 ```powershell
 cd backend
 uv run alembic upgrade head
+uv run python scripts/check_migrations.py   # 校验：单头 + 无未应用迁移（失败退出非 0）
 ```
 
 > `uv run` 会在虚拟环境中执行命令，无需手动 activate。

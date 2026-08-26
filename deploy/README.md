@@ -35,10 +35,8 @@ docker compose logs -f nginx
 docker compose exec postgres psql -U postgres -d project11 -c "CREATE EXTENSION IF NOT EXISTS vector;"
 docker compose exec backend alembic upgrade head
 
-# 6. 迁移链校验（R7-3 生产就绪）：必须只显示一个 head，且为最新迁移
-docker compose exec backend alembic heads   # 必须只有一行输出：c0d1e2f3a4b50 (head)
-# ⚠️ 若输出两个 head（如 1a2b3c4d5e6f 与 f6a7b8c9d0e1 并存），说明存在分叉迁移，
-#    生产升级会因 "Multiple head revisions" 失败——这是 P0，须先合并迁移链再继续。
+# 6. 迁移前置校验（L1 自动化）：单头 + 无未应用迁移（任一问题退出非 0，部署中止）
+docker compose exec backend python scripts/check_migrations.py
 
 # 7. 数据回填（R7-3 生产就绪）：为已有 documents/novels 写入 owner_key_hash
 #    （幂等，可重复执行；仅更新 owner_key_hash 为空的存量行，不覆盖已回填数据）
@@ -96,4 +94,5 @@ curl http://localhost/v1/health   # 应返回 {"status":"ok"}
 - **连接测试失败**：确认 nginx 代理了 `/v1/chat/test` 端点（与 `/v1/chat` 相同的 location 即可）。
 - **CORS 报错**：检查 backend `.env` 的 `CORS_ORIGINS` 是否包含前端实际访问的 origin。
 - **Alembic 报错找不到 extension**：先 `CREATE EXTENSION vector;` 再 `alembic upgrade head`。
+- **迁移校验失败（步骤 6 退出非 0）**：按脚本输出处理——双头需先合并迁移分支（`alembic merge`）；有未应用迁移则重跑 `docker compose exec backend alembic upgrade head` 后再校验。
 - **评估超时**：每个评估维度有 30 秒超时。如需调整，修改 `backend/app/eval/matrix.py` 中的 `_EVAL_DIM_TIMEOUT`。

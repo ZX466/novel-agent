@@ -31,7 +31,14 @@ async def require_api_key(
         )
     if not settings.api_keys:
         logger.error("X-API-Key authentication is not configured")
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="API authentication is not configured")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "API authentication is not configured: 未配置 API_KEYS，"
+                "请在 backend/.env 中设置 API_KEYS（受保护端点密钥白名单，JSON 数组格式）"
+                "并重启服务，部署配置方式参见 deploy/README.md"
+            ),
+        )
     if not any(secrets.compare_digest(key, allowed) for allowed in settings.api_keys):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
     return key

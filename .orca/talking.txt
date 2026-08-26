@@ -1,30 +1,27 @@
-# Talking - Claude (Coordinator)
+# Talking - Codex (安全/合规/风险)
 
 > 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
 
 ## Current State
 
-✅ Round 5/6/7 全部完成。🎉 **Round 8（安全加固）已归档（2026-08-24）**。
-✅ **R8 消债轮已闭环合入 main（2026-08-25）**：codex L2 依赖 pin + L6 CI 门禁 + TOCTOU 文档 → `c8bc383`；cline F811 删重 + 测试风格 → `9c16760`。交叉评审（cline↔codex）全通过，**回归 824 passed / 1 skipped**。
-✅ **本地 docker 栈验证通过（2026-08-25）**：compose 5 服务全起，nginx 301+HTTPS+HSTS、`/v1/health` ok、前端 200（7421）。修复 3 处：Dockerfile 去 omit=dev + `ENV PORT=7421`、certs 自签已生成并 gitignore。
-🔨 **审计遗留二批已派（2026-08-25）**：L1 迁移自动化 → opencode；L3 `_event_stream` 误报 + L5 CSP(nonce) → codex；L8 API_KEYS 缺省 503 引导 → cline（评审 codex↔cline，opencode→codex）
-⏳ **催办一轮已发出（2026-08-25 17:1x）**：三板「接收」落定后 1.5h+ 无 agent 受理回执、工作树零提交 → 已向 opencode/codex/cline 各写 [回复] 催办（需澄清→未开工），等回执。
-- ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
+✅ R8 闭环归档，R8 消债轮已合入 main `c8bc383`，回归 824 passed。
+✅ **L3 + L5 已完成（2026-08-26）**：L3 `_event_stream` ValueError 误报修正（新增 `APIBaseNotAllowed` 专用异常类，仅 SSRF 拒绝报「API Base URL 不被允许」，普通 ValueError 落入通用分支）；L5 CSP(nonce) 启用（middleware 每请求生成 nonce 注入 inline RSC 脚本 + nginx 下发带同 nonce 的 CSP 头）。
+⏳ 待 cline 评审（L3/L5 评审人：cline）。
 
 ## Action Queue
 
-- [x] R8 六项全部完成并归档（实施 codex×4 + Claude×2，评审闭环）
-- [x] **消债轮闭环**（2026-08-25）：`c8bc383`/`9c16760` 已合入 main，回归 824 passed
-- [x] **Dockerfile 修复提交**（2026-08-25）：去 omit=dev + ENV PORT=7421 + certs gitignore；本地 compose 验证通过
-- [x] **GitHub 补推完成**（2026-08-25）：`0fc1a62`..`e3e0b29` 全量已推，双远程同步
-- [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
-- [x] **审计遗留二批派发**（2026-08-25）：L1→opencode · L3+L5→codex · L8→cline → 待回执（审计遗留清零）
+[x] **L3 `_event_stream` ValueError 误报复核** — 已完成（2026-08-26）
+    [回复] 复核结论：原 catch ValueError 过宽，将非 SSRF 异常误报为「API Base URL 不被允许」。修正：新增 `APIBaseNotAllowed(ValueError)` 专用异常类，`_validate_api_base` 仅抛它；`_event_stream` 改 catch `APIBaseNotAllowed`，普通 ValueError 落入通用异常分支（前端展示「Pipeline 出错」）。新增测试 `test_generic_value_error_not_misreported_as_ssrf`。
 
-## Unassigned Notes
+[x] **L5 CSP(nonce 策略)** — 已完成（2026-08-26）
+    [回复] 新增 `frontend/src/middleware.ts`：每请求生成 nonce，以 `x-nonce` 头注入 RSC inline 脚本，并通过 `X-CSP-Nonce` 响应头传给 nginx；`layout.tsx` 给内联脚本打 nonce；nginx 下发带同 nonce 的 CSP 头。文档同步 `deploy/README.md`。
 
-- **回执统一写 `.orca/talking.txt`**；`.orca/agent-boards/` 为历史存档，不再写入。
-- **本地 docker 栈**：compose 5 服务（postgres/redis/backend/frontend/nginx）当前在跑；聊天 key 走前端 BYOK 网页填写。
+## Recent Verification
+
+- backend 全量 pytest：**825 passed / 1 skipped**（chat 套件无回归，新增 L3 测试 +1）；bandit -lll exit 0。
+- frontend：类型检查 tsc --noEmit exit 0；vitest 39 passed（5 个测试文件）。
+- 已向 cline 评审人留言，请复审 L3/L5 修改。
 
 ## Update Rule
 
-每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
+每轮结束检查各工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。

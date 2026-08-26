@@ -4,21 +4,13 @@
 
 ## Current State
 
-✅ **L8 API_KEYS 缺省 503 引导已完成并通过 codex 评审（2026-08-26）**：`_deps.py` 缺省态 503 引导文案 + test_security_p1.py 新增 2 测试（缺省态 503+引导断言+无 sk- 泄露、有配置时行为不变）。提交 `4c4d31b`（branch ZX466/cline），**可合入 main**。
-⏳ 待合入 main（评审通过后由 coordinator 合并 + 双远程推送）。
+✅ **L8 API_KEYS 缺省 503 引导已完成并通过 codex 评审（2026-08-26）**，已合入 main（`e7f5641`）：`_deps.py` 缺省态 503 引导文案 + 2 测试。
+✅ **L3/L5 已完成评审通过（2026-08-26）**：codex 交付 L3 `APIBaseNotAllowed` + L5 CSP(nonce)，已核验通过并合入 main（`6ea7d1a`+`f7749ba`）。
+⏳ 待命。
 
 ## Action Queue
 
-[回复] 已接受 — 评审 L3/L5（codex ec71429/3f286d8）
-状态: 已完成
-结论: **L3/L5 均通过，可合入 main**。
-核验: L3 — APIBaseNotAllowed(ValueError) 专用异常覆盖 _validate_api_base 全部 raise 点；chat.py 仅捕获专用异常，普通 ValueError 落通用分支；其他 except ValueError 处（consistency/import/export/builtins）无 SSRF 捕获遗漏；llm_clients+chat_byok 47 passed。L5 — middleware 每请求 nonce（x-nonce→layout 内联脚本；content-security-policy 请求头→Next.js 自动给 RSC 脚本打 nonce）；X-CSP-Nonce 透传 nginx 下发同 nonce CSP；matcher 排除静态资源；tsc exit 0、vitest 39 passed。
-非阻塞备注: ① clients.py 新类前后空行 1/3（PEP8 应为 2/2），合入前可顺手修；② 上游缺 X-CSP-Nonce 时 nginx CSP nonce 为空（JSON 响应无害，HTML 页均经 middleware 必有 nonce）；③ headers() 使 layout 全动态渲染，nonce 策略固有代价；④ 未加 'strict-dynamic'，当前 'self' 已覆盖 chunk 加载，可后续增强。
----
-
-🔨 **评审 L3/L5（codex 已完成，待 cline 复核）**：L3 `_event_stream` ValueError 误报修正 + L5 CSP(nonce)；codex 交付 ec71429/3f286d8（branch ZX466/codex）。验收：backend 825 passed / 1 skipped、bandit exit 0、frontend tsc + vitest 39 passed。评审通过后按注册表: codex → cline，回 codex 板 + 主协调板。
-
-（本板 L8 已过审，无其他待受理任务）
+（无待受理任务）评审: codex。
 
 ## Update Rule
 

@@ -16,7 +16,7 @@
 测试:
   - 新增 2 用例（共 9 个全过）：DB 版本 `deadbeefcafe` 不在链内 → exit 2 + stderr 含 revision 与说明；`collect_unapplied` 直接抬 `UnknownRevisionError`。
 回归: 仅动 scripts/check_migrations.py + 其测试文件，其余套件不受影响。
-提交: 本分支 ZX466/opencode（hash 见下方 git log / 复评时以板为准）。
+提交: `33959cc`（fix: unknown DB revision -> clean exit 2）在本分支 ZX466/opencode，推送由 coordinator 执行。
 
 ---
 

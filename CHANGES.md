@@ -31,7 +31,7 @@
 ### 结构收敛（2026-08-19）
 
 - **仅保留 `main` 分支**（本地 + gitee + github）；5 个 `ZX466/*` 分支与工作树删除
-- **各 Agent 记忆存档**：`.orca/agent-memory-pi.md`、`.orca/agent-memory-codex.md`、`AGENTS.md`（opencode）、`.orca/agent-boards/*-talking.txt`
+- **各 Agent 记忆存档**：`.orca/agent-memory-pi.md`、`.orca/agent-memory-codex.md`、`AGENTS.md`（opencode）
 - 后续协作直接在 main 上按能力域分工（见 `.orca/agent-registry.md`）
 
 ### 2026-08-17：Round 4（F1-F6 功能轮）
@@ -159,4 +159,4 @@
 
 ## 2026-07-20：代码整理与文档同步
 
-详见 [CHANGES-2026-07-20.md](CHANGES-2026-07-20.md)（已归档）。
+详见 [CHANGES-2026-07-20.md](CHANGES-2026-07-20.md)（已归档，历史文件未保留在仓）。

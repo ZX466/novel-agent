@@ -34,7 +34,7 @@
 ## Agent 工作树映射（2026-08-19 起：已收敛）
 
 > **分支与工作树已全部收敛**：仅保留 `main` 分支（本地 + gitee + github）。原 5 个 `ZX466/*` 分支与工作树已删除（工作树物理目录待关闭会话后清理）。
-> 各 Agent 的记忆已存档于主工作树：`.orca/agent-memory-pi.md`、`.orca/agent-memory-codex.md`、`AGENTS.md`（opencode 会话记忆）、`.orca/agent-boards/*-talking.txt`（各板终态）。
+> 各 Agent 的记忆已存档于主工作树：`.orca/agent-memory-pi.md`、`.orca/agent-memory-codex.md`、`AGENTS.md`（opencode 会话记忆）。
 > 后续协作直接在 `main` 上按能力域分工，通过主工作树 `.orca/talking.txt` 留言流转。
 
 | Agent | 能力域 | 协作位置 | 评审 Agent |

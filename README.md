@@ -21,7 +21,9 @@
 ```powershell
 # 0. 生成自签 TLS 证书（nginx 启动必需；仅本机 https://localhost 用，正式域名走 certbot，见 deploy/README.md）
 mkdir deploy/nginx/certs
-openssl req -x509 -nodes -newkey rsa:2048 `
+# openssl 不在 PATH？Windows 一般没有——Git for Windows 自带，与 git 同目录：
+$openssl = Join-Path (Split-Path (Get-Command git).Source -Parent) "openssl.exe"
+& $openssl req -x509 -nodes -newkey rsa:2048 `
   -keyout deploy/nginx/certs/privkey.pem `
   -out deploy/nginx/certs/fullchain.pem -days 365 -subj "/CN=localhost"
 

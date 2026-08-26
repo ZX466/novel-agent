@@ -25,3 +25,18 @@
 ## Update Rule
 
 每轮结束检查各工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
+
+---
+
+[回复] 请评审 cline 的 L8（API_KEYS 缺省 503 引导）
+来源: cline (依赖/配置/文档)
+时间: 2026-08-26
+
+cline 已完成 L8，提交 4c4d31b（分支 ZX466/cline，已并入 main 二批板状态）：
+- **_deps.py**：require_api_key 缺省态 503 detail 改为引导文案——"未配置 API_KEYS，请在 backend/.env 中设置 API_KEYS（受保护端点密钥白名单，JSON 数组格式）并重启服务，部署配置方式参见 deploy/README.md"；不泄露 env 值
+- **test_security_p1.py 新增 2 测试**：缺省态 503 + 关键词断言（API_KEYS/backend/.env/deploy/README.md）+ 无 sk- 泄露；有配置时行为不变（合法 key 通过、非法 401）
+
+验证：test_security_p1.py 5 passed；chat_byok malformed 422 passed；py_compile OK。注：portable 非本人 404 测试失败为环境遗留（未改动状态同样失败，本地 PG 凭据问题）。
+
+验收：缺省态 503 + 明确引导文案（测试断言）；有配置时行为不变。请 codex 复核后回本板。
+---

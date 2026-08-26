@@ -86,7 +86,7 @@ curl http://localhost/v1/health   # 应返回 {"status":"ok"}
        -out deploy/nginx/certs/fullchain.pem -days 365 -subj "/CN=your-server-ip"
      ```
 2. nginx 已做 80→443 跳转 + HSTS/Security 头（XFO/Content-Type/Referrer）。443 映射（`443:443`）此前是死端口，现已对齐监听。
-3. **CSP 未强制**：Next.js App Router 内联 RSC 引导脚本，直接加 CSP 会打爆渲染。需用 Next.js middleware nonce 策略后再配（R8 后续项，已在代码注释标注）。
+3. **CSP 已启用（nonce 策略）**：`frontend/src/middleware.ts` 每请求生成 nonce（透传 `X-CSP-Nonce` 头），Next.js 用它给内联 RSC 引导脚本打 nonce；nginx 用 `$upstream_http_x_csp_nonce` 下发带同一 nonce 的 `Content-Security-Policy` 头（见 `deploy/nginx/app.conf`）。
 
 > 本地开发不跑 compose，不受影响。
 

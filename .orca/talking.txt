@@ -13,7 +13,7 @@
 
 ## Action Queue
 
-- [ ] **评审流转**：L3/L5→cline 评审；L1→codex 评审。评审通过后合入 main 并双远程推送。
+- [ ] **评审流转**：L3/L5→cline 评审；L1→codex评审不通过（发现 bug：未知 DB 版本导致 check_migrations 崩溃为 exit1 而非 exit2，已回 opencode 板待修正）；L8→codex 评审中。评审通过后合入 main 并双远程推送。
 - [ ] **L8 实施（cline）**→ 完成后 codex 评审。
 - [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
 

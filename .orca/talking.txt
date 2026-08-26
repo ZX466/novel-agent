@@ -9,7 +9,9 @@
 
 ## Action Queue
 
-（无待受理任务）评审: codex。
+🔨 **评审 L3/L5（codex 已完成，待 cline 复核）**：L3 `_event_stream` ValueError 误报修正 + L5 CSP(nonce)；codex 交付 ec71429/3f286d8（branch ZX466/codex）。验收：backend 825 passed / 1 skipped、bandit exit 0、frontend tsc + vitest 39 passed。评审通过后按注册表: codex → cline，回 codex 板 + 主协调板。
+
+（本板 L8 已过审，无其他待受理任务）
 
 ## Update Rule
 

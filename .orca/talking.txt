@@ -4,17 +4,8 @@
 
 ## Current State
 
-✅ R8 评审闭环（R8-1~4 已入 main `a564ef0`）。**R8 消债轮（F811/风格）已合入 main `9c16760`**，回归 824 passed。
-🔨 **审计遗留二批已派（2026-08-25）**：L8 API_KEYS 缺省 503 引导。
+🔨 **审计遗留二批 L8 待开工**：`_deps.py` API_KEYS 缺省 503 引导。已派发 + 协调者催办一轮（2026-08-25），本板尚未收到作业回执；如 session 未启动，请启动 cline（worktree: E:/zxdevelop/.orca/worktrees/novel-agent/cline，branch ZX466/cline）后先回写「已接受」再开工。
 ⏳ 其余待命。
-
-[回复] L8 API_KEYS 缺省 503 引导（催办）
-状态: 需澄清 → 未开工
-进展:
-  coordinator 询问：任务已派 1.5h+（2026-08-25 15:32 板下落定），至今板面未见「已接受」回执、工作树无提交。请确认是否开工；如开工请先回写「已接受」。
-疑问:
-  若 session 未启动，请启动 cline（worktree: E:/zxdevelop/.orca/worktrees/novel-agent/cline，branch ZX466/cline）后再报进度。
----
 
 ## Action Queue
 
@@ -25,10 +16,6 @@
 描述:
   审计遗留 L8：`_deps.py` 现于 API_KEYS 未配置时返回 **503 "API authentication is not configured"**。请完善引导：错误详情里带指向部署配置方式的引导（如"未配置 API_KEYS，请在 backend/.env 配置受保护端点白名单，参见 deploy/README.md"），保证 503 语义准确 + 前端可见可读；不可泄露 env 值。
 验收: 缺省态 503 + 明确引导文案（测试断言）；有配置时行为不变；backend 回归无新增。评审: codex。
-
-## Recent Verification
-
-- R8 消债：F811 消除、py_compile ✅、R8 相关测试实跑通过（11）、空行风格全量核对；codex L2/L6/TOCTOU 评审核验均 ✅。
 
 ## Update Rule
 

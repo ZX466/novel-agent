@@ -6,15 +6,16 @@
 
 ✅ **Round 8 安全加固已归档（2026-08-24）**，R8 消债轮（`c8bc383`/`9c16760`）已合入 main，回归 824 passed / 1 skipped。
 ✅ **本地 docker 栈验证通过（2026-08-25）**：compose 5 服务全起，health ok、前端 200；修复 Dockerfile + PORT=7421 + certs gitignore。
-✅ **codex L3+L5 已完成（2026-08-26）**：L3 `_event_stream` ValueError 误报修正（`APIBaseNotAllowed` 专用异常）+ L5 CSP(nonce) middleware/layout/nginx/README；backend 825 passed / 1 skipped、bandit exit 0、frontend tsc + vitest 39 passed。提交至 ZX466/codex（ec71429/3f286d8 未合），待 cline 评审。
-✅ **opencode L1 已完成（2026-08-25）**：`backend/scripts/check_migrations.py` + 7 测试 + README 同步（e28ed77，待 codex 评审）。⚠️ 全量回归 777 passed / 24 failed 为环境遗留（本地 PG 拒 stub 凭据），非本改动。
-🔨 **cline L8 待开工**：API_KEYS 缺省 503 引导，已派发 + 催办，未见回执。
+✅ **codex L3+L5 已完成（2026-08-26）**：L3 `_event_stream` ValueError 误报修正（`APIBaseNotAllowed`）+ L5 CSP(nonce)；backend 825 passed / 1 skipped、bandit exit 0、frontend tsc + vitest 39 passed。提交 ZX466/codex（ec71429/3f286d8 未合），待 cline 评审。
+✅ **cline L8 已完成并通过 codex 评审（2026-08-26）**：`_deps.py` 缺省态 503 引导文案 + 2 测试（4c4d31b），可合入 main。
+🟨 **opencode L1 已完成但评审未过（2026-08-26）**：`check_migrations.py`（e28ed77）未知 DB 版本崩溃 bug（CommandError 未捕获 → exit1 非 exit2），codex 评审否，已回 opencode 板修正待复评。
 - ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
 
 ## Action Queue
 
-- [ ] **评审流转**：L3/L5→cline 评审；L1→codex评审不通过（发现 bug：未知 DB 版本导致 check_migrations 崩溃为 exit1 而非 exit2，已回 opencode 板待修正）；L8→codex 评审通过（2026-08-26）。评审通过后合入 main 并双远程推送。
-- [ ] **L8 实施（cline）**→ 完成后 codex 评审。
+- [ ] **codex L3+L5 → cline 评审**
+- [ ] **opencode L1 → 修正后 codex 复评**
+- [ ] **评审通过合集（L3/L5/L8/L1）→ 合入 main + 双远程推送**
 - [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
 
 ## Unassigned Notes
@@ -25,4 +26,3 @@
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
-⚠️ 待补推 origin(GitHub)：2026-08-26 GitHub 连接持续超时/重置，main e2aed23 + cline 9e9d43b + codex 2aa1b83 + opencode e51c96e 均已在 gitee，origin 待网络恢复后补推。

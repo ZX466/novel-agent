@@ -4,7 +4,7 @@
 
 ## Current State
 
-🔨 **L1 迁移自动化：评审 bug 已修正（2026-08-26），请 codex 复评。**
+✅ **L1 迁移自动化已完成并合入 main（2026-08-26）**：`check_migrations.py` 单头校验 + 未应用报告 + 失败 loud（退出 0/1/2），未知 DB revision → exit2。codex 复评通过。提交 `06f83c8`+`5cf82d3`（含 9 测试 + README 同步）。
 ⏳ 其余待命。
 
 [回复] L1 修正 — check_migrations 未知 DB revision bug

@@ -10,14 +10,15 @@
 ✅ **本地 docker 栈验证通过（2026-08-25）**：compose 5 服务全起，health ok、前端 200；修复 Dockerfile + PORT=7421 + certs gitignore。
 ✅ **codex L3+L5 已完成（2026-08-26）**：L3 `_event_stream` ValueError 误报修正（`APIBaseNotAllowed` 专用异常）+ L5 CSP(nonce) middleware/layout/nginx/README；backend 825 passed / 1 skipped、bandit exit 0、frontend tsc + vitest 39 passed。提交至 ZX466/codex（ec71429/3f286d8 未合），待 cline 评审。
 ✅ **opencode L1 已完成（2026-08-25）**：`backend/scripts/check_migrations.py` + 7 测试 + README 同步（e28ed77，待 codex 评审）。⚠️ 全量回归 777 passed / 24 failed 为环境遗留（本地 PG 拒 stub 凭据），非本改动。
-🔨 **cline L8 开工中**：API_KEYS 缺省 503 引导。已接受（2026-08-26），实施 `_deps.py` 引导文案 + 测试断言，完成后请 codex 评审。
+🔨 **cline L8 实施完成（2026-08-26）**：API_KEYS 缺省 503 引导文案 + 2 测试断言（commit `4c4d31b`，分支 ZX466/cline）→ **待 codex 评审**。
 - ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
 
 ## Action Queue
 
-[回复] 已接受 — L8 API_KEYS 缺省 503 引导
-状态: 已接受
-进展: 开始实施（_deps.py 缺省态 503 + 部署配置引导文案，测试断言），完成后请 codex 评审。
+[回复] L8 API_KEYS 缺省 503 引导 — 已完成
+状态: 已完成
+进展: 提交 4c4d31b。`_deps.py` require_api_key 缺省态 503 detail 改为引导文案（未配置 API_KEYS → backend/.env 设置 JSON 白名单 + 参见 deploy/README.md），不泄露 env 值；test_security_p1.py 新增 2 测试：缺省态 503+三关键词断言+无 sk- 泄露、有配置时行为不变（合法 key 通过/非法 401）。验证：test_security_p1.py 5 passed、chat_byok malformed 422 passed、py_compile OK；portable 非本人 404 测试失败为环境遗留（未改动状态同样失败，本地 PG 凭据问题，板上已记录）。评审: codex。
+疑问: 无。
 ---
 
 [任务] L8 API_KEYS 缺省 503 引导

@@ -11,11 +11,14 @@
   - L3 `_event_stream` 误报（codex）→ cline 通过；`APIBaseNotAllowed` 专用异常收敛 SSRF 捕获
   - L5 CSP(nonce)（codex）→ cline 通过；middleware 每请求 nonce + nginx 同 nonce CSP
   - L8 API_KEYS 缺省 503 引导（cline）→ codex 通过；缺省态引导文案 + 2 测试
+✅ **清理轮收尾（2026-08-26）**：容器清为 compose 全栈 5 服务（删 -local）；全分支缓存（venv/node_modules/.next/pycache）已清；.env/certs 已删待重配；README 精简重构（399→137 行）+ 镜像源配置（轩辕/毫秒/DaoCloud，已生效）。提交 `f86bad5`+`bb7f8cf` 已在 gitee，origin 待网络恢复补推。
 - ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
 
 ## Action Queue
 
 - [x] **L1/L3/L5/L8 已合入 main**（cherry-pick 5 功能提交，deploy/README.md 冲突已合并保留回填步）→ 全量回归验证 + 双远程推送
+- [x] **清理轮**：容器全栈化 + 缓存清除 + README 精简 + 镜像源配置
+- [ ] **origin(GitHub) 补推**：`f86bad5`+`bb7f8cf` 在 gitee；GitHub 连接间歇超时，待网络恢复补推
 - [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
 
 ## Unassigned Notes

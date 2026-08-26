@@ -92,6 +92,9 @@ desktop.ini
 # --- Docker (volumes are server-side, but ignore local overrides) ---
 docker-compose.override.yml
 
+# --- Local runtime TLS certs (generated locally for docker compose HTTPS; never commit) ---
+deploy/nginx/certs/
+
 # --- Logs ---
 logs/
 *.log
@@ -123,3 +126,5 @@ temp
 /.*/
 !/.orca/
 !/.orca/**
+!/.github/
+!/.github/**

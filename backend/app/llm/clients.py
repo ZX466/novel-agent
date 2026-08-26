@@ -56,6 +56,13 @@ def _validate_api_base(url: str) -> None:
     Defends against SSRF: a malicious user could otherwise point api_base
     at cloud metadata endpoints (169.254.169.254) or internal services
     to exfiltrate credentials or scan the network.
+    
+    TOCTOU 说明 (R8 审计): 此处校验自行解析 DNS，随后 litellm/httpx 发起请求时会
+    再次独立解析域名，校验与请求之间存在 DNS rebinding 竞态窗口，理论可绕过 IP 校验
+    （校验时解析为公网 IP，请求时重绑到内网）。因调用链经 litellm.acompletion（内部
+    transport 不对外暴露），transport 层 pin 主机名需侵入 litellm 内部，脆弱且收益低；
+    攻击者还需自控域名并精确把握微秒级窗口。结论：仅文档化，残余风险可接受。
+    推荐未来加固：在反代/网关层做 egress 域名/IP 白名单（本部署经 nginx，可落地）。
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):

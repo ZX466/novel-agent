@@ -27,8 +27,8 @@ $openssl = Join-Path (Split-Path (Get-Command git).Source -Parent) "openssl.exe"
   -keyout deploy/nginx/certs/privkey.pem `
   -out deploy/nginx/certs/fullchain.pem -days 365 -subj "/CN=localhost"
 
-# 1. 容器密钥（根目录，强密码）
-Copy-Item .env.example .env          # 编辑 POSTGRES_PASSWORD / REDIS_PASSWORD（≥20 字符）
+# 1. 容器密钥（根目录，强密码，.env.example 已预生成直接可用）
+Copy-Item .env.example .env
 
 # 2. API Key（后端）
 cd backend && Copy-Item .env.example .env   # 填 DEEPSEEK_API_KEY / DASHSCOPE_API_KEY 等

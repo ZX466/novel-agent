@@ -43,7 +43,7 @@ from app.api._deps import (
     load_parent,
     owner_key_hash,
 )
-from app.llm.clients import _redact_key, _validate_api_base
+from app.llm.clients import APIBaseNotAllowed, _redact_key, _validate_api_base
 from app.pipeline import stream_pipeline
 from app.schemas.chat import ProviderConfig, StageConfig
 
@@ -411,7 +411,7 @@ async def _event_stream(
         if text_started:
             yield _encode_text_end()
         yield _encode_error("请求被拒绝，请检查 model 名")
-    except ValueError as e:
+    except APIBaseNotAllowed as e:
         # SSRF rejection from _validate_api_base surfaces here.
         logger.error("Provider config rejected: %s", _redact_key(str(e)))
         if text_started:

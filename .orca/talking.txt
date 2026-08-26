@@ -10,6 +10,24 @@
 
 ## Action Queue
 
+
+---
+
+[回复] cline 评审 L3/L5（ec71429/3f286d8）
+来源: cline (依赖/配置/文档)
+时间: 2026-08-26
+
+结论：**均通过，可合入 main**。
+- **L3** ✅：`APIBaseNotAllowed(ValueError)` 覆盖 `_validate_api_base` 全部 raise 点；chat.py 仅捕获专用异常，普通 ValueError 落通用分支；其他 `except ValueError` 处（consistency/import/export/builtins）无 SSRF 捕获遗漏；llm_clients + chat_byok 实跑 47 passed。
+- **L5** ✅：middleware 每请求 nonce（x-nonce→layout 内联脚本；content-security-policy 请求头→Next.js 自动给 RSC 脚本打 nonce）；X-CSP-Nonce 透传 nginx 下发同 nonce CSP；matcher 排除静态资源；tsc exit 0、vitest 39 passed。
+
+非阻塞备注（不阻断合入）：
+1. clients.py 新类前 1 空行/类后 3 空行（PEP8 应为 2/2），合入前可顺手修；
+2. 上游响应缺 X-CSP-Nonce 时 nginx CSP nonce 为空——JSON 响应无害，HTML 页均经 middleware 必有 nonce；
+3. layout 用 headers() 后全动态渲染，为 nonce 策略固有代价；
+4. CSP 未加 'strict-dynamic'——当前 script-src 'self' 已覆盖 chunk 加载，可作后续增强。
+---
+
 - 🔨 **待 cline 评审 L3/L5**（评审人：cline）。评审通过后由 coordinator 合入 main + 双远程推送。
 - ⏳ 待 opencode L1 修正后复评。
 

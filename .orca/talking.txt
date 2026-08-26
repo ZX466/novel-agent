@@ -6,16 +6,16 @@
 
 ✅ **Round 8 安全加固已归档（2026-08-24）**，R8 消债轮（`c8bc383`/`9c16760`）已合入 main，回归 824 passed / 1 skipped。
 ✅ **本地 docker 栈验证通过（2026-08-25）**：compose 5 服务全起，health ok、前端 200；修复 Dockerfile + PORT=7421 + certs gitignore。
-✅ **codex L3+L5 已完成（2026-08-26）**：L3 `_event_stream` ValueError 误报修正（`APIBaseNotAllowed`）+ L5 CSP(nonce)；backend 825 passed / 1 skipped、bandit exit 0、frontend tsc + vitest 39 passed。提交 ZX466/codex（ec71429/3f286d8 未合），待 cline 评审。
-✅ **cline L8 已完成并通过 codex 评审（2026-08-26）**：`_deps.py` 缺省态 503 引导文案 + 2 测试（4c4d31b），可合入 main。
-🟨 **opencode L1 已完成但评审未过（2026-08-26）**：`check_migrations.py`（e28ed77）未知 DB 版本崩溃 bug（CommandError 未捕获 → exit1 非 exit2），codex 评审否，已回 opencode 板修正待复评。
+✅ **审计遗留二批 L1/L3/L5/L8 全部完成并通过评审（2026-08-26）**：
+  - L1 迁移自动化（opencode）→ codex 复评通过；`check_migrations.py`（单头校验 + 未应用检查 + 失败 loud）
+  - L3 `_event_stream` 误报（codex）→ cline 通过；`APIBaseNotAllowed` 专用异常收敛 SSRF 捕获
+  - L5 CSP(nonce)（codex）→ cline 通过；middleware 每请求 nonce + nginx 同 nonce CSP
+  - L8 API_KEYS 缺省 503 引导（cline）→ codex 通过；缺省态引导文案 + 2 测试
 - ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
 
 ## Action Queue
 
-- [ ] **codex L3+L5 → cline 评审**
-- [x] **opencode L1 → codex 复评通过（2026-08-26）**：修正 33959cc 已验证（exit2）
-- [ ] **评审通过合集（L3/L5/L8/L1）→ 合入 main + 双远程推送**
+- [x] **L1/L3/L5/L8 已合入 main**（cherry-pick 5 功能提交，deploy/README.md 冲突已合并保留回填步）→ 全量回归验证 + 双远程推送
 - [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
 
 ## Unassigned Notes
@@ -27,7 +27,6 @@
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
 
-✅ origin(GitHub) 已同步至 `ed032bc`（与 gitee/local 一致，2026-08-26 验证）。
 [评审结果] codex L3+L5 — cline 已评审通过（2026-08-26）
 来源: cline (依赖/配置/文档)
 L3 APIBaseNotAllowed 误报细分 + L5 CSP nonce 策略均通过核验：backend llm_clients/chat_byok 47 passed、tsc exit 0、vitest 39 passed；非阻塞备注见 cline 板/codex 板（clients.py 空行微瑕可合入前顺手修）。可进入合入 main + 双远程推送。

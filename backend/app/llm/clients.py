@@ -49,6 +49,7 @@ _RETRY_BASE_DELAY = 2.0  # seconds; exponential backoff: 2s, 4s, 8s, 16s
 
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
+
 class APIBaseNotAllowed(ValueError):
     """Raised by _validate_api_base when the API base URL is rejected (SSRF defense).
 
@@ -56,7 +57,6 @@ class APIBaseNotAllowed(ValueError):
     unrelated ValueErrors raised deeper in the LLM pipeline, so the frontend
     error message stays accurate (R8 audit L3).
     """
-
 
 
 def _validate_api_base(url: str) -> None:

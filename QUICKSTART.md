@@ -6,97 +6,70 @@
 
 ## 前置条件
 
-- Python 3.11+、Node 18+、[uv](https://docs.astral.sh/uv/)
-- PostgreSQL 16（含 pgvector 扩展）+ Redis（部署在腾讯云服务器，本地走 SSH 隧道）
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)（WSL2 后端；首次拉镜像较慢可配置镜像加速器）
+- 有任一 LLM 的 API Key（DeepSeek / DashScope / 中转 Claude 等）
+- （可选）[uv](https://docs.astral.sh/uv/)、Node 18+ — 仅本地进程开发模式需要
 
-## 0. 数据库准备（二选一）
-
-### 方式 A：SSH 隧道直连腾讯云（推荐，依赖服务器在线）
-
-```powershell
-ssh -N -L 5432:localhost:5432 -L 16379:localhost:16379 user@<服务器IP>
-```
-
-### 方式 B：本地 Docker 起 PG + Redis（服务器到期/离线时）
-
-只用 `docker-compose.local.yml`，**仅包含 PG + Redis 两个容器**，前后端仍用本地进程（uvicorn + next dev）。该文件维护在 main 分支，从工作树或克隆仓库根目录取：
+## 1. 一键启动全栈（5 个容器）
 
 ```powershell
 cd 项目根目录
-Copy-Item .env.example .env         # 首用：创建容器密钥（强密码，.env 不入库）
-docker compose -f docker-compose.local.yml up -d        # 起容器
-docker compose -f docker-compose.local.yml ps           # 确认 healthy
-docker compose -f docker-compose.local.yml down         # 停止（数据保存在卷中）
+Copy-Item .env.example .env          # 首用：创建容器密钥（POSTGRES_PASSWORD / REDIS_PASSWORD，强密码不入库）
+docker compose up -d --build         # 构建并启动 nginx + PG + Redis + backend + frontend
+docker compose ps                    # 确认 postgres / redis healthy，其余 up
 ```
 
-> 容器密码**必须**来自根目录 `.env`（`POSTGRES_PASSWORD` / `REDIS_PASSWORD`，≥20 字符），缺失时 compose 直接失败；端口仅绑定 127.0.0.1。
+> 端口仅 nginx 暴露 80/443，其余服务对宿主隐藏；数据保存在 Docker 卷 `pg_data` / `redis_data`，删容器不丢。
 
-后端 `.env` 用与根目录 `.env` 相同的密码指向本机即可：
-
-```ini
-DATABASE_URL=postgresql+asyncpg://postgres:<POSTGRES_PASSWORD>@localhost:5432/project11
-REDIS_URL=redis://:<REDIS_PASSWORD>@localhost:16379/0
-```
-
-> 生产/默认方式是方式 A。方式 B 是腾讯云到期或断网时的本地兜底，保证开发不中断。
-
-## 1. 开 SSH 隧道（连接云端 DB/Redis）
-
-```powershell
-ssh -N -L 5432:localhost:5432 -L 16379:localhost:16379 user@<服务器IP>
-```
-
-## 2. 启动后端
+## 2. 配置 API Key
 
 ```powershell
 cd backend
-Copy-Item .env.example .env        # 编辑 .env 填入 DB/Redis/API keys
-uv venv .venv --python 3.11
-.\.venv\Scripts\Activate.ps1
-uv pip install -r requirements.txt
-alembic upgrade head
-alembic heads                  # R7-3 生产就绪：必须只输出一个 head（c0d1e2f3a4b50）
-python -m scripts.backfill_owner_key_hash   # R7-3 幂等回填 owner_key_hash（可重复执行）
-uvicorn app.main:app --reload --port 8000
+Copy-Item .env.example .env          # 填入真实 API Key（DEEPSEEK_API_KEY / DASHSCOPE_API_KEY / RELAY_*）
+# DATABASE_URL / REDIS_URL 容器内由 compose 自动指向内部服务，无需手工改
+```
+然后重启后端容器使环境变量生效：
+```powershell
+cd 项目根目录
+docker compose restart backend
 ```
 
-> 首次需在 PostgreSQL 中建库并启用扩展：
-> `CREATE DATABASE project11; \c project11; CREATE EXTENSION IF NOT EXISTS vector;`
-
-## 3. 启动前端（新开一个终端）
+## 3. 初始化数据库（首次/代码更新后）
 
 ```powershell
-cd frontend
-echo NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 > .env.local
-npm install
-npm run dev
+docker compose exec backend alembic upgrade head
+docker compose exec backend python scripts/check_migrations.py   # 单头 + 无未应用（失败退出非 0）
 ```
 
-## 4. 验证
+## 4. 访问
+
+浏览器打开 **https://localhost** → 点击 ⚙ 配置 API Key → 开始写作。
+
+## 5. 验证
 
 | 检查 | 期望 |
 |---|---|
-| `curl http://localhost:8000/v1/health` | `{"status":"ok"}` |
-| 打开 http://localhost:7421 | 小说编辑器界面 |
+| `curl -k https://localhost/v1/health` | `{"status":"ok"}` |
+| 打开 https://localhost | 小说编辑器界面 |
 | 配置 BYOK → 测试连接 | ✅ 连接成功 |
 | 点击"续写" | ~1-2 秒后文字逐字出现 |
 
-## 5. Round 4 功能速览
+## 6. 功能速览
 
-> 以下功能由本轮（2026-08-17）交付，端点见 [README §六 表格](README.md)。
+> 以下核心功能由历史轮次交付，端点见 [README §六 表格](README.md)。
 
-- **作品导出（F3）**：作品页点"导出"，可选 `md / txt / epub`，浏览器下载文件（EPUB 为标准库 zip 生成，无需额外安装）。
-- **本地知识库（F4）**：作品页上传参考资料（白名单类型/大小受限），系统自动分块 + 向量化；之后 AI 检索会自动合并知识库内容（**小说设定优先**）。可上传 / 查看列表 / 删除。
-- **写作统计（F6）**：统计看板显示近 30 天字数曲线、连续写作天数、今日目标达成情况。
-- **AI 编剧对话（F1）**：对话界面可多轮问答，自动带章节/大纲上下文，结果可一键插入正文。
+- **作品导出**：作品页点"导出"（`md / txt / epub`，EPUB 为标准库 zip 生成，零依赖）。
+- **本地知识库**：作品页上传参考资料，自动分块 + 向量化；RAG 检索自动合并（**小说设定优先**）。可上传 / 列表 / 删除。
+- **写作统计**：统计看板显示近 30 天字数曲线、连续写作天数、今日目标达成情况。
+- **AI 编剧对话**：对话界面多轮问答，自动带章节/大纲上下文，结果可一键插入正文。
+- **交稿雷达**：导出前隐私/版权/敏感表达安全预检（SafetyScanDialog）。
 
-> 受保护端点需在 `API_KEYS` 白名单中配置密钥，前端需携带 `X-API-Key` 请求头方可调用导出/统计/知识库等接口。
+> 受保护端点需在 `API_KEYS` 白名单中配置密钥，前端携带 `X-API-Key` 请求头方可调用导出/统计/知识库等接口。
 
 ## 常见坑
 
-- **`alembic upgrade head` 报 "Multiple head revisions"**：迁移链分叉（如 `1a2b3c4d5e6f` 与 `f6a7b8c9d0e1` 并存）。用 `alembic heads` 核对，保持单一 head（当前应为 `c0d1e2f3a4b50`）；分叉需先合并链再升级。
-- **`litellm` 安装失败**：requirements.txt 已 pin `litellm<1.91`（1.91+ 引入 Rust 组件），不要手动升级。
-- **CORS 报错**：检查 `backend/.env` 的 `CORS_ORIGINS` 是否含 `http://localhost:7421`。
-- **本机 Docker 只用于"数据库容器"**：`docker-compose.local.yml`（本地 PG+Redis）可跑；不要跑 `docker-compose.yml`（那是腾讯云服务器全栈部署专用）。
-- **流式不实时**：确认走的是 SSE 且后端使用 `on_token` 回调（详见 README §4.1）。
-- **导出/统计/知识库 401 或 503**：确认已配置 `API_KEYS` 且请求携带 `X-API-Key`；`API_KEYS=[]` 时受保护接口返回 503（见 README §六 说明）。
+- **`alembic upgrade head` 报 "Multiple head revisions"**：迁移链分叉。用 `check_migrations.py` / `alembic heads` 核对，保持单一 head；分叉先合并链再升级。
+- **`litellm` 安装失败**：`pyproject.toml` 已 pin `litellm==1.90.7`（<1.91 硬约束），1.91+ 引入 Rust 组件，不要手动升级。
+- **CORS 报错**：检查 `backend/.env` 的 `CORS_ORIGINS` 是否含 `https://localhost`（容器内 compose 已覆盖默认，本地进程模式需自行加）。
+- **导出/统计/知识库 401 或 503**：确认已配置 `API_KEYS` 且请求携带 `X-API-Key`；`API_KEYS` 未配置时受保护接口返回 503 引导文案（见 README §六 说明）。
+- **镜像拉取失败**：国内网络配置 Docker 镜像加速器（Docker Desktop → Settings → Docker Engine 加 `registry-mirrors`，见 README §八 FAQ）。

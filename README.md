@@ -14,10 +14,10 @@ AI 小说创作平台：三阶段 LLM 流水线（草稿 → 精修 → 评估�
 | 数据库 | PostgreSQL 16 + pgvector + Redis（**本地 Docker 容器**） |
 | 前端 | Next.js 14 + TailwindCSS + Tiptap + Vercel AI SDK v5 |
 | 依赖管理 | **uv**（Python 虚拟环境 + 依赖锁定） |
-| 部署 | 本地：直接进程运行 + Docker 容器（仅数据库）；服务器：见 [deploy/README.md](deploy/README.md) |
+| 部署 | 本地：Docker Compose 全栈（nginx+PG+Redis+后端+前端）；服务器：见 [deploy/README.md](deploy/README.md) |
 
-> **本地环境**：PostgreSQL 16 + Redis 通过 `docker-compose.local.yml` 跑在 Docker 容器里（仅 2 个容器，轻量）。后端和前端用本地进程运行。
-> **Python 环境**：全部通过 `uv` 管理（`backend/pyproject.toml`），虚拟环境在 `backend/.venv`。
+> **本地环境**：一键 `docker compose up -d --build` 启动完整五服务栈（nginx 80/443 + PostgreSQL 16 + Redis + FastAPI 后端 + Next.js 前端），浏览器访问 `https://localhost`。开发迭代（代码热重载）见「替代：本地进程模式」。
+> **Python 环境**：容器外开发用 `uv` 管理（`backend/pyproject.toml`），虚拟环境在 `backend/.venv`。
 
 ## 核心特性
 
@@ -91,8 +91,8 @@ project11/
 │       ├── hooks/        # React hooks
 │       └── lib/          # 工具函数 + 类型定义
 ├── deploy/               # 服务器部署配置
-├── docker-compose.yml    # 服务器全栈（含 nginx）
-└── docker-compose.local.yml  # 本地仅数据库（PG + Redis）
+├── docker-compose.yml    # 全栈 compose（nginx + PG + Redis + backend + frontend，本地/服务器通用）
+└── docker-compose.local.yml  # 旧版：仅本地数据库（PG + Redis），已被全栈 compose 取代，停止使用
 ```
 
 ---
@@ -108,98 +108,80 @@ uv --version        # 应有输出，如 uv 0.x.x
 docker info         # 应显示 Server 信息（Docker Desktop 已启动）
 ```
 
-### 步骤 1：启动本地数据库（Docker 容器）
+### 步骤 1：配置容器密钥（根目录 .env）
 
 ```powershell
-# 在项目根目录，首次先创建容器密钥（强密码，.env 不入库）
+# 在项目根目录，首次创建容器密钥（强密码，.env 不入库）
 Copy-Item .env.example .env
-
-# 启动 PostgreSQL 16 + pgvector 和 Redis 两个容器
-docker compose -f docker-compose.local.yml up -d
-
-# 验证两个容器都 healthy
-docker ps
-# 期望看到 project11-postgres-local 和 project11-redis-local 均 (healthy)
+# 编辑 .env 设置 POSTGRES_PASSWORD / REDIS_PASSWORD（≥20 字符，缺失即启动失败）
 ```
 
-> 首次启动会自动拉取镜像（如网络慢，可配置 Docker 镜像加速器）。数据持久化在 Docker 卷 `pg_data` / `redis_data`，删除容器不丢数据。
-> **安全**：容器密码必须来自根目录 `.env`（≥20 字符，无默认弱密码，缺失即启动失败）；端口仅绑定 `127.0.0.1`（防局域网暴露）。后端 `.env` 的 `DATABASE_URL`/`REDIS_URL` 须使用与根目录 `.env` 相同的密码。
+> **安全**：容器密码必须来自根目录 `.env`，无默认弱密码；后端容器内 `DATABASE_URL`/`REDIS_URL` 由 compose 自动指向内部 `postgres`/`redis` 服务，无需手工配置（也不暴露到宿主端口）。
 
-### 步骤 2：配置后端环境
+### 步骤 2：配置后端环境（API Key）
 
 ```powershell
 cd backend
 Copy-Item .env.example .env
-# 编辑 .env 填入真实 API Key（详见 .env.example 注释）
-# DATABASE_URL 和 REDIS_URL 已默认指向 localhost:5432 / 16379，无需修改
+# 编辑 .env 填入真实 API Key（如 DEEPSEEK_API_KEY / DASHSCOPE_API_KEY）
+# DATABASE_URL / REDIS_URL 容器内由 compose 覆盖为内部服务地址，忽略本文件默认值
 ```
 
-### 步骤 3：用 uv 构建后端虚拟环境并安装
+### 步骤 3：构建并启动全栈 compose
 
 ```powershell
-cd backend
-uv sync            # 创建 .venv 虚拟环境 + 按 pyproject.toml 安装全部依赖 + 生成 uv.lock
+# 在项目根目录。首次构建镜像 + 启动 5 服务（postgres / redis / backend / frontend / nginx）
+docker compose up -d --build
+
+# 验证（postgres/redis 应 healthy）
+docker compose ps
 ```
 
-> `uv sync` 是 uv 的标准工作流：自动创建 `backend/.venv`，安装 pyproject.toml 声明的依赖（含 dev 组测试依赖），并锁定版本到 `uv.lock`。之后日常都用 `uv sync` / `uv run`，无需手动激活虚拟环境。
+> 首次会自动拉取基础镜像并构建容器（网络慢可配置 Docker 镜像加速器，见常见问题）。数据持久化在 Docker 卷 `pg_data` / `redis_data`，删除容器不丢数据；端口仅 nginx 暴露 80/443，其余服务对宿主隐藏。
 
 ### 步骤 4：初始化数据库（迁移）
 
 ```powershell
-cd backend
-uv run alembic upgrade head
-uv run python scripts/check_migrations.py   # 校验：单头 + 无未应用迁移（失败退出非 0）
+docker compose exec backend alembic upgrade head
+docker compose exec backend python scripts/check_migrations.py   # 校验单头 + 无未应用（失败退出非 0）
 ```
 
-> `uv run` 会在虚拟环境中执行命令，无需手动 activate。
+### 步骤 5：访问
 
-### 步骤 5：配置前端
+浏览器打开 **https://localhost**（nginx TLS 443 → 前端）→ 点击 ⚙ 配置 API Key → 开始写作。
 
+> 健康检查：`curl -k https://localhost/v1/health` 应返回 `{"status":"ok"}`。
+
+### 替代：本地进程模式（开发热重载）
+
+> 代码迭代用 compose 每次 rebuild 较慢；如需热重载可在 **compose 之外**起本地进程（仅代码热重载，DB 仍用 compose 栈）：
 ```powershell
-cd frontend
-# 创建 .env.local（后端地址）
-echo NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 > .env.local
-npm install
+cd backend  && uv sync && uv run uvicorn app.main:app --reload --port 8000   # 终端 1（需先本地配 DB 连接）
+cd frontend && npm install && npm run dev                                     # 终端 2
 ```
-
-### 步骤 6：启动
-
-```powershell
-# 终端 1: 后端（uv 虚拟环境中运行）
-cd backend && uv run uvicorn app.main:app --reload --port 8000
-
-# 终端 2: 前端
-cd frontend && npm run dev
-```
-
-访问 http://localhost:7421 → 点击 ⚙ 配置 API Key → 开始写作。
+> 该模式要求本地能连到数据库（如把 compose 的 postgres/redis 端口映射到宿主或用远程 DB）。日常若只想"跑起来"，直接用上方步骤 3 的全栈即可。
 
 ---
 
 ## 二、日常启动
 
 ```powershell
-# 终端 0（如容器已停止）: 启动数据库
-docker compose -f docker-compose.local.yml up -d
-
-# 终端 1: 后端（uv 虚拟环境中运行，--reload 自动重载）
-cd backend && uv run uvicorn app.main:app --reload --port 8000
-
-# 终端 2: 前端
-cd frontend && npm run dev
+# 项目根目录，直接启/停全栈（已构建过则无需 --build）
+docker compose up -d          # 启动（含已存在的镜像）
+docker compose down           # 停止并删除容器（数据卷保留）
+docker compose down -v        # 连数据卷一起删（彻底重置，需重新迁移）
 ```
 
-**停止数据库**：
+**看日志 / 保全**：
 ```powershell
-docker compose -f docker-compose.local.yml down    # 停止并删除容器（数据卷保留）
-docker compose -f docker-compose.local.yml down -v # 连数据卷一起删（彻底重置）
+docker compose logs -f backend    # 后端日志
+docker compose exec backend alembic upgrade head   # 代码更新后补迁移
 ```
 
-**清理虚拟环境重装**：
+**清理无用镜像/容器**：
 ```powershell
-cd backend
-rm -r .venv          # 删除虚拟环境
-uv sync              # 重新构建
+docker image prune               # 删悬空镜像
+docker container prune           # 删已停止容器
 ```
 
 ---
@@ -319,9 +301,9 @@ uv sync              # 重新构建
 
 | 项 | 期望 |
 |---|---|
-| `docker compose -f docker-compose.local.yml ps` | 两个容器均 healthy |
-| `curl http://localhost:8000/v1/health` | `{"status":"ok"}` |
-| 浏览器 http://localhost:7421 | 显示小说编辑器界面 |
+| `docker compose ps` | 5 容器均 running（postgres/redis healthy，frontend/backend/nginx up） |
+| `curl -k https://localhost/v1/health` | `{"status":"ok"}` |
+| 浏览器 https://localhost | 显示小说编辑器界面 |
 | 配置 BYOK → 测试连接 | 显示 ✅ 连接成功 |
 | 点击"续写" | ~1-2 秒后文字逐字出现，带闪烁光标 |
 | 选中文字 → 扩写 | 只处理选中内容 |
@@ -342,7 +324,7 @@ uv sync              # 重新构建
 A: 国内网络需配置 Docker 镜像加速器（Docker Desktop → Settings → Docker Engine 加 `registry-mirrors`）。
 
 **Q: 后端启动报 Redis 连接失败？**
-A: 确认容器在跑：`docker compose -f docker-compose.local.yml ps`。如容器已停，先 `up -d`。
+A: 确认容器在跑：`docker compose ps`。如容器已停，先 `docker compose up -d`。
 
 **Q: 续写还是白屏很久？**
 A: 检查 task_type 是否正确传递。续写应走 `continue` 路由（仅 draft + safety），不走完整 pipeline。
@@ -351,7 +333,7 @@ A: 检查 task_type 是否正确传递。续写应走 `continue` 路由（仅 dr
 A: 确认后端 `stream_pipeline` 使用 `on_token` 回调而非旧的 4 字符切块。检查浏览器 Network 面板的 SSE 连接是否正常。
 
 **Q: CORS 报错？**
-A: 检查 `backend/.env` 的 `CORS_ORIGINS` 是否包含 `http://localhost:7421`。
+A: compose 模式后端容器内 CORS 已由 `docker-compose.yml` 覆盖（含 `https://localhost`）；本地进程模式需在 `backend/.env` 的 `CORS_ORIGINS` 加 `http://localhost:7421`。
 
 **Q: 评估超时？**
 A: 每个评估维度有 30 秒超时保护。超时的维度返回 0.5 分 fallback，不影响其他维度。

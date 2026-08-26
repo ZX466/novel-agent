@@ -16,6 +16,7 @@ import litellm
 import pytest
 from fastapi import HTTPException
 
+from app.llm.clients import APIBaseNotAllowed
 from app.schemas.chat import ProviderConfig, StageConfig
 
 
@@ -410,10 +411,10 @@ async def test_not_found_error_branch(async_app_client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ssrf_rejection_branch(async_app_client, monkeypatch):
-    """When stream_pipeline raises ValueError (SSRF rejection from
+    """When stream_pipeline raises APIBaseNotAllowed (SSRF rejection from
     _validate_api_base propagating up through the LLM call inside a node),
     the SSE stream must emit the SSRF rejection error message."""
-    ssrf_error = ValueError("Blocked internal address: 169.254.169.254")
+    ssrf_error = APIBaseNotAllowed("Blocked internal address: 169.254.169.254")
     monkeypatch.setattr(
         "app.api.chat.stream_pipeline", _make_async_gen(ssrf_error)
     )
@@ -431,6 +432,27 @@ async def test_ssrf_rejection_branch(async_app_client, monkeypatch):
 
     assert '"type": "error"' in body
     assert "API Base URL 不被允许" in body
+
+@pytest.mark.asyncio
+async def test_generic_value_error_not_misreported_as_ssrf(async_app_client, monkeypatch):
+    """A non-SSRF ValueError raised by the pipeline must NOT be reported as an
+    API Base URL rejection (R8 audit L3); it falls through to the generic
+    error branch so the frontend message stays accurate."""
+    monkeypatch.setattr(
+        "app.api.chat.stream_pipeline", _make_async_gen(ValueError("json decode boom"))
+    )
+
+    async with async_app_client.stream(
+        "POST",
+        "/v1/chat",
+        json={"messages": [{"role": "user", "content": "hi"}]},
+        headers=_byok_header(),
+    ) as response:
+        body = (await response.aread()).decode("utf-8")
+
+    assert '"type": "error"' in body
+    assert "API Base URL 不被允许" not in body
+    assert "Pipeline 出错" in body
 
 
 @pytest.mark.asyncio

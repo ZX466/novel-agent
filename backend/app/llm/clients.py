@@ -49,6 +49,15 @@ _RETRY_BASE_DELAY = 2.0  # seconds; exponential backoff: 2s, 4s, 8s, 16s
 
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
+class APIBaseNotAllowed(ValueError):
+    """Raised by _validate_api_base when the API base URL is rejected (SSRF defense).
+
+    A dedicated type lets callers distinguish SSRF-style rejections from
+    unrelated ValueErrors raised deeper in the LLM pipeline, so the frontend
+    error message stays accurate (R8 audit L3).
+    """
+
+
 
 def _validate_api_base(url: str) -> None:
     """Raise ValueError if api_base points to a blocked internal address.
@@ -66,13 +75,13 @@ def _validate_api_base(url: str) -> None:
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
-        raise ValueError(f"Unsupported URL scheme: {parsed.scheme!r}")
+        raise APIBaseNotAllowed(f"Unsupported URL scheme: {parsed.scheme!r}")
     host = parsed.hostname or ""
     if not host:
-        raise ValueError("api_base has no host component")
+        raise APIBaseNotAllowed("api_base has no host component")
     if host in _LOCAL_HOSTS:
         if not settings.byok_allow_local_api_base:
-            raise ValueError("Local API base is disabled by BYOK_ALLOW_LOCAL_API_BASE")
+            raise APIBaseNotAllowed("Local API base is disabled by BYOK_ALLOW_LOCAL_API_BASE")
         return
     try:
         addresses = {ipaddress.ip_address(host)}
@@ -85,7 +94,7 @@ def _validate_api_base(url: str) -> None:
         except OSError:
             return
     if any(not ip.is_global for ip in addresses):
-        raise ValueError(f"Blocked internal address: {host}")
+        raise APIBaseNotAllowed(f"Blocked internal address: {host}")
 
 # --- API key redaction for logs ---------------------------------------------
 

@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.llm import clients
+from app.llm.clients import APIBaseNotAllowed
 from app.schemas.chat import ProviderConfig, StageConfig
 
 
@@ -168,37 +169,37 @@ def test_validate_api_base_rejects_hostname_resolving_to_private_ip(monkeypatch)
         "getaddrinfo",
         lambda *args, **kwargs: [(None, None, None, None, ("169.254.169.254", 0))],
     )
-    with pytest.raises(ValueError, match="Blocked internal address"):
+    with pytest.raises(APIBaseNotAllowed, match="Blocked internal address"):
         clients._validate_api_base("https://metadata.google.internal/v1")
 
 
 def test_validate_api_base_rejects_cloud_metadata():
-    with pytest.raises(ValueError, match="Blocked internal address"):
+    with pytest.raises(APIBaseNotAllowed, match="Blocked internal address"):
         clients._validate_api_base("http://169.254.169.254/v1")
 
 
 def test_validate_api_base_rejects_rfc1918_10():
-    with pytest.raises(ValueError):
+    with pytest.raises(APIBaseNotAllowed):
         clients._validate_api_base("http://10.0.0.1/v1")
 
 
 def test_validate_api_base_rejects_rfc1918_192():
-    with pytest.raises(ValueError):
+    with pytest.raises(APIBaseNotAllowed):
         clients._validate_api_base("http://192.168.1.1/v1")
 
 
 def test_validate_api_base_rejects_rfc1918_172():
-    with pytest.raises(ValueError):
+    with pytest.raises(APIBaseNotAllowed):
         clients._validate_api_base("http://172.16.0.1/v1")
 
 
 def test_validate_api_base_rejects_non_http_scheme():
-    with pytest.raises(ValueError, match="Unsupported URL scheme"):
+    with pytest.raises(APIBaseNotAllowed, match="Unsupported URL scheme"):
         clients._validate_api_base("ftp://example.com/v1")
 
 
 def test_validate_api_base_rejects_empty_host():
-    with pytest.raises(ValueError, match="no host"):
+    with pytest.raises(APIBaseNotAllowed, match="no host"):
         clients._validate_api_base("http:///v1")
 
 
@@ -220,7 +221,7 @@ def test_validate_api_base_rejects_localhost_when_disabled(monkeypatch):
     from app.config import settings
 
     monkeypatch.setattr(settings, "byok_allow_local_api_base", False)
-    with pytest.raises(ValueError, match="Local API base is disabled"):
+    with pytest.raises(APIBaseNotAllowed, match="Local API base is disabled"):
         clients._validate_api_base("http://localhost:11434/v1")
 
 
@@ -228,14 +229,14 @@ def test_validate_api_base_rejects_loopback_ip_when_disabled(monkeypatch):
     from app.config import settings
 
     monkeypatch.setattr(settings, "byok_allow_local_api_base", False)
-    with pytest.raises(ValueError, match="Local API base is disabled"):
+    with pytest.raises(APIBaseNotAllowed, match="Local API base is disabled"):
         clients._validate_api_base("http://127.0.0.1:8080/v1")
 
 
 def test_byok_kwargs_raises_on_ssrf():
     """StageConfig with SSRF api_base must raise before calling litellm."""
     stage = _make_stage(api_base="http://169.254.169.254/v1")
-    with pytest.raises(ValueError, match="Blocked internal address"):
+    with pytest.raises(APIBaseNotAllowed, match="Blocked internal address"):
         clients._byok_kwargs(stage)
 
 

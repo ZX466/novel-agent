@@ -19,6 +19,12 @@
 前置：Docker Desktop（WSL2 后端）。
 
 ```powershell
+# 0. 生成自签 TLS 证书（nginx 启动必需；仅本机 https://localhost 用，正式域名走 certbot，见 deploy/README.md）
+mkdir deploy/nginx/certs
+openssl req -x509 -nodes -newkey rsa:2048 `
+  -keyout deploy/nginx/certs/privkey.pem `
+  -out deploy/nginx/certs/fullchain.pem -days 365 -subj "/CN=localhost"
+
 # 1. 容器密钥（根目录，强密码）
 Copy-Item .env.example .env          # 编辑 POSTGRES_PASSWORD / REDIS_PASSWORD（≥20 字符）
 
@@ -37,6 +43,17 @@ docker compose exec backend python scripts/check_migrations.py
 健康检查：`curl -k https://localhost/v1/health` → `{"status":"ok"}`
 
 > 本地进程热重载（改代码免 rebuild）：`uv run uvicorn app.main:app --reload --port 8000` + `npm run dev`，DB 仍用 compose 栈。
+
+### 从零彻底重建（清容器 + 数据 + 镜像）
+
+```powershell
+docker compose down -v        # 停容器 + 删数据卷
+docker compose rm -f          # 删容器（保险）
+docker image prune -a         # 删本地镜像（重建会重新拉基础镜像）
+# 然后重跑上面「快速开始」步骤 0-4 即可
+```
+
+> `deploy/nginx/certs/` 不入库（gitignore）；丢了就重跑步骤 0。`pg_data`/`redis_data` 是数据卷，`down` 保留、`down -v` 清除（清后需重新迁移）。
 
 ## 常用命令
 

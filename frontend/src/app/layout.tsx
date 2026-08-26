@@ -1,4 +1,5 @@
 ﻿import type { Metadata } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { NavBar } from "@/components/NavBar";
 
@@ -12,6 +13,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const nonce = headers().get("x-nonce");
   return (
     <html lang="zh-CN">
       <head>
@@ -22,6 +24,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
         <script
+          nonce={nonce ?? undefined}
           dangerouslySetInnerHTML={{
             __html: `try{var t=localStorage.getItem("project11:theme");if(t&&t!=="dark")document.documentElement.dataset.theme=t}catch(e){}`,
           }}

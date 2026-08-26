@@ -1,0 +1,154 @@
+<!doctype html>
+<title>Project11 架构图</title>
+<style>
+  :root {
+    --bg: #faf9f7; --panel: #fff; --ink: #1c1b19; --muted: #6b675f;
+    --line: #dcd8d0; --accent: #8a5a2b; --accent-soft: #f1e6d8;
+    --code-bg: #f3f1ec; --chip-bg: #f0ece4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17161a; --panel: #201f24; --ink: #e9e6e1; --muted: #9a958c;
+      --line: #37343c; --accent: #d39a5f; --accent-soft: #322b22;
+      --code-bg: #26252a; --chip-bg: #2b2a30;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17161a; --panel: #201f24; --ink: #e9e6e1; --muted: #9a958c;
+    --line: #37343c; --accent: #d39a5f; --accent-soft: #322b22;
+    --code-bg: #26252a; --chip-bg: #2b2a30;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; line-height: 1.55; padding: 2.5rem 1.25rem; }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; font-weight: 650; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: .95rem; margin-top: .35rem; }
+  .rule { height: 1px; background: var(--line); margin: 1.4rem 0; }
+  .num { display: inline-block; min-width: 1.35rem; height: 1.35rem; line-height: 1.35rem; text-align: center; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: .75rem; font-weight: 700; margin-right: .55rem; }
+  h2 { font-size: 1.05rem; font-weight: 650; margin: 1.6rem 0 .7rem; }
+  .pane { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1.1rem 1.2rem; }
+  .mermaid { background: transparent; }
+  .mermaid svg { max-width: 100%; height: auto; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: .7rem; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: .85rem 1rem; }
+  .card b { display: block; font-size: .92rem; margin-bottom: .3rem; }
+  .card span { color: var(--muted); font-size: .85rem; }
+  ul { margin: .4rem 0 0 1.15rem; font-size: .9rem; color: var(--muted); }
+  li { margin: .18rem 0; }
+  .tag { display: inline-block; font-size: .72rem; padding: .08rem .5rem; border-radius: 999px; background: var(--chip-bg); color: var(--muted); margin-left: .4rem; vertical-align: middle; }
+</style>
+
+<div class="wrap">
+  <h1>Project11 — 运行时架构</h1>
+  <div class="sub">三阶段 LLM 流水线 · 流式 SSE · BYOK 多 provider · pgvector RAG</div>
+  <div class="rule"></div>
+
+  <h2><span class="num">1</span>整体拓扑：一次请求从浏览器到落库</h2>
+  <div class="pane">
+<pre class="mermaid">
+flowchart LR
+    U[浏览器<br/>Next.js 前端] -->|https /v1/chat<br/>SSE 流| NG[nginx :80/443]
+    NG -->|proxy_buffering off| BA[FastAPI 后端]
+
+    subgraph BE[后端 — app/]
+      BA --> API[API 层<br/>chat/documents/...]
+      API -->|POST /v1/chat| PS[stream_pipeline<br/>(SSE, 逐token)]
+      PS --> PL[LangGraph 流水线]
+      PL -->|llitellm| LLM[LLM 供应商<br/>DeepSeek/Qwen/Claude<br/>BYOK 凭证]
+      API --> SRV[业务服务层<br/>services/]
+      SRV --> DB[(PostgreSQL 16<br/>+ pgvector)]
+      SRV --> RD[(Redis<br/>缓存/限流)]
+    end
+
+    DB -->|迁移| AM
+    AM[Alembic 迁移<br/>check_migrations.py]
+
+    style U fill:transparent,stroke-width:0
+    style BE fill:transparent
+</pre>
+  </div>
+
+  <h2><span class="num">2</span>核心：LangGraph 流水线按 task_type 分叉</h2>
+  <div class="note">每次请求前端注入 <code>[task:TYPE]</code>,后端路由最少阶段,评估不过再循环</div>
+  <div class="pane">
+<pre class="mermaid">
+flowchart TD
+    START([START]) --> RET[retrieval<br/>RAG 检索]
+    RET --> DRAFT[draft<br/>草稿·注入检索上下文]
+    DRAFT --> REF[refine<br/>精修']
+    REF --> EVAL[evaluate<br/>维度矩阵评分]
+    EVAL -->|score 低于阈值<br/>且迭代<5| REF
+    EVAL -->|通过| SAFE[safety_check<br/>内容安全]
+    SAFE --> ENDE([END])
+
+    START2([continue / outline]) -.-> RET
+    START3([rewrite / polish]) -.-> REF
+
+    style RET fill:#f5efe6,stroke:#8a5a2b
+    style DRAFT fill:#f5efe6,stroke:#8a5a2b
+    style REF fill:#f5efe6,stroke:#8a5a2b
+    style EVAL fill:#f5efe6,stroke:#8a5a2b
+    style SAFE fill:#efe9dc,stroke:#8a5a2b
+</pre>
+  </div>
+
+  <div class="grid" style="margin-top:1.2rem">
+    <div class="card">
+      <b>task_type → 阶段链 <span class="tag">最少路径</span></b>
+      <ul>
+        <li><code>continue</code>：retrieval → draft → safety</li>
+        <li><code>rewrite / polish</code>：refine → safety</li>
+        <li><code>outline</code>：retrieval → draft → safety</li>
+        <li><code>generate</code>：完整 5 阶段 + 循环</li>
+      </ul>
+    </div>
+    <div class="card">
+      <b>RAG 检索 <span class="tag">smart_setting_priority</span></b>
+      <ul>
+        <li>4 集合：章节/角色/世界观/剧情事件</li>
+        <li>pgvector 语义检索，小说设定优先</li>
+        <li>结果注入 draft/refine 提示词</li>
+        <li>检索失败降级为无上下文（不阻断）</li>
+      </ul>
+    </div>
+    <div class="card">
+      <b>评估矩阵 <span class="tag">fallback</span></b>
+      <ul>
+        <li>多维度评分，单维度 30s 超时</li>
+        <li>失败返回 0.5 分 fallback</li>
+        <li>低于阈值最多重试 5 次</li>
+        <li>评估结果持久化</li>
+      </ul>
+    </div>
+    <div class="card">
+      <b>内容安全 <span class="tag">内置规则</span></b>
+      <ul>
+        <li>stage 级 pre-check</li>
+        <li>交稿雷达：隐私/版权/敏感预检</li>
+        <li>规则集在 <code>app/safety/</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <h2><span class="num">3</span>安全边界：BYOK 凭证与入站校验</h2>
+  <div class="pane">
+    <div class="grid">
+      <div class="card" style="border:none;padding-left:0">
+        <b>入站（客户端 → 后端）</b>
+        <ul>
+          <li>受保护端点需 <code>X-API-Key</code>（白名单 <code>API_KEYS</code>）</li>
+          <li>未配置时 503 + 引导文案</li>
+          <li>文档 ownership 校验（跨租户 404）</li>
+        </ul>
+      </div>
+      <div class="card" style="border:none;padding-right:0">
+        <b>出站（后端 → LLM）</b>
+        <ul>
+          <li>BYOK 凭证经 <code>X-Provider-Config</code> 上传</li>
+          <li>api_base SSRF 校验（<code>APIBaseNotAllowed</code>）</li>
+          <li>日志日志脱敏（<code>_redact_key</code>）</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>

@@ -85,17 +85,43 @@ docker-compose.local.yml  # 已废弃（仅旧版本地 DB），勿用
 
 ## 架构
 
-**Pipeline 路由**：
+**整体拓扑**：`浏览器 → nginx(80/443, TLS+CSP) → FastAPI 后端 → [LangGraph 流水线 → litellm → BYOK LLM] + [PostgreSQL/pgvector + Redis]`
 
-```text
-generate: retrieval → draft → refine → evaluate → [loop] → safety
-continue: retrieval → draft → safety
-rewrite:  refine → safety
-outline:  retrieval → draft → safety
+```mermaid
+flowchart LR
+    U[浏览器<br/>Next.js 前端] -->|https /v1/chat SSE| NG[nginx :80/443]
+    NG --> BA[FastAPI 后端]
+    BA --> PS[stream_pipeline]
+    PS --> PL[LangGraph 流水线]
+    PL --> LLM[LLM 供应商<br/>BYOK DeepSeek/Qwen/Claude]
+    BA --> SRV[业务服务层]
+    SRV --> DB[(PostgreSQL 16 + pgvector)]
+    SRV --> RD[(Redis)]
 ```
 
-**BYOK**：前端 `X-Provider-Config` 头上传分段凭证，后端 SSRF 校验 api_base，日志脱敏。
-**RAG**：retrieval_node 在 draft 前语义检索，注入 draft/refine 提示词。
+**Pipeline 路由**（按 `task_type` 取最少阶段链，评估不过最多循环 5 次）：
+
+```mermaid
+flowchart TD
+    START([START]) --> RET[retrieval RAG]
+    RET --> DRAFT[draft 注入检索上下文]
+    DRAFT --> REF[refine]
+    REF --> EVAL[evaluate 评分]
+    EVAL -->|分数低且迭代<5| REF
+    EVAL -->|通过| SAFE[safety_check]
+    SAFE --> ENDE([END])
+    C[continue/outline] -.-> RET
+    R[rewrite/polish] -.-> REF
+    style EVAL stroke:#8a5a2b,stroke-width:2px
+```
+
+**阶段链**：`generate` 全链 + 循环 ｜ `continue`/`outline` retrieval→draft→safety ｜ `rewrite`/`polish` refine→safety。
+
+**BYOK**：前端 `X-Provider-Config` 头上传分段凭证，后端 SSRF 校验 api_base（`APIBaseNotAllowed`），日志脱敏（`_redact_key`）。
+**RAG**：retrieval_node 在 draft 前对 4 集合（章节/角色/世界观/事件）pgvector 语义检索，注入 draft/refine 提示词；失败降级不阻断。
+**数据**：PostgreSQL 16 + pgvector（Alembic 迁移，`check_migrations.py` 前置校验）；Redis 缓存/限流。
+
+> 完整交互式版本：`docs/diagrams/architecture.html`
 
 ## API 一览
 

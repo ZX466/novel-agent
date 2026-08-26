@@ -9,7 +9,7 @@
 ✅ **本地 docker 栈验证通过（2026-08-25）**：compose 5 服务全起，nginx 301+HTTPS+HSTS、`/v1/health` ok、前端 200（7421）。修复 3 处：Dockerfile 去 omit=dev + `ENV PORT=7421`、certs 自签已生成并 gitignore。
 🔨 **审计遗留二批已派（2026-08-25）**：L1 迁移自动化 → opencode；L3 `_event_stream` 误报 + L5 CSP(nonce) → codex；L8 API_KEYS 缺省 503 引导 → cline（评审 codex↔cline，opencode→codex）
 ⏳ **催办一轮已发出（2026-08-25 17:1x）**：三板「接收」落定后 1.5h+ 无 agent 受理回执、工作树零提交 → 已向 opencode/codex/cline 各写 [回复] 催办（需澄清→未开工），等回执。
-🔨 **codex 已开工（2026-08-25 18:1x）**：L3 `APIBaseNotAllowed` 收敛异常分支 + 防误报测试；L5 nonce middleware/layout/nginx CSP/README 全部落盘，未提交。opencode(L1)/cline(L8) 仍待受理。
+✅ **codex L3+L5 已完成（2026-08-26）**：L3 `_event_stream` ValueError 误报修正（新增 `APIBaseNotAllowed` 专用异常类，仅 SSRF 拒绝报「API Base URL 不被允许」，普通 ValueError 落入通用分支）+ L5 CSP(nonce) middleware/layout/nginx/README 全部完成；backend 825 passed / 1 skipped、bandit exit 0、frontend tsc + vitest 39 passed。已提交 ZX466/codex（ec71429/3f286d8），待 cline 评审。opencode(L1)/cline(L8) 仍待受理。
 - ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
 
 ## Action Queue
@@ -20,6 +20,7 @@
 - [x] **GitHub 补推完成**（2026-08-25）：`0fc1a62`..`e3e0b29` 全量已推，双远程同步
 - [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
 - [x] **审计遗留二批派发**（2026-08-25）：L1→opencode · L3+L5→codex · L8→cline → 待回执（审计遗留清零）
+- [x] **codex L3+L5 完成回执**（2026-08-26）：代码提交 ZX466/codex ec71429/3f286d8，待 cline 评审（L3/L5 评审人：cline）
 
 ## Unassigned Notes
 

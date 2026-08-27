@@ -120,11 +120,11 @@ def _byok_kwargs(cfg: StageConfig) -> Dict[str, Any]:
 
     Reasoning models (step-3.7-flash, DeepSeek-R1, QwQ…) burn thinking
     tokens against max_tokens; if the whole budget is spent inside the
-    chain-of-thought, `content` arrives empty. Two mitigations:
-    - generous budget (16k) so reasoning + actual answer both fit;
-    - best-effort suppression of the private thought stream via extra_body
-      (providers that don't support a key ignore it per OpenAI-compat
-      convention — unknown extra_body keys are passed through verbatim).
+    chain-of-thought, `content` arrives empty. Generous budget (16k) so
+    reasoning + actual answer both fit. No attempt to disable thinking on
+    the wire: litellm raises UnsupportedParamsError for unregistered models
+    when passed reasoning_effort (seen live with step-3.7-flash) — instead,
+    any inline <think> output is stripped by pipeline nodes' filter.
     """
     _validate_api_base(cfg.api_base)
     kwargs: Dict[str, Any] = {
@@ -132,9 +132,6 @@ def _byok_kwargs(cfg: StageConfig) -> Dict[str, Any]:
         "api_key": cfg.api_key,
         "api_base": cfg.api_base,
         "max_tokens": 16384,
-        # OpenAI-style switch honored by several OpenAI-compatible backends
-        # (vLLM/DashScope/stepfun): disables emitting the CoT on the wire.
-        "reasoning_effort": "none",
     }
     if cfg.extra_headers:
         kwargs["extra_headers"] = dict(cfg.extra_headers)

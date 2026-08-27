@@ -78,30 +78,6 @@ docker compose exec backend alembic upgrade head   # 更新后补迁移
 - **作品导出**：md / txt / epub（零新依赖）
 - **写作工具**：生成总纲 / 续写 / 扩写 / 重写 / 降AI / 编剧对话 / 知识库 / 统计看板
 
-## 目录结构
-
-```
-backend/                # FastAPI + LangGraph
-  app/                  # 核心代码
-    agents/             # 角色化 Agent
-    api/                # REST 端点
-    pipeline/           # 三阶段流水线（核心）
-    planner/            # DAG 编排器
-    eval/               # 评估矩阵
-    safety/             # 内容安全
-    services/           # 业务逻辑
-  alembic/              # 数据库迁移
-  scripts/              # 工具脚本（check_migrations 等）
-  tests/
-  pyproject.toml        # uv 依赖声明（唯一权威）
-frontend/               # Next.js 14
-  src/app/              # 页面路由
-  src/components/       # UI 组件
-deploy/                 # 服务器部署（nginx 等）
-docker-compose.yml      # 全栈 compose
-docker-compose.local.yml  # 已废弃（仅旧版本地 DB），勿用
-```
-
 ## 架构
 
 **整体拓扑**：`浏览器 → nginx(对外 8080/8443, TLS+CSP) → FastAPI 后端 → [LangGraph 流水线 → litellm → BYOK LLM] + [PostgreSQL/pgvector + Redis]`
@@ -141,6 +117,67 @@ flowchart TD
 **数据**：PostgreSQL 16 + pgvector（Alembic 迁移，`check_migrations.py` 前置校验）；Redis 缓存/限流。
 
 > 完整交互式版本：`docs/diagrams/architecture.html`
+
+## 运作原理（通俗版）
+
+> 没接触过 Docker 也不怕，这一节用大白话讲清"代码到底怎么变成能用的网站"。
+
+### 1. 镜像和容器存在哪
+
+- **镜像 / 容器 / 数据卷，全都存在一个虚拟磁盘文件里**（Docker Desktop 用 WSL2 后端，相当于一个隐藏的 Linux 虚拟机）：
+  `E:\docker\dockerdata\DockerDesktopWSL\disk\docker_data.vhdx`（8GB 左右，随内容增长）
+- 这个文件就像一个大"U 盘镜像"：删了它 = 镜像、容器、数据全没。**日常清理用 Docker 命令，不要直接动这个文件**。
+- 数据卷（`pg_data` / `redis_data`，存你的作品数据）也在这个文件里，`docker compose down` 不删，`down -v` 才删。
+
+### 2. 从源码到成品运行：四步
+
+```text
+源代码(.py/.tsx) ──① Dockerfile 定义"菜谱"──▶ 镜像(不可变快照) ──② docker compose 启动──▶ 容器(运行中的实例) ──③ 内部网络互通──▶ 整个网站跑起来
+```
+
+1. **源码 ≠ 能跑**：`.py` 需要 Python 环境，`.tsx` 需要 Node 环境。源码是"原料"。
+2. **Dockerfile = 菜谱**，告诉 Docker 怎么把原料做成"可运行快照（镜像）"：
+   - `backend/Dockerfile`：装 Python 3.11 → 装依赖 → 拷源码 → 启动 `uvicorn`（后端服务）
+   - `frontend/Dockerfile`：装 Node → `npm build` 打包前端 → 交给 nginx 托管
+3. **镜像 = 打包好的成品**（不可变，可复制到任何机器跑）。你项目里 5 个镜像 = 2 个自己构建（backend/frontend）+ 3 个从 Docker Hub 远端拉取（`nginx:alpine` / `redis:7-alpine` / `pgvector/pgvector:pg16`，即网关、缓存、数据库的官方成品）。
+4. **容器 = 镜像的运行实例**。`docker compose up -d --build` 把 5 个镜像各起一个容器，并搭好内部网络。容器之间用内部名字互连（`postgres`/`redis`/`backend`/`frontend`），只有 nginx 对外开 8080/8443 端口。
+
+**改代码后为什么没变？** 因为容器跑的是镜像里的旧快照。改完要重新"做菜"：`docker compose build backend`（重新生成镜像）→ `docker compose up -d backend`（换新容器）。
+
+### 3. 源码都是干什么的（速览）
+
+| 目录 | 通俗解释 |
+|---|---|
+| `backend/app/main.py` | 后端"总开关"，创建 FastAPI 应用，挂载所有接口 |
+| `backend/app/api/` | 接口层：每个文件是一类接口（聊天/作品/章节/角色/设定/导出/统计…），收到前端请求后调业务层 |
+| `backend/app/pipeline/` | **核心**：三阶段写作流水线（草稿→精修→评估→安全），按任务类型走不同路径 |
+| `backend/app/llm/` | 调用 AI 供应商的封装（litellm），处理 BYOK 凭证、SSRF 校验、重试 |
+| `backend/app/services/` | 业务逻辑（文档/章节/角色/检索等操作数据库） |
+| `backend/app/models/` | 数据库表结构（SQLAlchemy ORM），一章一个模型 |
+| `backend/app/schemas/` | 接口的输入输出格式（Pydantic），数据校验 |
+| `backend/app/eval/` | 评估矩阵：给生成内容打分（连贯/角色一致/文笔/剧情逻辑…） |
+| `backend/app/safety/` | 内容安全规则引擎（敏感表达检查） |
+| `backend/app/agents/` + `planner/` | 大纲角色 / 编辑器等"智能体"与 DAG 编排 |
+| `backend/app/tools/` | 工具注册表（AI 可用的内置工具） |
+| `backend/alembic/` | 数据库"版本管理"（迁移脚本），改表结构用 |
+| `backend/scripts/` | 运维脚本（迁移前校验等） |
+| `backend/tests/` | 后端测试 |
+| `frontend/src/app/` | 页面路由（编辑器/作品列表/统计等） |
+| `frontend/src/components/` | 页面里的组件（编辑区/角色面板/AI工具面板/设置…） |
+| `frontend/src/lib/` | 前端工具函数 + 调用后端 API 的封装 |
+| `frontend/src/middleware.ts` | CSP 安全：每请求生成一次性 nonce，防 XSS |
+| `docker-compose.yml` | 5 个服务的编排总表（镜像、端口、环境变量、依赖关系） |
+| `deploy/nginx/app.conf` | nginx 配置：TLS 终止、反代到前端/后端、安全响应头 |
+
+### 4. 一次请求是怎么走完的
+
+```text
+浏览器(https://localhost:8443) → nginx(收请求,解密 TLS) → frontend(页面渲染)
+  用户点"续写" → frontend 发 POST /v1/chat → nginx → backend
+  backend 跑流水线: 检索记忆→草稿→精修→评估→安全检查 → 调 LLM(DeepSeek等)
+  结果逐字 SSE 流回 → 前端逐字显示
+  正文保存 → backend 写 PostgreSQL(内容) + Redis(缓存/限流)
+```
 
 ## API 一览
 

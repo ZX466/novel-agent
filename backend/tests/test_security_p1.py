@@ -55,18 +55,11 @@ async def test_chat_rate_limit_fails_closed_when_redis_is_unavailable(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_require_api_key_unconfigured_returns_503_with_setup_guidance(monkeypatch) -> None:
-    """L8: empty API_KEYS must yield 503 with actionable deployment guidance."""
+async def test_require_api_key_open_mode_when_unconfigured(monkeypatch) -> None:
+    """L8-a: empty API_KEYS = open mode — any request passes (frontend omits header)."""
     monkeypatch.setattr(settings, "api_keys", [])
-    with pytest.raises(HTTPException) as exc_info:
-        await _deps.require_api_key("any-key")
-    assert exc_info.value.status_code == 503
-    detail = exc_info.value.detail
-    assert "API_KEYS" in detail
-    assert "backend/.env" in detail
-    assert "deploy/README.md" in detail
-    # Guidance must never leak configured key material.
-    assert "sk-" not in detail
+    assert await _deps.require_api_key(None) == ""
+    assert await _deps.require_api_key("anything") == "anything"
 
 
 @pytest.mark.asyncio

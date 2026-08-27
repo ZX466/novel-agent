@@ -155,7 +155,7 @@ flowchart TD
 | GET | `/v1/stats/dashboard` | 写作统计 |
 | CRUD | `/v1/documents/{id}/knowledge-docs` | 知识库 |
 
-> 除 `/v1/health` 外受保护端点均需 `X-API-Key`（`API_KEYS` 白名单，见 `.env.example`）。`API_KEYS` 未配置时返回 503 引导文案。
+> 受保护端点鉴权默认**开放模式（fail-open）**：未配置 `API_KEYS` 时直接放行，前端无需填网站鉴权 Key 即可使用。配置 `API_KEYS`（白名单 JSON，见 `.env.example`）后转为强制校验，请求需带 `X-API-Key`（前端设置弹窗「网站鉴权 Key」填写）。
 
 ## 验证清单
 

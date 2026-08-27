@@ -20,24 +20,22 @@ logger = logging.getLogger(__name__)
 
 
 async def require_api_key(
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: str | None = Header(None, alias="X-API-Key"),
 ) -> str:
-    """Validate the X-API-Key header is present and non-empty after stripping."""
-    key = x_api_key.strip()
+    """Validate X-API-Key iff a whitelist is configured (fail-open by default).
+
+    - API_KEYS empty/not set → open mode: any request passes (local single-user;
+      the frontend may simply omit the header).
+    - API_KEYS configured  → strict: header required, must match the whitelist.
+    """
+    key = (x_api_key or "").strip()
+    if not settings.api_keys:
+        # Fail-open (L8-a): no whitelist → no auth requirement.
+        return key
     if not key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="缺少或空的 X-API-Key 头",
-        )
-    if not settings.api_keys:
-        logger.error("X-API-Key authentication is not configured")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "API authentication is not configured: 未配置 API_KEYS，"
-                "请在 backend/.env 中设置 API_KEYS（受保护端点密钥白名单，JSON 数组格式）"
-                "并重启服务，部署配置方式参见 deploy/README.md"
-            ),
         )
     if not any(secrets.compare_digest(key, allowed) for allowed in settings.api_keys):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")

@@ -64,12 +64,12 @@ docker compose exec backend python scripts/check_migrations.py   # 单头 + 无�
 - **AI 编剧对话**：对话界面多轮问答，自动带章节/大纲上下文，结果可一键插入正文。
 - **交稿雷达**：导出前隐私/版权/敏感表达安全预检（SafetyScanDialog）。
 
-> 受保护端点需在 `API_KEYS` 白名单中配置密钥，前端携带 `X-API-Key` 请求头方可调用导出/统计/知识库等接口。
+> 受保护端点鉴权默认**开放模式**：未配置 `API_KEYS` 时直接放行，前端填 AI 供应商 Key 即可使用（无需网站 Key）。配置 `API_KEYS` 后需携带 `X-API-Key`。
 
 ## 常见坑
 
 - **`alembic upgrade head` 报 "Multiple head revisions"**：迁移链分叉。用 `check_migrations.py` / `alembic heads` 核对，保持单一 head；分叉先合并链再升级。
 - **`litellm` 安装失败**：`pyproject.toml` 已 pin `litellm==1.90.7`（<1.91 硬约束），1.91+ 引入 Rust 组件，不要手动升级。
 - **CORS 报错**：检查 `backend/.env` 的 `CORS_ORIGINS` 是否含 `https://localhost:8443`（容器内 compose 已覆盖默认，本地进程模式需自行加）。
-- **导出/统计/知识库 401 或 503**：确认已配置 `API_KEYS` 且请求携带 `X-API-Key`；`API_KEYS` 未配置时受保护接口返回 503 引导文案（见 README §六 说明）。
+- **导出/统计/知识库 401**：仅在配置了 `API_KEYS` 时出现——确认请求携带 `X-API-Key`（前端设置弹窗「网站鉴权 Key」填白名单中任一值）；未配置 `API_KEYS` 时默认开放不拦。
 - **镜像拉取失败**：国内网络配置 Docker 镜像加速器（Docker Desktop → Settings → Docker Engine 加 `registry-mirrors`，见 README §八 FAQ）。

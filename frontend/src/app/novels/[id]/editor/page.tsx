@@ -511,7 +511,11 @@ export default function NovelEditorPage() {
 
   const handleAddChapter = useCallback(async () => {
     try {
-      const nextIndex = chapters.length;
+      // Next index = max existing + 1, NOT chapters.length — the outline
+      // auto-create can leave world-setting rows occupying early indices,
+      // so length over-counts and jumps past the real next chapter.
+      const nextIndex =
+        chapters.reduce((m, c) => Math.max(m, c.chapter_index ?? 0), -1) + 1;
       const ch = await createChapter(docId, {
         chapter_index: nextIndex,
         title: `第${nextIndex + 1}章`,
@@ -672,7 +676,6 @@ export default function NovelEditorPage() {
           for (let i = 0; i < lines.length; i++) {
             const trimmed = lines[i].trim();
             if (
-              /^\d+[\.\、]/.test(trimmed) ||
               /^第[一二三四五六七八九十百千\d]+章/.test(trimmed)
             ) {
               const title =

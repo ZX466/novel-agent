@@ -231,22 +231,58 @@ export function AIToolPanel({
   useEffect(() => {
     if (wasBusy.current && !isBusy && latestAssistantText) {
       setEditedText(latestAssistantText);
+      clearPending();
     }
     wasBusy.current = isBusy;
   }, [isBusy, latestAssistantText]);
 
   // Persist the live result (streaming buffer included, not just the finished
   // editedText) so leaving the editor mid-generation doesn't lose it.
+  // Never removeItem here: a submission clears the UI copy via setEditedText("")
+  // while the model is still thinking (no tokens yet), and wiping storage then
+  // would destroy a previously saved draft on a mid-thought exit.
   useEffect(() => {
     if (!storageKey) return;
     const value = editedText || latestAssistantText;
+    if (!value) return;
     try {
-      if (value) window.localStorage.setItem(storageKey, value);
-      else window.localStorage.removeItem(storageKey);
+      window.localStorage.setItem(storageKey, value);
     } catch {
       // localStorage unavailable (private mode etc.) — non-fatal.
     }
   }, [editedText, latestAssistantText, storageKey]);
+
+  // "Generation interrupted" marker: set on submit, cleared once real content
+  // lands. If the user leaves while the model is still thinking (no tokens),
+  // the draft area would otherwise come back blank with no explanation.
+  const pendingKey = storageKey ? `${storageKey}:pending` : null;
+  const [interrupted, setInterrupted] = useState(false);
+  useEffect(() => {
+    if (!pendingKey) return;
+    try {
+      if (window.localStorage.getItem(pendingKey)) setInterrupted(true);
+      window.localStorage.removeItem(pendingKey); // ack once
+    } catch {
+      // non-fatal
+    }
+  }, [pendingKey]);
+
+  const markPending = () => {
+    if (!pendingKey) return;
+    try {
+      window.localStorage.setItem(pendingKey, "1");
+    } catch {
+      // non-fatal
+    }
+  };
+  const clearPending = () => {
+    if (!pendingKey) return;
+    try {
+      window.localStorage.removeItem(pendingKey);
+    } catch {
+      // non-fatal
+    }
+  };
 
   const handleTool = (tool: ToolKey) => {
     if (isBusy) return;
@@ -257,6 +293,7 @@ export function AIToolPanel({
     }
     setActiveTool(tool);
     setEditedText("");
+    markPending();
     sendMessage({
       text: buildPrompt(tool, editorText, chapterTitle, novelId, selectedText, novelTitle, outlineText, undefined, customPrompt),
     });
@@ -266,13 +303,17 @@ export function AIToolPanel({
     setShowOutlineForm(false);
     setActiveTool("outline");
     setEditedText("");
+    markPending();
     sendMessage({
       text: buildPrompt("outline", editorText, chapterTitle, novelId, selectedText, novelTitle, outlineText, outlineForm, customPrompt),
     });
   };
 
   const handleInsert = () => {
-    if (editedText) onInsertIntoEditor(editedText);
+    if (editedText) {
+      onInsertIntoEditor(editedText);
+      clearPending();
+    }
   };
 
   return (
@@ -489,12 +530,33 @@ export function AIToolPanel({
         {/* Empty state */}
         {!isBusy && !editedText && !error && (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-sp-3" style={{ color: "var(--muted)" }}>
-            <svg className="w-10 h-10" style={{ color: "var(--border)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-            <p className="text-[12px] max-w-[180px]">点击上方按钮使用 AI 工具，生成内容将显示在此</p>
+            {interrupted ? (
+              <>
+                <svg className="w-10 h-10" style={{ color: "var(--warn)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+                <p className="text-[12px] max-w-[220px]" style={{ color: "var(--warn)" }}>
+                  上次生成在思考时被中断，未产生内容。请重新点击上方工具生成。
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { setInterrupted(false); setActiveTool(null); }}
+                  className="px-sp-3 py-sp-1.5 rounded-sm text-[11px] font-medium border"
+                  style={{ borderColor: "var(--border)", color: "var(--fg-secondary)" }}
+                >
+                  知道了
+                </button>
+              </>
+            ) : (
+              <>
+                <svg className="w-10 h-10" style={{ color: "var(--border)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <p className="text-[12px] max-w-[180px]">点击上方按钮使用 AI 工具，生成内容将显示在此</p>
+              </>
+            )}
           </div>
         )}
 

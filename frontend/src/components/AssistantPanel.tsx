@@ -22,7 +22,8 @@ interface AssistantPanelProps {
 }
 
 const CONTEXT_HINT =
-  "我是你的 AI 编剧。我会参考当前章节（或全文）上下文回答你的创作问题，回复可直接插入正文。";
+  "我是你的 AI 编剧。我会参考当前章节/全文及人物、世界观设定回答你的创作问题。\n"
+  + "回复 200-600 字、条理清晰，可直接插入正文或作为修改参考。";
 
 /**
  * F1 AI 对话助手 — multi-turn chat with work context injection.

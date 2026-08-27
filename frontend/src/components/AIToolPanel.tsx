@@ -87,31 +87,64 @@ function buildPrompt(
       const chapPart  = outlineForm?.targetChapters
         ? `目标章数：${outlineForm.targetChapters}章\n`
         : "";
-      return `${novelTag} [task:outline] ${titleContext}${genrePart}${tonePart}${descPart}${chapPart}请为这本小说生成完整的故事大纲，包含主题、核心冲突、主要角色、世界观设定、每章梗概。${contextPart}${customPart}`;
+      return `${novelTag} [task:outline] ${titleContext}${genrePart}${tonePart}${descPart}${chapPart}请为这本小说生成完整的故事大纲，包含以下部分：\n`
+        + `1. 【主题与核心冲突】1-2句话点明主题与核心矛盾；\n`
+        + `2. 【主要角色】逐个列出：姓名、身份、动机、性格、成长弧线（每角色 2-3 行）；\n`
+        + `3. 【世界观设定】地理、势力、力量体系等（分条）；\n`
+        + `4. 【章节梗概】${chapPart.trim() ? `按${outlineForm?.targetChapters}章逐章列出，` : "逐章列出（8-20章，每章"}每章以"第X章 标题"开头，接 2-3 句该章发生的事、冲突与伏笔。\n`
+        + `只输出大纲本身，不要解释、不要复述要求。${contextPart}${customPart}`;
     }
     case "generate": {
       const outlinePart = outlineText
-        ? `\n\n故事大纲（请据此生成正文）：\n${outlineText.slice(-6000)}`
+        ? `\n\n故事大纲（请严格据此展开情节，不偏离设定）：\n${outlineText.slice(-6000)}`
         : "";
-      return `${novelTag} [task:generate] ${titleContext}根据以下大纲和已写内容，续写新的正文段落${titlePart}。目标长度约 800-1200 字，一次只写一个场景，自然衔接前文。${outlinePart}\n\n当前内容：\n${context}${customPart}`;
+      return `${novelTag} [task:generate] ${titleContext}请根据故事大纲续写新的正文段落${titlePart}。\n`
+        + `要求：\n`
+        + `- 目标长度 800-1200 字，一次写一个完整场景（有起承转合）\n`
+        + `- 开头自然衔接上一段，不重复已写内容\n`
+        + `- 多用具体动作、环境细节、对白与心理活动，避免空泛概括\n`
+        + `- 人物言行符合其设定，推进剧情并留下至少一处伏笔\n`
+        + `- 结尾停在张力点，方便继续续写\n`
+        + `直接输出正文，不要任何标题、解释或思考过程。${outlinePart}\n\n当前内容：\n${context}${customPart}`;
     }
     case "continue": {
       const outlinePart = outlineText
-        ? `\n\n故事大纲（供参考）：\n${outlineText.slice(-6000)}`
+        ? `\n\n故事大纲（供参考，保持设定一致）：\n${outlineText.slice(-6000)}`
         : "";
-      return `${novelTag} [task:continue] ${titleContext}请从以下内容的末尾继续写作，保持风格一致，自然衔接${titlePart}。目标长度约 500-800 字。${outlinePart}\n\n当前内容：\n${context}${customPart}`;
+      return `${novelTag} [task:continue] ${titleContext}请从以下内容的末尾继续写作${titlePart}。\n`
+        + `要求：\n`
+        + `- 目标长度 500-900 字，一次推进一个情节节拍\n`
+        + `- 与上文风格、视角、时态保持一致，衔接自然\n`
+        + `- 结合已有的人物性格与伏笔推进，不强行反转\n`
+        + `- 直接输出续写正文，不要解释或思考过程。${outlinePart}\n\n当前内容：\n${context}${customPart}`;
     }
     case "expand": {
       const target = selectedText || context;
-      return `${novelTag} [task:rewrite] 请将以下段落进行扩写，增加细节描写和情节发展${titlePart}。\n\n待扩写内容：\n${target}${customPart}`;
+      return `${novelTag} [task:rewrite] 请将以下段落扩写${titlePart}。\n`
+        + `要求：\n`
+        + `- 在保持原意与情节不变的前提下，补充感官细节、动作、对白、环境与心理描写\n`
+        + `- 扩写后长度约为原文的 2-3 倍\n`
+        + `- 不新增与主线无关的支线，不改变人物设定\n`
+        + `直接输出扩写后的完整段落，不要解释。\n\n待扩写内容：\n${target}${customPart}`;
     }
     case "rewrite": {
       const target = selectedText || context;
-      return `${novelTag} [task:rewrite] 请重写以下段落，改进文笔和表达，保持情节不变${titlePart}。\n\n待重写内容：\n${target}${customPart}`;
+      return `${novelTag} [task:rewrite] 请重写以下段落${titlePart}。\n`
+        + `要求：\n`
+        + `- 保持情节与信息不变，只改进文笔：句式更流畅、用词更精准、节奏更有张力\n`
+        + `- 保持原文视角与风格基调\n`
+        + `- 长度与原文相当（约 ±20%）\n`
+        + `直接输出重写后的完整段落，不要解释。\n\n待重写内容：\n${target}${customPart}`;
     }
     case "deai": {
       const target = selectedText || context;
-      return `${novelTag} [task:polish] 请将以下内容改写为更自然的人类写作风格，降低 AI 检测率，保持意思不变${titlePart}。\n\n待处理内容：\n${target}${customPart}`;
+      return `${novelTag} [task:polish] 请将以下内容改写为更自然的人类写作风格${titlePart}。\n`
+        + `要求：\n`
+        + `- 消除明显的 AI 腔：套路化排比、"然而/不禁/仿佛"式高频词、空泛总结\n`
+        + `- 用具体、口语化但不失文采的表述替代模板句\n`
+        + `- 保持情节与人物设定完全不变\n`
+        + `- 长度与原文相当（约 ±20%）\n`
+        + `直接输出改写后的完整段落，不要解释。\n\n待处理内容：\n${target}${customPart}`;
     }
   }
 }

@@ -181,8 +181,12 @@ async def draft_node(state: PipelineState) -> dict:
         system_content = (
             "你是一位小说创作 AI 编剧。对话最后一条 user 消息是当前问题，"
             "前文为作品上下文与对话历史（角色 user/assistant 表示问答双方）。\n"
-            "请直接给出具体、可执行的创作建议（情节发展/人物刻画/对白/节奏/连贯性），"
-            "不要复述问题，不要输出与创作无关的内容。"
+            "要求：\n"
+            "1. 直接给出具体、可执行的创作建议（情节发展/人物刻画/对白/节奏/连贯性），"
+            "不要复述问题，不要输出与创作无关的内容；\n"
+            "2. 结合作品上下文中的角色与世界观，不凭空设定；\n"
+            "3. 回复 200-600 字，条理清晰，可直接插入正文或当作修改参考；\n"
+            "4. 只输出建议正文，不要任何思考过程、解释或前后缀。"
         )
     else:
         system_content = "You are a concise drafting assistant. Write a first draft."
@@ -212,13 +216,10 @@ async def draft_node(state: PipelineState) -> dict:
     stream_resp = await llm_draft(messages, **draft_kwargs)
     async for chunk in stream_resp:
         delta = chunk.choices[0].delta
-        # Some models (DeepSeek-R1, QwQ, etc.) put content in
-        # reasoning_content or thinking fields instead of content.
-        token = (
-            getattr(delta, "content", None)
-            or getattr(delta, "reasoning_content", None)
-            or ""
-        )
+        # ONLY stream `content`. Reasoning models (DeepSeek-R1, QwQ, etc.)
+        # put their chain-of-thought in `reasoning_content` — that is the
+        # model's private thinking and must NEVER leak into the novel text.
+        token = getattr(delta, "content", None) or ""
         if token:
             content += token
             if on_token:

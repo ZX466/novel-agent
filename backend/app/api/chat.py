@@ -205,7 +205,23 @@ async def _load_work_context(
         wanted = set(req.context_chapter_ids)
         chapters = [c for c in chapters if c.id in wanted]
 
-    blocks = [f"[{c.title}]\n{c.content_text or ''}" for c in chapters]
+    # Always include the novel's characters / world settings / plot events so
+    # the assistant can answer with full lore, not just raw chapter text.
+    lore_blocks: list[str] = []
+    try:
+        from app.services.retrieval import retrieve_structured_lore
+        lore = await retrieve_structured_lore(
+            session, novel_id=req.context_doc_id, max_chars=max_chars // 2
+        )
+        if lore:
+            lore_blocks.append(lore)
+    except Exception:
+        logger.warning(
+            "assistant: structured lore load failed, using chapters only",
+            exc_info=True,
+        )
+
+    blocks = lore_blocks + [f"[{c.title}]\n{c.content_text or ''}" for c in chapters]
     return "\n\n".join(blocks)[:max_chars]
 
 

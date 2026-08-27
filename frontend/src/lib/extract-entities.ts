@@ -13,16 +13,54 @@ import { loadProviderConfig, ownerAuthHeaders } from "@/lib/settings";
 
 const EXTRACT_TASK: TaskType = "extract";
 
+/**
+ * Extract the first top-level JSON object from a model reply.
+ * Models sometimes wrap JSON in markdown fences or prose; sometimes they
+ * emit several JSON objects. A naive indexOf("{")..lastIndexOf("}") breaks
+ * on nested braces or trailing prose, so walk braces with a depth counter.
+ */
+function extractJsonObject(text: string): string {
+  const start = text.indexOf("{");
+  if (start < 0) return text;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escape) escape = false;
+      else if (ch === "\\") escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === "{") {
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  // Unbalanced (model cut off) — fall back to the full remaining text.
+  return text.slice(start);
+}
+
 function parseExtractJson(text: string): ExtractEntitiesResult {
   // Strip any markdown fences / leading prose the model may add.
   const cleaned = text
     .replace(/^```(?:json)?\s*/m, "")
     .replace(/\s*```$/, "")
     .trim();
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  const jsonStr = start >= 0 && end > start ? cleaned.slice(start, end + 1) : cleaned;
-  const data = JSON.parse(jsonStr) as Partial<ExtractEntitiesResult>;
+  let data: Partial<ExtractEntitiesResult>;
+  try {
+    data = JSON.parse(extractJsonObject(cleaned)) as Partial<ExtractEntitiesResult>;
+  } catch {
+    // Last resort: the model replied with prose (JSON mode unsupported).
+    // Try to salvage any JSON fragment before giving up.
+    const frag = cleaned.match(/\{[\s\S]*\}/)?.[0] ?? "";
+    data = frag ? (JSON.parse(frag) as Partial<ExtractEntitiesResult>) : {};
+  }
   return {
     characters: Array.isArray(data.characters) ? data.characters : [],
     world_settings: Array.isArray(data.world_settings) ? data.world_settings : [],

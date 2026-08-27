@@ -90,8 +90,9 @@ async def retrieval_node(state: PipelineState) -> dict:
     if session is None or novel_id is None:
         return {"retrieved_context": ""}
 
+    # 1) Vector RAG (needs EMBEDDING_* configured).
     try:
-        from app.services.retrieval import retrieve
+        from app.services.retrieval import retrieve, retrieve_structured_lore
         # Use the dedicated embedding stage from ProviderConfig when present
         # (user-configured in the frontend settings dialog). When absent,
         # falls back to .env EMBEDDING_* credentials. Never reuse the draft
@@ -111,8 +112,24 @@ async def retrieval_node(state: PipelineState) -> dict:
             )
             return {"retrieved_context": ctx}
     except Exception:
+        logger.warning(
+            "retrieval_node: vector retrieval failed, falling back to structured lore",
+            exc_info=True,
+        )
+    # 2) Structured lore fallback (no embeddings needed): characters / world /
+    #    recent chapters straight from the DB, so the draft still knows the
+    #    novel even when EMBEDDING_* is unconfigured or retrieval returned nothing.
+    try:
+        from app.services.retrieval import retrieve_structured_lore
+        lore = await retrieve_structured_lore(
+            session, novel_id=novel_id, max_chars=6000
+        )
+        if lore:
+            logger.info("retrieval_node: structured lore fallback, %d chars", len(lore))
+            return {"retrieved_context": lore}
+    except Exception:
         logger.exception(
-            "retrieval_node: memory retrieval failed, continuing without context"
+            "retrieval_node: structured lore fallback failed, continuing without context"
         )
 
     return {"retrieved_context": ""}

@@ -243,3 +243,63 @@ async def test_retrieve_rejects_missing_novel_id():
     # Also verify an explicit None is rejected the same way.
     with pytest.raises(ValueError, match="novel_id"):
         await retrieval.retrieve(session, "query", novel_id=None)
+
+
+async def test_retrieve_structured_lore_formats_all_sections(mock_session):
+    """retrieve_structured_lore pulls characters / world settings / plot
+    events / recent chapters without embeddings and formats a text block."""
+    from app.models.plot_event import PlotEvent
+    from app.models.world_setting import WorldSetting
+    mock_session.set_execute_results([
+        _FakeResult(scalars=[
+            Character(id=1, novel_id=7, name="张三", role="主角",
+                      description="少年剑客", arc_summary="从学徒到宗师"),
+        ]),
+        _FakeResult(scalars=[
+            WorldSetting(id=1, novel_id=7, category="地理", title="青云宗",
+                         content_text="仙门坐落于青云山"),
+        ]),
+        _FakeResult(scalars=[
+            PlotEvent(id=1, novel_id=7, chapter_index=0,
+                      event_type="起", summary="张三拜入师门"),
+        ]),
+        _FakeResult(scalars=[
+            Chapter(id=1, novel_id=7, chapter_index=1, title="初入江湖",
+                    summary="少年张三拜入青云宗"),
+        ]),
+    ])
+    lore = await retrieval.retrieve_structured_lore(mock_session, novel_id=7)
+    assert "【主要角色】" in lore
+    assert "张三" in lore
+    assert "少年剑客" in lore
+    assert "【世界观设定】" in lore
+    assert "青云宗" in lore
+    assert "【剧情事件】" in lore
+    assert "张三拜入师门" in lore
+    assert "【最近章节】" in lore
+    assert "第1章《初入江湖》" in lore
+
+
+async def test_retrieve_structured_lore_empty_when_nothing_found(mock_session):
+    """All four collections empty → returns empty string (draft gets no context)."""
+    mock_session.set_execute_results([
+        _FakeResult(scalars=[]),
+        _FakeResult(scalars=[]),
+        _FakeResult(scalars=[]),
+        _FakeResult(scalars=[]),
+    ])
+    assert await retrieval.retrieve_structured_lore(mock_session, novel_id=7) == ""
+
+
+async def test_retrieve_structured_lore_respects_max_chars(mock_session):
+    """Result is capped at max_chars."""
+    long_desc = "长" * 5000
+    mock_session.set_execute_results([
+        _FakeResult(scalars=[Character(id=1, novel_id=7, name="A", role="配角",
+                                       description=long_desc, arc_summary="")]),
+        _FakeResult(scalars=[]),
+        _FakeResult(scalars=[]),
+        _FakeResult(scalars=[]),
+    ])
+    lore = await retrieval.retrieve_structured_lore(mock_session, novel_id=7, max_chars=100)
+    assert len(lore) <= 100

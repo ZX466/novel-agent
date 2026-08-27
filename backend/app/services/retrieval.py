@@ -439,3 +439,98 @@ async def retrieve_knowledge_docs(
         )
         for kd, score in hits
     ]
+
+
+async def retrieve_structured_lore(
+    session: AsyncSession,
+    *,
+    novel_id: int,
+    max_chars: int = 8000,
+) -> str:
+    """Structured lore fallback for draft context when vector RAG is
+    unavailable (no EMBEDDING_* configured, or retrieval failed).
+
+    Pulls the novel's characters, world settings, plot events and the most
+    recent chapter summaries straight from the DB — no embeddings needed.
+    Returns a formatted plain-text lore block (empty string if nothing found).
+    """
+    if novel_id is None:
+        raise ValueError("retrieve_structured_lore() requires novel_id")
+
+    blocks: list[str] = []
+
+    # Characters (most prominent first: keep insertion order, cap by chars).
+    char_rows = (
+        await session.execute(
+            select(Character)
+            .where(Character.novel_id == novel_id)
+            .order_by(Character.id.asc())
+            .limit(50)
+        )
+    ).scalars().all()
+    if char_rows:
+        lines = ["【主要角色】"]
+        for c in char_rows:
+            desc = (c.description or "").strip()
+            arc = (c.arc_summary or "").strip()
+            parts = [f"角色：{c.name}（{c.role or '其他'}）"]
+            if desc:
+                parts.append(f"描述：{desc}")
+            if arc:
+                parts.append(f"弧线：{arc}")
+            lines.append("；".join(parts))
+        blocks.append("\n".join(lines))
+
+    # World settings.
+    ws_rows = (
+        await session.execute(
+            select(WorldSetting)
+            .where(WorldSetting.novel_id == novel_id)
+            .order_by(WorldSetting.id.asc())
+            .limit(50)
+        )
+    ).scalars().all()
+    if ws_rows:
+        lines = ["【世界观设定】"]
+        for ws in ws_rows:
+            content = (getattr(ws, "content_text", "") or "").strip()
+            lines.append(f"设定：{ws.title or ''}（{ws.category or '其他'}）{content}")
+        blocks.append("\n".join(lines))
+
+    # Plot events.
+    pe_rows = (
+        await session.execute(
+            select(PlotEvent)
+            .where(PlotEvent.novel_id == novel_id)
+            .order_by(PlotEvent.id.asc())
+            .limit(50)
+        )
+    ).scalars().all()
+    if pe_rows:
+        lines = ["【剧情事件】"]
+        for pe in pe_rows:
+            summary = (pe.summary or "").strip()
+            lines.append(f"事件：{summary}")
+        blocks.append("\n".join(lines))
+
+    # Recent chapter summaries (tail of the story — what happened up to now).
+    ch_rows = (
+        await session.execute(
+            select(Chapter)
+            .where(Chapter.novel_id == novel_id)
+            .order_by(Chapter.chapter_index.desc())
+            .limit(5)
+        )
+    ).scalars().all()
+    if ch_rows:
+        lines = ["【最近章节】"]
+        for ch in reversed(ch_rows):
+            summary = (ch.summary or "").strip()
+            lines.append(f"第{ch.chapter_index}章《{ch.title or ''}》：{summary or '（无摘要）'}")
+        blocks.append("\n".join(lines))
+
+    if not blocks:
+        return ""
+
+    lore = "\n\n".join(blocks)
+    return lore[:max_chars]

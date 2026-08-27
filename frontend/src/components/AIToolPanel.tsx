@@ -93,13 +93,13 @@ function buildPrompt(
       const outlinePart = outlineText
         ? `\n\n故事大纲（请据此生成正文）：\n${outlineText.slice(-6000)}`
         : "";
-      return `${novelTag} [task:generate] ${titleContext}根据以下大纲和已写内容，续写新的正文段落${titlePart}。${outlinePart}\n\n当前内容：\n${context}${customPart}`;
+      return `${novelTag} [task:generate] ${titleContext}根据以下大纲和已写内容，续写新的正文段落${titlePart}。目标长度约 800-1200 字，一次只写一个场景，自然衔接前文。${outlinePart}\n\n当前内容：\n${context}${customPart}`;
     }
     case "continue": {
       const outlinePart = outlineText
         ? `\n\n故事大纲（供参考）：\n${outlineText.slice(-6000)}`
         : "";
-      return `${novelTag} [task:continue] ${titleContext}请从以下内容的末尾继续写作，保持风格一致，自然衔接${titlePart}。${outlinePart}\n\n当前内容：\n${context}${customPart}`;
+      return `${novelTag} [task:continue] ${titleContext}请从以下内容的末尾继续写作，保持风格一致，自然衔接${titlePart}。目标长度约 500-800 字。${outlinePart}\n\n当前内容：\n${context}${customPart}`;
     }
     case "expand": {
       const target = selectedText || context;
@@ -139,8 +139,27 @@ export function AIToolPanel({
   const [showCustomPrompt, setShowCustomPrompt] = useState(false);
 
   // Editable copy of the latest generated text (user can tweak before inserting).
-  const [editedText, setEditedText] = useState("");
+  // Persisted to localStorage so leaving the editor mid-generation doesn't
+  // lose the result — restore it on remount.
+  const storageKey = novelId ? `project11:ai-draft:${novelId}` : null;
+  const [editedText, setEditedText] = useState(() => {
+    if (!storageKey) return "";
+    try {
+      return window.localStorage.getItem(storageKey) ?? "";
+    } catch {
+      return "";
+    }
+  });
   const wasBusy = useRef(false);
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      if (editedText) window.localStorage.setItem(storageKey, editedText);
+      else window.localStorage.removeItem(storageKey);
+    } catch {
+      // localStorage unavailable (private mode etc.) — non-fatal.
+    }
+  }, [editedText, storageKey]);
 
   const transport = useMemo(
     () =>

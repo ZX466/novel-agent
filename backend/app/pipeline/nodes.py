@@ -60,6 +60,80 @@ logger = logging.getLogger(__name__)
 # Max iterations before forced degradation (safety net)
 _HARD_MAX_ITERS = 5
 
+_THINK_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
+
+
+class _ThinkStreamFilter:
+    """Filters inline ``<think>…</think>`` blocks out of a token stream.
+
+    Some reasoning models (e.g. step-3.7-flash) emit their chain-of-thought
+    inline in ``content`` between <think> tags, instead of the separate
+    ``reasoning_content`` field. This filter buffers tokens while inside a
+    think block and only forwards content outside one. Final fallback:
+    ``strip()`` removes any residual tags from the assembled text.
+    """
+
+    def __init__(self) -> None:
+        self.buffer = ""
+        self.in_think = False
+        self.emitted = ""
+        self.emitted_any = False
+
+    def feed(self, token: str) -> str:
+        """Feed one streamed token; returns text safe to forward now ("" if none)."""
+        self.buffer += token
+        return self._drain(final=False)
+
+    def finish(self) -> str:
+        """Flush the holdback buffer at end of stream and return the tail.
+
+        Closes the streamed phase: anything still buffered (minus a trailing
+        unclosed <think>) is released. Call before/instead of strip().
+        """
+        return self._drain(final=True)
+
+    def strip(self, text: str) -> str:
+        """Final regex pass over the assembled text; also closes unclosed tags."""
+        cleaned = _THINK_RE.sub("", text)
+        # Unclosed <think> (model truncated mid-thought): drop everything after.
+        idx = cleaned.find("<think>")
+        if idx != -1:
+            cleaned = cleaned[:idx]
+        return cleaned.strip()
+
+    def _drain(self, *, final: bool) -> str:
+        out: list[str] = []
+        while True:
+            if not self.in_think:
+                idx = self.buffer.find("<think>")
+                if idx == -1:
+                    if final:
+                        out.append(self.buffer)
+                        self.buffer = ""
+                    else:
+                        # Hold back the last len("<think>")-1 chars in case a
+                        # tag spans a token boundary.
+                        cut = max(0, len(self.buffer) - (len("<think>") - 1))
+                        out.append(self.buffer[:cut])
+                        self.buffer = self.buffer[cut:]
+                    break
+                out.append(self.buffer[:idx])
+                self.buffer = self.buffer[idx + len("<think>"):]
+                self.in_think = True
+            else:
+                end = self.buffer.find("</think>")
+                if end == -1:
+                    if final:
+                        # Unclosed tag at end of stream: drop the whole tail.
+                        self.buffer = ""
+                    break
+                self.buffer = self.buffer[end + len("</think>"):]
+                self.in_think = False
+        text = "".join(out)
+        if text:
+            self.emitted_any = True
+        return text
+
 
 def _user_msg(content: str) -> Dict[str, str]:
     return {"role": "user", "content": content}
@@ -205,8 +279,10 @@ async def draft_node(state: PipelineState) -> dict:
         _user_msg(topic),
     ]
 
-    # Stream tokens in real-time
+    # Stream tokens in real-time. _ThinkStreamFilter drops inline
+    # <think>…</think> blocks some reasoning models emit inside `content`.
     content = ""
+    think_filter = _ThinkStreamFilter()
     draft_kwargs: dict = {"stage_config": stage, "stream": True}
     if task_type == "extract":
         # JSON extraction: lower temperature for deterministic output
@@ -221,9 +297,17 @@ async def draft_node(state: PipelineState) -> dict:
         # model's private thinking and must NEVER leak into the novel text.
         token = getattr(delta, "content", None) or ""
         if token:
-            content += token
-            if on_token:
-                await on_token(token)
+            safe = think_filter.feed(token)
+            if safe:
+                content += safe
+                if on_token:
+                    await on_token(safe)
+    tail = think_filter.finish()
+    if tail:
+        content += tail
+        if on_token:
+            await on_token(tail)
+    content = think_filter.strip(content)
 
     if not content.strip():
         logger.warning(
@@ -313,16 +397,25 @@ async def refine_node(state: PipelineState) -> dict:
         _user_msg(user_content),
     ]
 
-    # Stream tokens in real-time
+    # Stream tokens in real-time (with inline <think> filtering)
     content = ""
+    think_filter = _ThinkStreamFilter()
     stream_resp = await llm_refine(messages, stage_config=stage, stream=True)
     async for chunk in stream_resp:
         delta = chunk.choices[0].delta
         token = getattr(delta, "content", None) or ""
         if token:
-            content += token
-            if on_token:
-                await on_token(token)
+            safe = think_filter.feed(token)
+            if safe:
+                content += safe
+                if on_token:
+                    await on_token(safe)
+    tail = think_filter.finish()
+    if tail:
+        content += tail
+        if on_token:
+            await on_token(tail)
+    content = think_filter.strip(content)
 
     return {
         "refined": content,

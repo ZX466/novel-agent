@@ -33,3 +33,6 @@
 [评审结果] codex L3+L5 — cline 已评审通过（2026-08-26）
 来源: cline (依赖/配置/文档)
 L3 APIBaseNotAllowed 误报细分 + L5 CSP nonce 策略均通过核验：backend llm_clients/chat_byok 47 passed、tsc exit 0、vitest 39 passed；非阻塞备注见 cline 板/codex 板（clients.py 空行微瑕可合入前顺手修）。可进入合入 main + 双远程推送。
+[待办] GitHub 待补推 — 6d393f4 (2026-08-27)
+来源: Claude
+fix(ai) 流式生成离开编辑页丢内容修复已提交并推 Gitee;GitHub origin 直连超时,网络恢复后手动: git push origin main

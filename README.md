@@ -19,7 +19,7 @@
 前置：Docker Desktop（WSL2 后端）。
 
 ```powershell
-# 0. 生成自签 TLS 证书（nginx 启动必需；仅本机 https://localhost 用，正式域名走 certbot，见 deploy/README.md）
+# 0. 生成自签 TLS 证书（nginx 启动必需；仅本机 https://localhost:8443 用，正式域名走 certbot，见 deploy/README.md）
 mkdir deploy/nginx/certs
 # openssl 不在 PATH？Windows 一般没有——Git for Windows 自带，与 git 同目录：
 $openssl = Join-Path (Split-Path (Get-Command git).Source -Parent) "openssl.exe"
@@ -41,8 +41,8 @@ docker compose exec backend alembic upgrade head
 docker compose exec backend python scripts/check_migrations.py
 ```
 
-访问 **https://localhost** → 点击 ⚙ 配置 API Key → 开始写作。
-健康检查：`curl -k https://localhost/v1/health` → `{"status":"ok"}`
+访问 **https://localhost:8443** → 点击 ⚙ 配置 API Key → 开始写作。
+健康检查：`curl -k https://localhost:8443/v1/health` → `{"status":"ok"}`
 
 > 本地进程热重载（改代码免 rebuild）：`uv run uvicorn app.main:app --reload --port 8000` + `npm run dev`，DB 仍用 compose 栈。
 
@@ -104,11 +104,11 @@ docker-compose.local.yml  # 已废弃（仅旧版本地 DB），勿用
 
 ## 架构
 
-**整体拓扑**：`浏览器 → nginx(80/443, TLS+CSP) → FastAPI 后端 → [LangGraph 流水线 → litellm → BYOK LLM] + [PostgreSQL/pgvector + Redis]`
+**整体拓扑**：`浏览器 → nginx(对外 8080/8443, TLS+CSP) → FastAPI 后端 → [LangGraph 流水线 → litellm → BYOK LLM] + [PostgreSQL/pgvector + Redis]`
 
 ```mermaid
 flowchart LR
-    U[浏览器<br/>Next.js 前端] -->|https /v1/chat SSE| NG[nginx :80/443]
+    U[浏览器<br/>Next.js 前端] -->|https /v1/chat SSE| NG[nginx 对外 8080/8443]
     NG --> BA[FastAPI 后端]
     BA --> PS[stream_pipeline]
     PS --> PL[LangGraph 流水线]
@@ -162,8 +162,8 @@ flowchart TD
 | 项 | 期望 |
 |---|---|
 | `docker compose ps` | 5 容器 running，postgres/redis healthy |
-| `curl -k https://localhost/v1/health` | `{"status":"ok"}` |
-| 浏览器 https://localhost | 编辑器界面 |
+| `curl -k https://localhost:8443/v1/health` | `{"status":"ok"}` |
+| 浏览器 https://localhost:8443 | 编辑器界面 |
 | 配置 BYOK → 测试连接 | ✅ 连接成功 |
 | 点击"续写" | ~1-2s 后文字逐字出现 |
 

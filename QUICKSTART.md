@@ -43,14 +43,14 @@ docker compose exec backend python scripts/check_migrations.py   # 单头 + 无�
 
 ## 4. 访问
 
-浏览器打开 **https://localhost** → 点击 ⚙ 配置 API Key → 开始写作。
+浏览器打开 **https://localhost:8443** → 点击 ⚙ 配置 API Key → 开始写作。
 
 ## 5. 验证
 
 | 检查 | 期望 |
 |---|---|
-| `curl -k https://localhost/v1/health` | `{"status":"ok"}` |
-| 打开 https://localhost | 小说编辑器界面 |
+| `curl -k https://localhost:8443/v1/health` | `{"status":"ok"}` |
+| 打开 https://localhost:8443 | 小说编辑器界面 |
 | 配置 BYOK → 测试连接 | ✅ 连接成功 |
 | 点击"续写" | ~1-2 秒后文字逐字出现 |
 
@@ -70,6 +70,6 @@ docker compose exec backend python scripts/check_migrations.py   # 单头 + 无�
 
 - **`alembic upgrade head` 报 "Multiple head revisions"**：迁移链分叉。用 `check_migrations.py` / `alembic heads` 核对，保持单一 head；分叉先合并链再升级。
 - **`litellm` 安装失败**：`pyproject.toml` 已 pin `litellm==1.90.7`（<1.91 硬约束），1.91+ 引入 Rust 组件，不要手动升级。
-- **CORS 报错**：检查 `backend/.env` 的 `CORS_ORIGINS` 是否含 `https://localhost`（容器内 compose 已覆盖默认，本地进程模式需自行加）。
+- **CORS 报错**：检查 `backend/.env` 的 `CORS_ORIGINS` 是否含 `https://localhost:8443`（容器内 compose 已覆盖默认，本地进程模式需自行加）。
 - **导出/统计/知识库 401 或 503**：确认已配置 `API_KEYS` 且请求携带 `X-API-Key`；`API_KEYS` 未配置时受保护接口返回 503 引导文案（见 README §六 说明）。
 - **镜像拉取失败**：国内网络配置 Docker 镜像加速器（Docker Desktop → Settings → Docker Engine 加 `registry-mirrors`，见 README §八 FAQ）。

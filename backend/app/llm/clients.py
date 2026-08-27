@@ -117,12 +117,24 @@ def _byok_kwargs(cfg: StageConfig) -> Dict[str, Any]:
     OpenAI-compatible endpoint through the openai provider when api_base
     is supplied. Any other provider prefix (openrouter/, anthropic/, ...)
     would be silently ignored in this mode.
+
+    Reasoning models (step-3.7-flash, DeepSeek-R1, QwQ…) burn thinking
+    tokens against max_tokens; if the whole budget is spent inside the
+    chain-of-thought, `content` arrives empty. Two mitigations:
+    - generous budget (16k) so reasoning + actual answer both fit;
+    - best-effort suppression of the private thought stream via extra_body
+      (providers that don't support a key ignore it per OpenAI-compat
+      convention — unknown extra_body keys are passed through verbatim).
     """
     _validate_api_base(cfg.api_base)
     kwargs: Dict[str, Any] = {
         "model": f"openai/{cfg.model}",
         "api_key": cfg.api_key,
         "api_base": cfg.api_base,
+        "max_tokens": 16384,
+        # OpenAI-style switch honored by several OpenAI-compatible backends
+        # (vLLM/DashScope/stepfun): disables emitting the CoT on the wire.
+        "reasoning_effort": "none",
     }
     if cfg.extra_headers:
         kwargs["extra_headers"] = dict(cfg.extra_headers)
@@ -250,7 +262,6 @@ async def draft(
             messages=messages,
             stream=stream,
             temperature=temp,
-            max_tokens=4096,
             **extra,
             **_byok_kwargs(stage_config),
         )
@@ -286,7 +297,6 @@ async def refine(
             messages=messages,
             stream=stream,
             temperature=0.4,
-            max_tokens=2048,
             **_byok_kwargs(stage_config),
         )
     return await retry_fn(
@@ -322,7 +332,6 @@ async def evaluate(
             messages=messages,
             stream=False,
             temperature=0.0,
-            max_tokens=512,
             **_byok_kwargs(stage_config),
         )
     return await _call_with_retry(

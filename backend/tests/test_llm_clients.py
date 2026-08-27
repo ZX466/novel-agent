@@ -101,7 +101,9 @@ async def test_evaluate_forwards_byok_kwargs():
     assert kwargs["model"] == "openai/gpt-4o-mini"
     assert kwargs["temperature"] == 0.0
     assert kwargs["stream"] is False
-    assert kwargs["max_tokens"] == 512
+    # BYOK requests share the unified reasoning-model budget from _byok_kwargs
+    # (was 512; raised so CoT tokens don't starve the actual answer).
+    assert kwargs["max_tokens"] == 16384
 
 
 @pytest.mark.asyncio

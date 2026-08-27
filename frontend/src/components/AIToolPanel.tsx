@@ -184,15 +184,6 @@ export function AIToolPanel({
     }
   });
   const wasBusy = useRef(false);
-  useEffect(() => {
-    if (!storageKey) return;
-    try {
-      if (editedText) window.localStorage.setItem(storageKey, editedText);
-      else window.localStorage.removeItem(storageKey);
-    } catch {
-      // localStorage unavailable (private mode etc.) — non-fatal.
-    }
-  }, [editedText, storageKey]);
 
   const transport = useMemo(
     () =>
@@ -243,6 +234,19 @@ export function AIToolPanel({
     }
     wasBusy.current = isBusy;
   }, [isBusy, latestAssistantText]);
+
+  // Persist the live result (streaming buffer included, not just the finished
+  // editedText) so leaving the editor mid-generation doesn't lose it.
+  useEffect(() => {
+    if (!storageKey) return;
+    const value = editedText || latestAssistantText;
+    try {
+      if (value) window.localStorage.setItem(storageKey, value);
+      else window.localStorage.removeItem(storageKey);
+    } catch {
+      // localStorage unavailable (private mode etc.) — non-fatal.
+    }
+  }, [editedText, latestAssistantText, storageKey]);
 
   const handleTool = (tool: ToolKey) => {
     if (isBusy) return;

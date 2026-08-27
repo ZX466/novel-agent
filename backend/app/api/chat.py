@@ -42,6 +42,7 @@ from app.api._deps import (
     enforce_chat_test_rate_limit,
     load_parent,
     owner_key_hash,
+    require_api_key,
 )
 from app.llm.clients import APIBaseNotAllowed, _redact_key, _validate_api_base
 from app.pipeline import stream_pipeline
@@ -384,6 +385,7 @@ async def _event_stream(
             topic, provider_config,
             session=session, evaluator=evaluator, novel_id=novel_id,
             task_type=task_type, perf=perf,
+            persist_key=f"ai-draft:{novel_id}" if novel_id else None,
         ):
             if not text_started:
                 yield _encode_text_start()
@@ -501,6 +503,32 @@ async def chat(
         media_type="text/event-stream",
         headers=_sse_headers(),
     )
+
+
+@router.get("/v1/chat/draft/{doc_id}")
+async def get_completed_draft(
+    doc_id: int,
+    session: AsyncSession = Depends(get_db),
+    api_key: str = Depends(require_api_key),
+) -> dict:
+    """Return a completed AI-generation result persisted for this document.
+
+    The chat pipeline persists its full output under `ai-draft:{novel_id}`
+    (1h TTL) even when the client disconnects mid-stream. This endpoint lets
+    the frontend recover the complete text after the user navigated away
+    during generation — instead of being left with a truncated stream.
+    """
+    owner = owner_key_hash(api_key)
+    # Ownership gate: only the novel's owner may read its pending draft.
+    await load_parent(session, doc_id, owner_hash=owner)
+    try:
+        from app.core.redis import get_redis
+        redis = get_redis()
+        text = await redis.get(f"ai-draft:{doc_id}")
+        return {"text": text or ""}
+    except Exception as e:
+        logger.warning("get_completed_draft: Redis unavailable: %s", _redact_key(str(e)))
+        return {"text": ""}
 
 
 def _sse_headers() -> Dict[str, str]:

@@ -166,6 +166,40 @@ async def test_full_header_forwards_provider_config(async_app_client, monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_stream_pipeline_receives_persist_key(async_app_client, monkeypatch):
+    """Chat requests pass a persist_key so disconnected generations can be
+    recovered from Redis (mid-stream navigation away must not lose output)."""
+    captured: dict[str, object] = {}
+
+    async def _spy(topic, provider_config=None, **kwargs) -> AsyncIterator[str]:
+        captured["persist_key"] = kwargs.get("persist_key")
+        yield "hi"
+        return
+
+    monkeypatch.setattr("app.api.chat.stream_pipeline", _spy)
+    from app.config import settings
+    monkeypatch.setattr(settings, "byok_fallback_to_env", True)
+    # Avoid the real DB: ownership gate is exercised elsewhere.
+    async def _noop_guard(session, novel_id, owner):
+        return None
+    monkeypatch.setattr("app.api.chat._guard_novel_owner", _noop_guard)
+    async with async_app_client.stream(
+        "POST",
+        "/v1/chat",
+        json={
+            "messages": [
+                {"role": "user", "content": "[novel:7] hello"},
+            ]
+        },
+    ) as response:
+        body = (await response.aread()).decode("utf-8")
+
+    assert response.status_code == 200
+    assert captured["persist_key"] == "ai-draft:7"
+    assert '"type": "finish"' in body
+
+
+@pytest.mark.asyncio
 async def test_missing_header_falls_back_to_none(async_app_client, monkeypatch):
     from app.config import settings
 

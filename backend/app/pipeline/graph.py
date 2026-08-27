@@ -209,6 +209,7 @@ async def stream_pipeline(
     novel_id: int | None = None,
     task_type: str = "generate",
     perf: dict | None = None,
+    persist_key: str | None = None,
 ) -> AsyncIterator[str]:
     """True streaming: yields tokens as the LLM generates them.
 
@@ -221,18 +222,25 @@ async def stream_pipeline(
     streaming callback approach fails.
 
     `task_type` selects which pipeline stages to run.
+
+    When `persist_key` is set, the completed text is written to Redis under
+    that key (1h TTL) after the pipeline finishes — even if the client
+    disconnected mid-stream. The frontend can then poll `persist_key` to
+    recover the full result after navigating away mid-generation.
     """
     token_queue: asyncio.Queue[str | None] = asyncio.Queue()
     pipeline_error: Exception | None = None
+    final_text: str = ""
+    detached: bool = False
 
     async def on_token(text: str) -> None:
         await token_queue.put(text)
 
     async def _run_pipeline():
         """Run the pipeline in a background task; puts None when done."""
-        nonlocal pipeline_error
+        nonlocal pipeline_error, final_text
         try:
-            await run_pipeline(
+            state = await run_pipeline(
                 topic,
                 provider_config,
                 session=session,
@@ -242,6 +250,9 @@ async def stream_pipeline(
                 on_token=on_token,
                 perf=perf,
             )
+            final_text = state.get("refined") or state.get("draft") or ""
+            # Expose for _persist_later (detached completion after disconnect).
+            asyncio.current_task()._pipeline_final_text = final_text  # type: ignore[attr-defined]
         except Exception as e:
             logger.error("stream_pipeline: pipeline task failed: %s", _redact_key(str(e)))
             pipeline_error = e
@@ -262,6 +273,14 @@ async def stream_pipeline(
         # an error event to the frontend instead of an empty response.
         if pipeline_error is not None:
             raise pipeline_error
+    except GeneratorExit:
+        # Client disconnected mid-stream. Do NOT cancel the pipeline — it may
+        # still be producing the full result. Let it finish in the background
+        # and persist the completed text so the frontend can recover it later.
+        detached = True
+        if persist_key:
+            _persist_later(pipeline_task, persist_key)
+        raise
     except Exception as e:
         logger.warning("True streaming failed (%s), falling back to chunking: %s", type(e).__name__, _redact_key(str(e)))
         # Fallback: run pipeline to completion and chunk the result
@@ -295,9 +314,43 @@ async def stream_pipeline(
             for i in range(0, len(final_text), 4):
                 yield final_text[i : i + 4]
     finally:
-        if not pipeline_task.done():
+        # Normal completion: persist the full result if requested. On client
+        # disconnect we already detached via _persist_later, so this branch
+        # only fires when the stream ran to completion.
+        if persist_key and final_text and not pipeline_task.cancelled():
+            await _persist_text(persist_key, final_text)
+        if not detached and not pipeline_task.done():
             pipeline_task.cancel()
             try:
                 await pipeline_task
             except asyncio.CancelledError:
                 pass
+
+
+def _persist_later(task: asyncio.Task, key: str) -> None:
+    """Detach a pipeline task and persist its final text when it completes.
+
+    Called from GeneratorExit so we can't await the task here — schedule a
+    follow-up that persists once the pipeline finishes in the background.
+    """
+    async def _wait_and_persist() -> None:
+        try:
+            await task
+        except asyncio.CancelledError:
+            return
+        text = getattr(task, "_pipeline_final_text", "")
+        if text:
+            await _persist_text(key, text)
+
+    asyncio.create_task(_wait_and_persist())
+
+
+async def _persist_text(key: str, text: str) -> None:
+    """Write completed generation text to Redis (1h TTL), best-effort."""
+    try:
+        from app.core.redis import get_redis
+        redis = get_redis()
+        await redis.set(key, text, ex=3600)
+        logger.info("stream_pipeline: persisted %d chars to %s", len(text), key)
+    except Exception as e:
+        logger.warning("stream_pipeline: failed to persist result: %s", _redact_key(str(e)))

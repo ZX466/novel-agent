@@ -57,6 +57,34 @@ const TOOLS: Array<{ key: ToolKey; icon: string; label: string; desc: string }> 
   { key: "deai",     icon: "🧹", label: "降AI",     desc: "降低 AI 检测率，重写为更自然的语言" },
 ];
 
+const CONTEXT_DRAFT_ENDPOINT = (novelId: number) => `/v1/chat/draft/${novelId}`;
+
+/**
+ * Fetch a completed AI-generation result the backend persisted to Redis.
+ * The chat pipeline keeps generating after a mid-stream disconnect and stores
+ * the full output under `ai-draft:{novel_id}` (1h TTL). If generation is
+ * still running when we first poll, retry briefly (up to ~60s) so the user
+ * returning to the editor gets the complete text, not a truncated stream.
+ */
+async function fetchCompletedDraft(novelId: number): Promise<string> {
+  const deadline = Date.now() + 60_000;
+  for (;;) {
+    try {
+      const res = await fetch(CONTEXT_DRAFT_ENDPOINT(novelId), {
+        headers: { ...ownerAuthHeaders() },
+      });
+      if (res.ok) {
+        const body = (await res.json()) as { text?: string };
+        if (body.text) return body.text;
+      }
+    } catch {
+      // network blip — keep retrying until deadline
+    }
+    if (Date.now() >= deadline) return "";
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+}
+
 function buildPrompt(
   tool: ToolKey,
   editorText: string,
@@ -259,13 +287,40 @@ export function AIToolPanel({
   const [interrupted, setInterrupted] = useState(false);
   useEffect(() => {
     if (!pendingKey) return;
-    try {
-      if (window.localStorage.getItem(pendingKey)) setInterrupted(true);
-      window.localStorage.removeItem(pendingKey); // ack once
-    } catch {
-      // non-fatal
-    }
-  }, [pendingKey]);
+    let cancelled = false;
+    (async () => {
+      try {
+        if (window.localStorage.getItem(pendingKey)) {
+          setInterrupted(true);
+          // The backend keeps generating after a mid-stream disconnect and
+          // persists the full result to Redis. Poll for it so the user gets
+          // the complete text instead of a truncated stream.
+          if (novelId) {
+            const full = await fetchCompletedDraft(novelId);
+            if (!cancelled && full) {
+              setEditedText(full);
+              setInterrupted(false);
+              try {
+                window.localStorage.setItem(storageKey ?? "", full);
+              } catch {
+                // non-fatal
+              }
+              return;
+            }
+          }
+          window.localStorage.removeItem(pendingKey); // ack once
+        } else {
+          window.localStorage.removeItem(pendingKey);
+        }
+      } catch {
+        // localStorage unavailable — non-fatal
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingKey, novelId]);
 
   const markPending = () => {
     if (!pendingKey) return;

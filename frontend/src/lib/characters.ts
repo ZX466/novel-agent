@@ -8,7 +8,7 @@ import {
   type CharacterUpdate,
 } from "@/lib/types";
 import { backendUrl } from "@/lib/config";
-import { ownerAuthHeaders } from "@/lib/settings";
+import { embeddingProviderHeaders, ownerAuthHeaders } from "@/lib/settings";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${backendUrl}${path}`, {
@@ -16,6 +16,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: {
       "Content-Type": "application/json",
       ...ownerAuthHeaders(),
+      ...embeddingProviderHeaders(),
       ...(init?.headers ?? {}),
     },
   });

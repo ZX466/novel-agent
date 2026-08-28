@@ -17,6 +17,14 @@ const API_KEY_STORAGE_KEY = "novel-agent.api-key";
 // Persistence
 // ---------------------------------------------------------------------------
 
+/** Headers carrying just the BYOK embedding stage (for lore-entity CRUD
+ * whose writes auto-embed server-side). Empty when unconfigured. */
+export function embeddingProviderHeaders(): Record<string, string> {
+  const stage = loadProviderConfig()?.embedding;
+  if (!stage || !stage.api_base || !stage.api_key || !stage.model) return {};
+  return { "X-Provider-Config": JSON.stringify({ embedding: stage }) };
+}
+
 export function loadProviderConfig(): ProviderConfig | null {
   if (typeof window === "undefined") return null;
   try {

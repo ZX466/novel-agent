@@ -63,11 +63,13 @@ const CONTEXT_DRAFT_ENDPOINT = (novelId: number) => `/v1/chat/draft/${novelId}`;
  * Fetch a completed AI-generation result the backend persisted to Redis.
  * The chat pipeline keeps generating after a mid-stream disconnect and stores
  * the full output under `ai-draft:{novel_id}` (1h TTL). If generation is
- * still running when we first poll, retry briefly (up to ~60s) so the user
- * returning to the editor gets the complete text, not a truncated stream.
+ * still running when we first poll, retry with exponential backoff for up
+ * to 10 minutes so the user returning mid-generation still gets the complete
+ * text - full pipelines (draft->refine->evaluate loop) run several minutes.
  */
 async function fetchCompletedDraft(novelId: number): Promise<string> {
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + 600_000; // 10 min
+  let delay = 3000;
   for (;;) {
     try {
       const res = await fetch(CONTEXT_DRAFT_ENDPOINT(novelId), {
@@ -81,7 +83,8 @@ async function fetchCompletedDraft(novelId: number): Promise<string> {
       // network blip — keep retrying until deadline
     }
     if (Date.now() >= deadline) return "";
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r) => setTimeout(r, delay));
+    delay = Math.min(delay * 2, 30000);
   }
 }
 
@@ -327,6 +330,7 @@ export function AIToolPanel({
   // the draft area would otherwise come back blank with no explanation.
   const pendingKey = storageKey ? `${storageKey}:pending` : null;
   const [interrupted, setInterrupted] = useState(false);
+  const [recovering, setRecovering] = useState(false);
   useEffect(() => {
     if (!pendingKey) return;
     let cancelled = false;
@@ -338,10 +342,13 @@ export function AIToolPanel({
           // persists the full result to Redis. Poll for it so the user gets
           // the complete text instead of a truncated stream.
           if (novelId) {
+            setRecovering(true);
             const full = await fetchCompletedDraft(novelId);
+            setRecovering(false);
             if (!cancelled && full) {
               setEditedText(full);
               setInterrupted(false);
+              window.localStorage.removeItem(pendingKey);
               try {
                 window.localStorage.setItem(storageKey ?? "", full);
               } catch {
@@ -627,7 +634,19 @@ export function AIToolPanel({
         {/* Empty state */}
         {!isBusy && !editedText && !error && (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-sp-3" style={{ color: "var(--muted)" }}>
-            {interrupted ? (
+            {recovering ? (
+              <>
+                <svg className="w-10 h-10 animate-spin" style={{ color: "var(--accent)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+                <p className="text-[12px] max-w-[220px]" style={{ color: "var(--fg-secondary)" }}>
+                  后台生成进行中,正在等待完整结果…
+                </p>
+                <p className="text-[10px] max-w-[240px]" style={{ color: "var(--muted)" }}>
+                  离开页面时 AI 仍在后台继续,全流程最多 10 分钟
+                </p>
+              </>
+            ) : interrupted ? (
               <>
                 <svg className="w-10 h-10" style={{ color: "var(--warn)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />

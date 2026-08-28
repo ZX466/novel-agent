@@ -21,6 +21,8 @@ interface AIToolPanelProps {
   selectedText?: string;
   /** Current chapter title for context injection. */
   chapterTitle?: string;
+  /** 0-based chapter index of the current chapter (authoritative chapter no.). */
+  chapterIndex?: number;
   /** Optional novel_id tag to inject into the prompt for RAG retrieval. */
   novelId?: number;
   /** Novel/document title for outline generation context. */
@@ -134,6 +136,7 @@ function buildPrompt(
   tool: ToolKey,
   editorText: string,
   chapterTitle: string,
+  chapterIndex?: number,
   novelId?: number,
   selectedText?: string,
   novelTitle?: string,
@@ -143,7 +146,13 @@ function buildPrompt(
 ): string {
   const context = editorText.slice(-3000);
   const novelTag = novelId ? `[novel:${novelId}]` : "";
-  const titlePart = chapterTitle ? `（章节：${chapterTitle}）` : "";
+  // Authoritative chapter number from the DB index (1-based display); the
+  // title alone is unreliable if the user renamed the chapter.
+  const chapterNo = (chapterIndex ?? -1) + 1;
+  const chapterLabel = chapterNo >= 1
+    ? `第${chapterNo}章${chapterTitle ? ` ${chapterTitle.replace(/^第[一二三四五六七八九十百千零〇两\d]+章\s*/, "")}` : ""}`
+    : chapterTitle;
+  const titlePart = chapterLabel ? `（章节：${chapterLabel}）` : "";
   const titleContext = novelTitle ? `小说标题：${novelTitle}\n` : "";
   const customPart = customPrompt?.trim() ? `\n补充要求：${customPrompt.trim()}` : "";
 
@@ -179,7 +188,7 @@ function buildPrompt(
         + `- 人物言行必须符合既有角色设定与世界观，推进剧情并留下至少一处伏笔\n`
         + `- 结尾停在张力点，方便继续续写\n`
         + `- 正文分段：每个自然段 2-5 句，段间换行，严禁一整段输出\n`
-        + `第一行输出当前章节号和标题（${chapterTitle || "第X章 标题"}），空一行后开始正文；除首行外不要任何解释或思考过程。${outlinePart}\n\n当前内容：\n${context}${customPart}`;
+        + `第一行输出当前章节号和标题（${chapterLabel || "第X章 标题"}），空一行后开始正文；除首行外不要任何解释或思考过程。${outlinePart}\n\n当前内容：\n${context}${customPart}`;
     }
     case "continue": {
       const outlinePart = outlineText
@@ -231,6 +240,7 @@ export function AIToolPanel({
   editorText = "",
   selectedText = "",
   chapterTitle = "",
+  chapterIndex,
   novelId,
   novelTitle = "",
   outlineText = "",
@@ -401,7 +411,7 @@ export function AIToolPanel({
     setEditedText("");
     markPending();
     sendMessage({
-      text: buildPrompt(tool, editorText, chapterTitle, novelId, selectedText, novelTitle, outlineText, undefined, customPrompt),
+      text: buildPrompt(tool, editorText, chapterTitle, chapterIndex, novelId, selectedText, novelTitle, outlineText, undefined, customPrompt),
     });
   };
 
@@ -411,7 +421,7 @@ export function AIToolPanel({
     setEditedText("");
     markPending();
     sendMessage({
-      text: buildPrompt("outline", editorText, chapterTitle, novelId, selectedText, novelTitle, outlineText, outlineForm, customPrompt),
+      text: buildPrompt("outline", editorText, chapterTitle, chapterIndex, novelId, selectedText, novelTitle, outlineText, outlineForm, customPrompt),
     });
   };
 

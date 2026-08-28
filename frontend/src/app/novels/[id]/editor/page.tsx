@@ -1278,6 +1278,7 @@ export default function NovelEditorPage() {
                   editorText={currentText}
                   selectedText={selectedText}
                   chapterTitle={activeChapter?.title ?? ""}
+                  chapterIndex={activeChapter?.chapter_index}
                   novelId={docId}
                   novelTitle={title}
                   outlineText={((doc?.metadata_json as Record<string, unknown> | undefined)?.outline as string) ?? ""}

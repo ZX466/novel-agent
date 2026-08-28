@@ -144,7 +144,8 @@ function buildPrompt(
   outlineForm?: OutlineFormState,
   customPrompt?: string,
 ): string {
-  const context = editorText.slice(-3000);
+  const contextWindow = tool === "continue" ? 6000 : 3000;
+  const context = editorText.slice(-contextWindow);
   const novelTag = novelId ? `[novel:${novelId}]` : "";
   // Authoritative chapter number from the DB index (1-based display); the
   // title alone is unreliable if the user renamed the chapter.

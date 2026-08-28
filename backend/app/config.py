@@ -157,7 +157,9 @@ class Settings(BaseSettings):
     )
 
     # --- Pipeline tuning ---
-    pipeline_score_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+    # 0.75: each extra refine iteration rewrites the whole chapter (BYOK cost
+    # ×N) while the score delta is imperceptible to readers — loop rarely.
+    pipeline_score_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
     pipeline_max_iters: int = Field(default=3, ge=1, le=10)
     pipeline_multi_dim_eval: bool = Field(
         default=True,

@@ -39,6 +39,16 @@ def test_assistant_runs_draft_and_safety_only() -> None:
     assert _should_run_stage("assistant", "evaluate") is False
 
 
+def test_rewrite_polish_run_retrieval_refine_safety() -> None:
+    """Expand/rewrite/polish stay lore-grounded: retrieval must run."""
+    for task in ("rewrite", "polish"):
+        assert _should_run_stage(task, "retrieval") is True
+        assert _should_run_stage(task, "refine") is True
+        assert _should_run_stage(task, "safety_check") is True
+        assert _should_run_stage(task, "draft") is False
+        assert _should_run_stage(task, "evaluate") is False
+
+
 def test_assistant_topic_keeps_history_and_strips_tags() -> None:
     messages = [
         _Msg("user", "[task:assistant] 我的主角穿越到异界，[novel:3] 该怎么写他的金手指？"),

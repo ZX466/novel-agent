@@ -86,7 +86,7 @@ def _should_run_stage(task_type: str, stage: str) -> bool:
 
     - "generate": full pipeline (all stages)
     - "continue": only draft + safety (skip refine/evaluate for speed)
-    - "rewrite"/"polish": only refine + safety (input is already written text)
+    - "rewrite"/"polish": retrieval + refine + safety (lore-grounded polish)
     - "outline": only draft + safety (structural output, evaluation not useful)
     - "extract": only draft (direct JSON extraction, no safety needed)
     """
@@ -95,7 +95,9 @@ def _should_run_stage(task_type: str, stage: str) -> bool:
         # assistant: multi-turn creative chat (draft + safety, RAG useful)
         return stage in ("retrieval", "draft", "safety_check")
     if task_type in ("rewrite", "polish"):
-        return stage in ("refine", "safety_check")
+        # retrieval too: expand/rewrite/polish must stay consistent with
+        # established lore (characters/world), not just polish prose blind.
+        return stage in ("retrieval", "refine", "safety_check")
     if task_type == "outline":
         return stage in ("retrieval", "draft", "safety_check")
     if task_type == "extract":

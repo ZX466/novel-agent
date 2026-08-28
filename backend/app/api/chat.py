@@ -435,6 +435,28 @@ async def _event_stream(
         if text_started:
             yield _encode_text_end()
         yield _encode_error("API Base URL 不被允许")
+    except litellm.APIError as e:
+        # Provider-side failures. Content moderation ("blocked") is the most
+        # common one for novel content: the provider's safety filter rejects
+        # the whole request (or the model's own output) based on genre
+        # keywords (revenge/violence/class-conflict themes trigger it).
+        msg = str(e)
+        logger.error("LLM API error: %s", _redact_key(msg))
+        if text_started:
+            yield _encode_text_end()
+        if "blocked" in msg.lower():
+            yield _encode_error(
+                "内容被供应商安全审核拦截（题材/用词触发风控）。"
+                "可在设置中把「草稿」阶段换成审核更宽松的模型（如 DeepSeek），"
+                "或调整章节中的敏感用词后重试。"
+            )
+        else:
+            yield _encode_error("AI 服务返回错误，请稍后重试或检查供应商状态")
+    except litellm.RateLimitError as e:
+        logger.error("LLM rate limited: %s", _redact_key(str(e)))
+        if text_started:
+            yield _encode_text_end()
+        yield _encode_error("请求过于频繁（限流），请稍等片刻再试")
     except Exception as e:
         # Use logger.error (not exception) to avoid leaking sensitive data
         # (API keys, internal URLs) that may appear in stack traces.

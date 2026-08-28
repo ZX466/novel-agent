@@ -85,6 +85,24 @@ async function fetchCompletedDraft(novelId: number): Promise<string> {
   }
 }
 
+/**
+ * Trim the outline for prompt injection: prefer the per-chapter synopsis
+ * section over the theme/character/worldsetting preamble. Chapter working
+ * prompts only need "what happens next" - the preamble's genre keywords
+ * (revenge/violence/class conflict) also trip provider-side content
+ * moderation, so dropping it both focuses the prompt and reduces blocks.
+ */
+function outlineForPrompt(outlineText: string): string {
+  const CHAPTER_HEAD = /(章节梗概|逐章|第[一二三四五六七八九十百零\d]+章)/;
+  const lines = outlineText.split("\n");
+  const idx = lines.findIndex((l) => CHAPTER_HEAD.test(l));
+  if (idx > 0) {
+    const synopsis = lines.slice(idx).join("\n");
+    return synopsis.slice(-6000);
+  }
+  return outlineText.slice(-6000);
+}
+
 function buildPrompt(
   tool: ToolKey,
   editorText: string,
@@ -124,7 +142,7 @@ function buildPrompt(
     }
     case "generate": {
       const outlinePart = outlineText
-        ? `\n\n故事大纲（请严格据此展开情节，不偏离设定）：\n${outlineText.slice(-6000)}`
+        ? `\n\n故事大纲（请严格据此展开情节，不偏离设定）：\n${outlineForPrompt(outlineText)}`
         : "";
       return `${novelTag} [task:generate] ${titleContext}请根据故事大纲续写新的正文段落${titlePart}。\n`
         + `要求：\n`
@@ -137,7 +155,7 @@ function buildPrompt(
     }
     case "continue": {
       const outlinePart = outlineText
-        ? `\n\n故事大纲（供参考，保持设定一致）：\n${outlineText.slice(-6000)}`
+        ? `\n\n故事大纲（供参考，保持设定一致）：\n${outlineForPrompt(outlineText)}`
         : "";
       return `${novelTag} [task:continue] ${titleContext}请从以下内容的末尾继续写作${titlePart}。\n`
         + `要求：\n`

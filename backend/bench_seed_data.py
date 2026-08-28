@@ -14,7 +14,7 @@ import time
 import asyncpg
 
 DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/project11"
-EMBEDDING_DIM = 1536
+EMBEDDING_DIM = 1024
 PER_COLLECTION = 1000  # 每集合行数
 
 

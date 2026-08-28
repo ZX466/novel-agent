@@ -84,7 +84,7 @@ class Settings(BaseSettings):
         description="LiteLLM model name. Use 'openai/text-embedding-3-small' format.",
     )
     embedding_dim: int = Field(
-        default=1536,
+        default=1024,
         ge=1,
         description="Embedding dimension. MUST match the vector(N) column in migrations.",
     )

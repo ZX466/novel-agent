@@ -21,9 +21,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
-# Default embedding dimension. OpenAI text-embedding-3-small = 1536.
-# Change via migration if a different embedding provider is used.
-EMBEDDING_DIM = 1536
+# Default embedding dimension. Must stay in sync with the alembic head
+# (b7c8d9e0f1a2, vector(1024)) and settings.embedding_dim.
+EMBEDDING_DIM = 1024
 
 
 class Chapter(Base):

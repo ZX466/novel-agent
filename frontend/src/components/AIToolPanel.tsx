@@ -86,21 +86,45 @@ async function fetchCompletedDraft(novelId: number): Promise<string> {
 }
 
 /**
- * Trim the outline for prompt injection: prefer the per-chapter synopsis
- * section over the theme/character/worldsetting preamble. Chapter working
- * prompts only need "what happens next" - the preamble's genre keywords
- * (revenge/violence/class conflict) also trip provider-side content
- * moderation, so dropping it both focuses the prompt and reduces blocks.
+ * Trim the outline for chapter-writing prompts to the synopsis of the
+ * CURRENT chapter (+ the next one for lead-in), not the whole arc.
+ * Writing chapter N only needs "what happens in N and what comes next";
+ * injecting the entire outline (theme/characters/every chapter) both
+ * dilutes the instruction and multiplies the keywords that trip
+ * provider-side content moderation ("blocked" APIError on genre words).
  */
-function outlineForPrompt(outlineText: string): string {
-  const CHAPTER_HEAD = /(章节梗概|逐章|第[一二三四五六七八九十百零\d]+章)/;
+function outlineForPrompt(outlineText: string, chapterTitle?: string): string {
+  const CHAP_LINE = /^第[一二三四五六七八九十百千零〇两\d]+章/;
   const lines = outlineText.split("\n");
-  const idx = lines.findIndex((l) => CHAPTER_HEAD.test(l));
-  if (idx > 0) {
-    const synopsis = lines.slice(idx).join("\n");
-    return synopsis.slice(-6000);
+  const starts: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (CHAP_LINE.test(lines[i].trim())) starts.push(i);
   }
-  return outlineText.slice(-6000);
+  if (starts.length === 0) return outlineText.slice(-6000);
+
+  // Locate the current chapter by matching the editor's chapter title
+  // against synopsis headings (fall back to the last two chapters).
+  let cur = -1;
+  if (chapterTitle) {
+    const wanted = chapterTitle.replace(/\s+/g, "");
+    cur = starts.findIndex((s) => lines[s].replace(/\s+/g, "").startsWith(wanted));
+    if (cur === -1) {
+      // Title like「第一章 青石镇的弃儿」may appear as a prefix of the
+      // synopsis heading or vice versa; try prefix match either way.
+      cur = starts.findIndex((s) => {
+        const h = lines[s].replace(/\s+/g, "");
+        return h.startsWith(wanted) || wanted.startsWith(h);
+      });
+    }
+  }
+  if (cur === -1) {
+    const from = Math.max(0, starts.length - 2);
+    return lines.slice(starts[from]).join("\n").slice(-6000);
+  }
+  // Current chapter + next chapter's synopsis (a few hundred chars).
+  const from = starts[cur];
+  const to = cur + 1 < starts.length ? starts[cur + 1] : lines.length;
+  return lines.slice(from, to).join("\n").slice(0, 1500);
 }
 
 function buildPrompt(
@@ -142,7 +166,7 @@ function buildPrompt(
     }
     case "generate": {
       const outlinePart = outlineText
-        ? `\n\n故事大纲（请严格据此展开情节，不偏离设定）：\n${outlineForPrompt(outlineText)}`
+        ? `\n\n本章大纲梗概（请严格据此展开情节，不偏离设定）：\n${outlineForPrompt(outlineText, chapterTitle)}`
         : "";
       return `${novelTag} [task:generate] ${titleContext}请根据故事大纲续写新的正文段落${titlePart}。\n`
         + `要求：\n`
@@ -155,7 +179,7 @@ function buildPrompt(
     }
     case "continue": {
       const outlinePart = outlineText
-        ? `\n\n故事大纲（供参考，保持设定一致）：\n${outlineForPrompt(outlineText)}`
+        ? `\n\n本章大纲梗概（供参考，保持设定一致）：\n${outlineForPrompt(outlineText, chapterTitle)}`
         : "";
       return `${novelTag} [task:continue] ${titleContext}请从以下内容的末尾继续写作${titlePart}。\n`
         + `要求：\n`

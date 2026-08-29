@@ -39,7 +39,7 @@ from app.services.document import (
     restore_document,
     update_document,
 )
-from app.api._deps import owner_key_hash, require_api_key as _require_api_key
+from app.api._deps import owner_key_hash
 
 router = APIRouter(prefix="/v1/documents", tags=["documents"])
 

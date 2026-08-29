@@ -457,7 +457,7 @@ async def evaluate_node(state: PipelineState) -> dict:
                 r.dimension_name: {"score": r.score, "feedback": r.feedback, "error": r.error}
                 for r in matrix.results
             }
-        except Exception as exc:
+        except Exception:
             logger.exception("evaluate_node: ReviewMatrixRunner failed, falling back")
             evaluator = None  # fall through to single-evaluator path
 
@@ -615,7 +615,7 @@ async def safety_check_node(state: PipelineState) -> dict:
     """
     # Lazy import to break circular dependency:
     # pipeline → safety → agents → pipeline
-    from app.safety.rules import RuleEngine, Severity  # noqa: F811
+    from app.safety.rules import RuleEngine  # noqa: F811
 
     text = state.get("refined") or state.get("draft") or ""
 

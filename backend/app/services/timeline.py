@@ -200,7 +200,6 @@ def build_timeline_dag(events: list[PlotEvent]) -> TimelineDag:
     """
     by_id = {pe.id: pe for pe in events}
     ordered = sorted(events, key=_sort_key)
-    order = {pe.id: i for i, pe in enumerate(ordered)}
 
     nodes = [
         TimelineNode(

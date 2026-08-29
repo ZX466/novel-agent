@@ -28,12 +28,10 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.novel_memory import (
     ChapterCreate,
-    ChapterRead,
     ChapterUpdate,
     CharacterRead,
 )
 from app.services.chapter import (
-    ChapterNotFound,
     create_chapter,
     update_chapter,
     update_chapter_embedding,
@@ -337,7 +335,7 @@ class SaveChapterTool(Tool):
 # ---------------------------------------------------------------------------
 
 
-def make_default_registry() -> "ToolRegistry":  # type: ignore[name-defined]
+def make_default_registry() -> "ToolRegistry":  # noqa: F821 (local import below)
     """Build a ToolRegistry with the three built-in tools registered.
 
     Returns a fresh registry on each call — caller may register

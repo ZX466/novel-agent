@@ -6,7 +6,7 @@ TaskKind handlers registered.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,9 @@ from app.agents.plotter import PlotterAgent
 from app.planner.orchestrator import Orchestrator
 from app.planner.spec import TaskKind
 from app.schemas.chat import ProviderConfig
+
+if TYPE_CHECKING:
+    from app.safety import RuleEngine
 
 # NOTE: ContentSafetyAgent / RuleEngine are imported lazily inside
 # make_novel_orchestrator() to avoid a circular import at module load time.
@@ -54,7 +57,7 @@ def make_novel_orchestrator(
     because it has its own safety-specific evaluation prompt.
     """
     # Lazy import — see module-level note about circular import.
-    from app.safety import ContentSafetyAgent, RuleEngine
+    from app.safety import ContentSafetyAgent
 
     shared_kwargs: dict[str, Any] = {
         "session": session,

@@ -4,7 +4,6 @@ from __future__ import annotations
 import io
 import logging
 import zipfile
-from pathlib import PurePosixPath
 from urllib.parse import quote
 
 from datetime import datetime

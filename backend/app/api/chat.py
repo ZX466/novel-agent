@@ -30,7 +30,7 @@ import re
 from typing import Annotated, Any, AsyncIterator, Dict, List, Literal
 
 import litellm
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession

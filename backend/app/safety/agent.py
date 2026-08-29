@@ -27,7 +27,7 @@ from typing import Any
 
 from app.agents.base import BaseAgent
 from app.planner.spec import SubTask, SubTaskDAG, TaskKind
-from app.safety.rules import RuleEngine, RuleResult, Severity
+from app.safety.rules import RuleEngine, RuleResult
 
 logger = logging.getLogger(__name__)
 

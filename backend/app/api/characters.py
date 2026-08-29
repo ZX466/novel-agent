@@ -24,7 +24,6 @@ from app.db.session import get_db
 from app.schemas.chat import StageConfig
 from app.schemas.novel_memory import (
     CharacterCreate,
-    CharacterListItem,
     CharacterListResponse,
     CharacterRead,
     CharacterUpdate,

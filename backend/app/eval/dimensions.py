@@ -29,7 +29,7 @@ class ReviewDimension:
     `name` is a short identifier used as the key in ReviewMatrix.results.
     `system_prompt` instructs the LLM how to score the text on this
         dimension — must follow the same JSON output contract as
-        EVAL_SYSTEM_PROMPT in app.agents.base: respond with ONLY a JSON
+        EVAL_SYSTEM_PROMPT: respond with ONLY a JSON
         object {"score": <float 0.0-1.0>, "feedback": "<short sentence>"}.
     `weight` is a positive float; higher = more influence on the
         composite score. The aggregator normalizes weights to sum to 1.

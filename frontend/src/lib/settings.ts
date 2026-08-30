@@ -114,36 +114,6 @@ export function emptyStage(): StageConfig {
   return { api_base: "", api_key: "", model: "", extra_headers: {} };
 }
 
-/** Pick the non-empty stages out of a config (used before sending to backend). */
-export function resolvedProviderConfig(
-  cfg: ProviderConfig | null,
-): ProviderConfig | null {
-  if (!cfg) return null;
-  const next: ProviderConfig = { draft: cfg.draft, refine: cfg.refine, evaluate: cfg.evaluate };
-  for (const k of STAGE_KEYS) {
-    if (!isStageComplete(cfg[k])) {
-      // Keep as-is; backend falls back to .env per-stage when missing.
-    }
-  }
-  if (cfg.embedding && isStageComplete(cfg.embedding)) {
-    next.embedding = cfg.embedding;
-  }
-  return next;
-}
-
-/** Clear the in-memory embedding cache on the backend (used when model/dim changes). */
-export async function clearEmbeddingCache(): Promise<void> {
-  try {
-    const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-    await fetch(`${base}/v1/embedding/cache`, {
-      method: "DELETE",
-      headers: ownerAuthHeaders(),
-    });
-  } catch {
-    // Best-effort — the endpoint may not exist; cache invalidation is a hint.
-  }
-}
-
 export function isStageConfigured(cfg: ProviderConfig | null, key: AllStageKey): boolean {
   if (!cfg) return false;
   const stage = cfg[key as keyof ProviderConfig];

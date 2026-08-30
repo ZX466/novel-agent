@@ -354,7 +354,7 @@ class ReviewMatrixRunner:
 
 
 # ---------------------------------------------------------------------------
-# JSON parsing — duplicated from app.agents.base to keep the eval module
+# JSON parsing helper (kept local to the eval module)
 # decoupled. If parsing changes, update both copies.
 # ---------------------------------------------------------------------------
 

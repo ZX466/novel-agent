@@ -1,0 +1,102 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "build",
+  "instructions": [
+    "AGENTS.md",
+    ".opencode/skills/tdd-workflow/SKILL.md",
+    ".opencode/skills/security-review/SKILL.md",
+    ".opencode/skills/verification-loop/SKILL.md",
+    ".opencode/skills/coding-standards/SKILL.md",
+    ".opencode/skills/error-handling/SKILL.md",
+    ".opencode/skills/database-migrations/SKILL.md",
+    ".opencode/skills/backend-patterns/SKILL.md",
+    ".opencode/skills/deep-research/SKILL.md",
+    ".opencode/skills/api-design/SKILL.md",
+    ".opencode/skills/e2e-testing/SKILL.md",
+    ".opencode/skills/git-workflow/SKILL.md",
+    ".opencode/skills/strategic-compact/SKILL.md"
+  ],
+  "agent": {
+    "build": {
+      "description": "Primary coding agent for development work",
+      "mode": "primary",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": true,
+        "read": true,
+        "changed-files": true
+      }
+    },
+    "planner": {
+      "description": "Expert planning specialist for complex features and refactoring.",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "bash": true,
+        "write": false,
+        "edit": false
+      }
+    },
+    "architect": {
+      "description": "Software architecture specialist for system design and scalability.",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "bash": true,
+        "write": false,
+        "edit": false
+      }
+    },
+    "code-reviewer": {
+      "description": "Code review specialist for quality, security, and maintainability.",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "bash": true,
+        "write": false,
+        "edit": false
+      }
+    },
+    "security-reviewer": {
+      "description": "Vulnerability detection and remediation specialist.",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "bash": true
+      }
+    },
+    "tdd-guide": {
+      "description": "TDD specialist enforcing write-tests-first with 80%+ coverage.",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "bash": true
+      }
+    },
+    "build-error-resolver": {
+      "description": "Build and type error resolution specialist with minimal diffs.",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "bash": true
+      }
+    },
+    "e2e-runner": {
+      "description": "Playwright end-to-end testing specialist.",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "bash": true
+      }
+    }
+  }
+}

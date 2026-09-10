@@ -12,6 +12,8 @@
 
 ## Action Queue
 
+- [ ] **origin(GitHub) 补推**：main(`d36d1dd`) + 4 个 agent 分支(cline/kiro/opencode-2/pi `154d7a6`)已推 gitee；GitHub 443 不通，恢复后补推
+- [ ] **六项需求批次 R9（2026-09-10 派发）**：①改名 Project11→novel-agent ②三阶段流水线可视化 ③人物关系一键可视化树+拖点改关系 ④章节提示词注入章节数/人物树/背景保连贯 ⑤AI 文本插入编辑器分段消失 ⑥每章字数控制。分派见各工作树板面
 - [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
 
 ## Unassigned Notes

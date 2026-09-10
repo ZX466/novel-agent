@@ -1,43 +1,30 @@
-# Talking - Claude (Coordinator)
+# Talking - kiro (接口/兼容性)
 
-> 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
+> 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。任务只认 `[任务]` 标记。
 
 ## Current State
 
-✅ **仓库状态（2026-09-10）**：main=`fd0c025`（gitee 已推；GitHub 间歇不通待补）。5 个 agent 工作树已重建（用户手动）：`cline`/`codex`/`kiro`/`opencode-2`/`pi`，各挂 `ZX466/<同名>` 分支，全部基于 main `fd0c025`，工作区干净。
-✅ **dot 目录策略（2026-09-10 落地）**：`.agents/`+`.codegraph/` junction 已重打至 5 个新工作树（源：主工作树）；`.kiro/`/`.opencode/` 随 main 检出自带。注意：kilo→`kiro` 工作树、opencode→`opencode-2`（旧 `opencode` 空壳被进程占用待清理，不影响使用）。
-✅ **协作模式（2026-09-09 起）**：任务由 Claude 写本板，各 agent 会话读板认领 `[任务]`，产出汇总回 main。
-✅ **历史轮次**：R8 安全加固+消债已归档（824 passed）；审计二批 L1/L3/L5/L8 合入；死代码清理（DAG 遗迹 ~8900 行，`981daf3`）。
-- ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
+🔄 **R9-④⑥ 章节提示词增强+字数控制：方案设计中**（任务原文见 git 历史 `7558a58`，要点：task_type=generate 分支注入 章节数/人物关系树概要/前文 1-2 章梗概；字数目标硬约束写入提示词并推导基准）。
 
-## Action Queue
+## Pi 性能评估结论（已定，直接采纳为设计约束）
 
-- [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
+1. **注入必须进 system prompt，不得拼进 topic**——否则 retrieval query 每次变化，embedding 缓存全 miss（+100-500ms/次网络 embed）。
+2. **token 预算**：三项注入合计 +400-1400 tokens/次（+7%~25% input），可接受。人物树**限 10 角色内**、relations 单行精简，避免把 6000 字符 lore 顶到 8000+。
+3. **字数重试策略（按此设计）**：
+   - 差距 ≤10% → 接受不重试
+   - 少 10%-40% → continue 分支续写补足 1 次（成本仅整章重生 15-25%）
+   - 差距 >40% 或续写 2 次仍不足 → 才整章重生
+   - **不要把字数绑进 evaluate 评分**——会高频触发迭代，破坏 pipeline_max_iters=3 成本上限
+4. 现有管线参数：draft max_tokens=4096、refine 2048、pipeline_max_iters=3、_HARD_MAX_ITERS=5。
 
-## Unassigned Notes
+## Current Queue
 
-- **回执统一写本文件**（`[任务]`/`[回复]` 流转，格式见 `.orca/workflow` §2）。
-- **本地 docker 栈**：compose 5 服务（postgres/redis/backend/frontend/nginx）；聊天 key 走前端 BYOK 网页填写。
+- [ ] 产出设计文档（注入字段/数据来源/提示词模板/字数策略）回写本板 → Claude 评审后实施
+
+## Notes
+
+- 勘察线索：nodes.py:230-260 task_type 分支、state.py PipelineState、retrieval.py retrieve_structured_lore、chapter.py:137-176 字数统计。
 
 ## Update Rule
 
-每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
-
-[任务] 章节写作提示词增强: 章节数/人物关系树/背景注入 + 每章字数控制
-来源: Claude (协调)
-时间: 2026-09-10 13:14
-优先级: P0
-描述:
-  背景: backend/app/pipeline/nodes.py draft_node 现仅注入 RAG 检索到的 lore(retrieved_context),未显式注入章节数与人物关系;用户要求写作时上下文强连贯+每章字数合理相同。
-  需求:
-    A. 章节生成提示词(system_content, task_type=generate 分支)必须包含:
-       1. 当前章节数(第几章/共几章,数据源 chapter_index 与大纲章节数)
-       2. 人物关系树概要(角色名+关系+弧线,从 characters 结构化数据或 RAG 上下文提取)
-       3. 前文背景(最近 1-2 章梗概,增强连贯)
-    B. 字数控制: 目标字数作为硬约束写入提示词(如"本章目标 2000-2500 字"),并研究 per-chapter 字数基准如何从大纲/前几章实际字数推导,保证各章字数合理接近。
-  勘察线索: nodes.py:230-260 各 task_type 分支;state.py PipelineState 字段;retrieve_structured_lore(retrieval.py)已有结构化 lore 通道可复用;字数统计逻辑在 services/chapter.py:137-176。
-  验收:
-    1. 设计文档(注入哪些字段/数据来源/字数策略)写回本板,经 Claude 评审后再实施
-    2. 若直接实施: uv run pytest backend 相关测试通过;手工构造一次章节生成验证提示词包含上述要素
-  注意: 你是接口/兼容域——本次做**方案设计**(数据流与提示词模板),编码实施待 Claude 确认。
----
+只保留当前任务、阻塞、最近验证；已关闭任务只留一行结果。

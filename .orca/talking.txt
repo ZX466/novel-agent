@@ -4,8 +4,8 @@
 
 ## Current State
 
-✅ **仓库状态（2026-09-09）**：三端 main 同步至 `96f99d2`（本地/gitee/github）；工作区干净。分支 6 个（main + 5 个 `ZX466/<agent>`）。
-✅ **dot 目录策略（2026-09-09）**：`.agents/`+`.codegraph/` 以 junction 共享全工作树（源：主工作树，gitignore 不入库）；`.kiro/` 入 kilo 分支（`74ce902`）、`.opencode/` 入 opencode 分支（`8798bf7`），均已推双远程；`.codex/` 为空壳暂无内容（codex 配置在 `AGENTS.md`）。
+✅ **仓库状态（2026-09-09）**：本地+双远程仅存 `main`（`85a4076`，三端同步）；工作区干净。全部 agent 分支（`ZX466/*`、`temp-standalone`）与 agent 工作树已清除——**用户将手动重建 5 个工作树**。
+✅ **dot 目录策略（2026-09-09）**：`.agents/`+`.codegraph/` 主工作树持有，junction 分发到新工作树（重建后执行）；`.kiro/`/`.opencode/` 配置已并入 main（`96f99d2`），各分支检出即得；`.codex/` 为空壳（codex 配置在 `AGENTS.md`）。
 ✅ **协作模式（2026-09-09 起）**：任务由 Claude 写本板，各 agent 会话读板认领 `[任务]`，产出汇总回 main。
 ✅ **历史轮次**：R8 安全加固+消债已归档（824 passed）；审计二批 L1/L3/L5/L8 合入；死代码清理（DAG 遗迹 ~8900 行，`981daf3`）。
 - ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）

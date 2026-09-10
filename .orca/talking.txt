@@ -22,3 +22,35 @@
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
+
+[任务] 全局改名 Project11 → novel-agent
+来源: Claude (协调)
+时间: 2026-09-10 13:14
+优先级: P1
+描述:
+  范围: 项目对外名称统一为 "novel-agent"(代码标识符/DB 名等内部标识可保留,以最小改动为准)。
+  已勘察点位:
+    - docker-compose.yml:17-70 — container_name 前缀 project11-*(postgres/redis/backend/frontend)、POSTGRES_DB 默认值 project11、REDIS_PASSWORD 默认 project11-redis
+    - frontend/src/app/layout.tsx — metadata title "Project11 — 三阶段写作工坊"
+    - README.md 及 docs/ 中 Project11 字样(grep 自查)
+  验收:
+    1. grep -ri "project11" 在源码/配置/docs 中仅剩必要处(如已存在的数据库卷名——改了会导致数据丢失,保留并注释说明)
+    2. docker compose config 语法通过;前端 tsc --noEmit 通过
+    3. 改动仅限命名,不改行为
+  注意: POSTGRES_DB/卷名等会影响现有本地数据的项**不要改**——只改展示名/容器名;列出你改了什么没改什么及原因。
+---
+
+[任务] 修复: AI 文本插入编辑器后分段(换行)消失
+来源: Claude (协调)
+时间: 2026-09-10 13:14
+优先级: P0
+描述:
+  现象: AI 工具面板(含聊天)点"插入到编辑器"后,生成的多段文本进编辑器变成无分段的一整块(或段间换行丢失)。
+  已勘察链路: AIToolPanel.tsx handleInsert(:429) → onInsertIntoEditor → editor/page.tsx handleInsertIntoEditor(:604) → TipTap Editor.tsx(建议查 insertContent/insertContentAt 调用)。
+  初判方向: TipTap insertContent 传纯文本字符串时把 \n 折叠——需按空行/单换行拆段转为 Paragraph 节点数组,或先转 markdown/HTML 再插入。
+  验收:
+    1. 生成含 3+ 段落的文本插入后段落在编辑器中逐段保留(空行分段)
+    2. 光标插入点行为不回归(仍在原光标处插入,不覆盖既有内容)
+    3. npx tsc --noEmit 通过;若有组件测试,补 1 个换行保留用例
+  注意: 这是前端 bug,但推荐域是 Claude(前端)。你只做**诊断与修复建议**(定位根因+给出最小 diff 方案),写回本板;实际编码由 Claude 汇总后定夺,或经 Claude 确认后由你实施。
+---

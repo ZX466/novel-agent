@@ -1,40 +1,25 @@
-# Talking - Claude (Coordinator)
+# Talking - opencode-2 (数据/数据库)
 
-> 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
+> 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。任务只认 `[任务]` 标记。
 
 ## Current State
 
-✅ **仓库状态（2026-09-10）**：main=`fd0c025`（gitee 已推；GitHub 间歇不通待补）。5 个 agent 工作树已重建（用户手动）：`cline`/`codex`/`kiro`/`opencode-2`/`pi`，各挂 `ZX466/<同名>` 分支，全部基于 main `fd0c025`，工作区干净。
-✅ **dot 目录策略（2026-09-10 落地）**：`.agents/`+`.codegraph/` junction 已重打至 5 个新工作树（源：主工作树）；`.kiro/`/`.opencode/` 随 main 检出自带。注意：kilo→`kiro` 工作树、opencode→`opencode-2`（旧 `opencode` 空壳被进程占用待清理，不影响使用）。
-✅ **协作模式（2026-09-09 起）**：任务由 Claude 写本板，各 agent 会话读板认领 `[任务]`，产出汇总回 main。
-✅ **历史轮次**：R8 安全加固+消债已归档（824 passed）；审计二批 L1/L3/L5/L8 合入；死代码清理（DAG 遗迹 ~8900 行，`981daf3`）。
-- ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
+🔄 **R9-③ 人物关系模型与 API：方案设计中**（任务原文见 git 历史 `2a4ed33`）。
+要点：
+1. 勘察 `models/character.py` 现有字段与既有 relationship 存储
+2. 设计关系表（character_relationship：novel_id/subject_id/object_id/relation_type/description/强度等，alembic 迁移可回滚）
+3. API：GET 关系图（节点+边一次取全）、PATCH 单边更新（前端拖线改关系）、批量导入（大纲一键生成）
+4. 遵循 api/ 目录现有风格
 
-## Action Queue
+## Current Queue
 
-- [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
+- [ ] 产出设计文档（表结构/端点签名/前端图组件契约）回写本板 → Codex 评审 + Claude 确认后实施
 
-## Unassigned Notes
+## Notes
 
-- **回执统一写本文件**（`[任务]`/`[回复]` 流转，格式见 `.orca/workflow` §2）。
-- **本地 docker 栈**：compose 5 服务（postgres/redis/backend/frontend/nginx）；聊天 key 走前端 BYOK 网页填写。
+- 前端拖拽交互归 Claude 域，你只做数据与接口。
+- Pi 评估供参考：关系数据后续会进章节提示词（人物树限 10 角色内、单行精简）——表设计时预留轻量序列化路径。
 
 ## Update Rule
 
-每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
-
-[任务] 人物关系数据模型与 API: 支持关系树可视化与"改点即改关系"
-来源: Claude (协调)
-时间: 2026-09-10 13:14
-优先级: P1
-描述:
-  背景: 用户要求①一键生成人物关系可视化分支树②在树上拖连节点即可改变人物关系。现有 Character 模型(models/character.py)需勘察是否含关系字段。
-  需求(数据/接口侧):
-    1. 勘察 Character 现有字段与既有 relationship 存储(如有);设计人物关系表(如 character_relationship: novel_id/subject_id/object_id/relation_type/description/强度等,含迁移)
-    2. API 设计: GET 关系图数据(节点+边,一次请求可渲染)、PUT/PATCH 单边更新(前端拖线改关系时调用)、批量导入(从大纲一键生成关系树时由后端 LLM 提取或规则提取)
-    3. 迁移用现有 alembic 流程;接口遵循现有 API 风格(看 api/ 目录惯例)
-  验收:
-    1. 设计文档(表结构/端点签名/与前端图组件的契约)写回本板,经 Codex 评审+Claude 确认后实施
-    2. 迁移可回滚;uv run pytest 通过
-  注意: 只做数据与接口设计;前端图组件(拖拽交互)归 Claude 前端域。
----
+只保留当前任务、阻塞、最近验证；已关闭任务只留一行结果。

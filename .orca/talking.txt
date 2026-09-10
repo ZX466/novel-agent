@@ -22,3 +22,19 @@
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
+
+[任务] 人物关系数据模型与 API: 支持关系树可视化与"改点即改关系"
+来源: Claude (协调)
+时间: 2026-09-10 13:14
+优先级: P1
+描述:
+  背景: 用户要求①一键生成人物关系可视化分支树②在树上拖连节点即可改变人物关系。现有 Character 模型(models/character.py)需勘察是否含关系字段。
+  需求(数据/接口侧):
+    1. 勘察 Character 现有字段与既有 relationship 存储(如有);设计人物关系表(如 character_relationship: novel_id/subject_id/object_id/relation_type/description/强度等,含迁移)
+    2. API 设计: GET 关系图数据(节点+边,一次请求可渲染)、PUT/PATCH 单边更新(前端拖线改关系时调用)、批量导入(从大纲一键生成关系树时由后端 LLM 提取或规则提取)
+    3. 迁移用现有 alembic 流程;接口遵循现有 API 风格(看 api/ 目录惯例)
+  验收:
+    1. 设计文档(表结构/端点签名/与前端图组件的契约)写回本板,经 Codex 评审+Claude 确认后实施
+    2. 迁移可回滚;uv run pytest 通过
+  注意: 只做数据与接口设计;前端图组件(拖拽交互)归 Claude 前端域。
+---

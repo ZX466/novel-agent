@@ -42,6 +42,7 @@
   没改（已注释或列此说明）：POSTGRES_DB 默认（数据库绑定既有卷内数据，compose 两文件已加 NAMING 注释）、REDIS_PASSWORD 默认（服务间共享认证凭据，属行为面）、deploy/README `-d project11`（数据库名）、localStorage `project11:*` keys（用户浏览器既有数据，改名会丢主题/目标/草稿）、包名 project11-backend/-frontend（代码标识符，uv.lock/package-lock 同步 churn，任务允许保留）、test X-Title 夹具、历史记录（AGENTS.md/agent-memory/PERFORMANCE-ANALYSIS 中的旧容器名）。
   验证：grep -i project11 残留仅上述必要处 ✅；docker compose config 主文件=0、local=0 ✅；uv py_compile main/__init__ =0 ✅；前端 tsc **未运行**——npm 12 `EALLOWREMOTE` 环境策略阻止远程安装，node_modules 两工作树均无法重建；本次前端 4 处均为纯字符串字面量无类型影响，请 Claude/网络恢复后补跑 `npx tsc --noEmit`。
   行为面：仅命名，零行为变化；容器名变更在下次 compose up 生效（数据在卷，不受影响）。
+  推送：gitee=已推（e5c860e，Everything up-to-date 确认）；origin(GitHub)=两次 443 超时未推，待网络恢复补推（双远程未齐，不宣称"已双推"）。
 ---
 
 [回复] 修复: AI 文本插入编辑器后分段(换行)消失

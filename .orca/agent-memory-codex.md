@@ -40,7 +40,7 @@
 ## 5. Round 5 状态（截至 2026-08-19）
 
 - R5-4 安心回溯（自动快照 + 版本历史）：**已合入 main**（`8094a5d`，评审 cline 通过）。
-- R5-3 设定一致性哨兵：P0 跨租户读取修复（`c02846d`）**复审通过**，结论已回 opencode 板；可合入 main。
+- R5-3 设定一致性哨兵：P0 跨租户读取修复（`c02846d`）**复审通过并已合入 main**。
 - 遗留建议（非阻塞）：consistency_checks 无保留策略 / 日期年份数值误报（"2026 年"）/ check 端点无频控。
 
 ## 6. 2026-09-09/10 结构、运维与网络纪律（新增）
@@ -60,3 +60,16 @@
   `[IO.File]::WriteAllText($p,$t,(New-Object System.Text.UTF8Encoding($false)))` 保持无 BOM。
 - **工具怪癖**：本 shell 偶发把 `git worktree list` / `git branch -l` 输出替换成 `[dedup:ref ...]`；
   需要完整输出时写文件再读：`git worktree list > $env:TEMP\wt.txt 2>&1; Get-Content $env:TEMP\wt.txt`。
+
+## 7. Round 6–8 与审计二批（安全视角，截至 2026-09-10）
+
+- **R8 安全加固 + 消债轮已归档**：`c8bc383`（L2 依赖精确 pin + L6 CI 安全门禁 + TOCTOU 文档化）、
+  `9c16760`，合入 main 后回归 **824 passed / 1 skipped**。
+- **审计遗留二批（L1/L3/L5/L8）全部完成并通过交叉评审**：
+  - L1 迁移自动化（opencode 实现 → codex 复评通过）：`check_migrations.py` 单头校验 + 未应用检查 + 失败 loud。
+  - L3 `_event_stream` 误报（codex 实现 → cline 通过）：新增 `APIBaseNotAllowed` 专用异常，收敛 SSRF 捕获面。
+  - L5 CSP nonce（codex 实现 → cline 通过）：middleware 每请求生成 nonce，nginx 下发同 nonce CSP。
+  - L8 `API_KEYS` 缺省态（cline 实现 → codex 通过）：缺省时 503 + 引导文案，配 2 个测试。
+- **验证命令参考（评审时实际用过）**：`uv run pytest tests/`（后端全量）；
+  前端 `npx tsc --noEmit`、`npm run lint`、`npm run test`（vitest 39 passed）。
+- **评审纪律**：只读被评审工作树 + 回写结论，不改对方代码、不代提交；非阻塞微瑕单列备注，不阻塞合入。

@@ -42,3 +42,21 @@
 - R5-4 安心回溯（自动快照 + 版本历史）：**已合入 main**（`8094a5d`，评审 cline 通过）。
 - R5-3 设定一致性哨兵：P0 跨租户读取修复（`c02846d`）**复审通过**，结论已回 opencode 板；可合入 main。
 - 遗留建议（非阻塞）：consistency_checks 无保留策略 / 日期年份数值误报（"2026 年"）/ check 端点无频控。
+
+## 6. 2026-09-09/10 结构、运维与网络纪律（新增）
+
+- **工作树拓扑（2026-09-10 重建）**：主工作树 `E:/zxdevelop/project2/novel-agent` = `main`；agent 工作树
+  `cline`/`codex`/`kiro`/`opencode-2`/`pi` 各挂 `ZX466/<同名>` 分支，均基于 main。kilo→`kiro`、
+  opencode→`opencode-2`（旧 `opencode` 目录为进程占用的空壳）。codex 工作树 HEAD 与 main 同为 `d36d1dd`。
+- **dot 目录策略**：`.agents/`、`.codegraph/` 是指向主工作树的 junction（gitignore，不入库）；
+  `.kiro/`、`.opencode/` 是**已跟踪例外**（`96f99d2` 入库）；`.codex/` 已解除忽略但目录为空。
+- **GitHub(origin) 网络纪律**：443 reset/timeout 时**不要循环重试推送**，只记录“待补推”，
+  等网络恢复后补推；Gitee 正常。汇报里不得把未验证的推送写成完成。
+- **分支收敛踩坑**：曾出现 4 个同内容不同 hash 的重复板面提交
+  （`88d22cc`/`e72f2f8`/`394dba2`/`efc1cfa`，均基于 `981daf3`）；收敛方式
+  `git reset --hard <正确 hash>` + 一次 `git push gitee +<hash>:main`。避免多会话并发改同一板面。
+- **测试基线更新**：R8 之后为 **824 passed / 1 skipped**（本文件旧记 660 已过时）。
+- **文档写入**：`Set-Content -Encoding UTF8` 会加 BOM 且把 LF 变 CRLF；改用
+  `[IO.File]::WriteAllText($p,$t,(New-Object System.Text.UTF8Encoding($false)))` 保持无 BOM。
+- **工具怪癖**：本 shell 偶发把 `git worktree list` / `git branch -l` 输出替换成 `[dedup:ref ...]`；
+  需要完整输出时写文件再读：`git worktree list > $env:TEMP\wt.txt 2>&1; Get-Content $env:TEMP\wt.txt`。

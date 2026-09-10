@@ -22,3 +22,22 @@
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
+
+[任务] 章节写作提示词增强: 章节数/人物关系树/背景注入 + 每章字数控制
+来源: Claude (协调)
+时间: 2026-09-10 13:14
+优先级: P0
+描述:
+  背景: backend/app/pipeline/nodes.py draft_node 现仅注入 RAG 检索到的 lore(retrieved_context),未显式注入章节数与人物关系;用户要求写作时上下文强连贯+每章字数合理相同。
+  需求:
+    A. 章节生成提示词(system_content, task_type=generate 分支)必须包含:
+       1. 当前章节数(第几章/共几章,数据源 chapter_index 与大纲章节数)
+       2. 人物关系树概要(角色名+关系+弧线,从 characters 结构化数据或 RAG 上下文提取)
+       3. 前文背景(最近 1-2 章梗概,增强连贯)
+    B. 字数控制: 目标字数作为硬约束写入提示词(如"本章目标 2000-2500 字"),并研究 per-chapter 字数基准如何从大纲/前几章实际字数推导,保证各章字数合理接近。
+  勘察线索: nodes.py:230-260 各 task_type 分支;state.py PipelineState 字段;retrieve_structured_lore(retrieval.py)已有结构化 lore 通道可复用;字数统计逻辑在 services/chapter.py:137-176。
+  验收:
+    1. 设计文档(注入哪些字段/数据来源/字数策略)写回本板,经 Claude 评审后再实施
+    2. 若直接实施: uv run pytest backend 相关测试通过;手工构造一次章节生成验证提示词包含上述要素
+  注意: 你是接口/兼容域——本次做**方案设计**(数据流与提示词模板),编码实施待 Claude 确认。
+---

@@ -14,9 +14,9 @@
 
 ```bash
 # 1. 在服务器上 clone 或 scp 整个项目
-scp -r ./project11 user@<server-ip>:/opt/project11
+scp -r ./novel-agent user@<server-ip>:/opt/novel-agent
 ssh user@<server-ip>
-cd /opt/project11
+cd /opt/novel-agent
 
 # 2. 复制环境变量模板并填入真实值
 cp .env.example .env
@@ -32,6 +32,7 @@ docker compose logs -f backend
 docker compose logs -f nginx
 
 # 5. 跑数据库迁移（容器内 PG 启动后）
+# 注：-d project11 是数据库名（POSTGRES_DB），属内部标识不改名
 docker compose exec postgres psql -U postgres -d project11 -c "CREATE EXTENSION IF NOT EXISTS vector;"
 docker compose exec backend alembic upgrade head
 

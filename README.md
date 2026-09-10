@@ -1,4 +1,4 @@
-# Project11 — AI 小说创作平台
+# novel-agent — AI 小说创作平台
 
 三阶段 LLM 流水线（草稿 → 精修 → 评估）+ 实时流式输出 + BYOK 多 provider + RAG 记忆检索。
 

@@ -21,12 +21,13 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: project11-postgres-local
+    container_name: novel-agent-postgres-local
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       # SECURITY: REQUIRED — no default. Set a >=20 char random value in .env.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required in .env (>=20 chars)}
+      # NAMING: POSTGRES_DB 默认值保留 project11——数据库名与既有 pg_data 卷数据绑定，不改
       POSTGRES_DB: ${POSTGRES_DB:-project11}
     ports:
       - "127.0.0.1:5432:5432"
@@ -42,7 +43,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: project11-redis-local
+    container_name: novel-agent-redis-local
     restart: unless-stopped
     # SECURITY: protected-mode yes + requirepass from .env (no default).
     command: ["redis-server", "--port", "16379", "--protected-mode", "yes", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD required in .env (>=20 chars)}"]

@@ -14,12 +14,13 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: project11-postgres
+    container_name: novel-agent-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       # SECURITY: Override POSTGRES_PASSWORD in .env — the default is for dev only.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # NAMING: POSTGRES_DB 默认值保留 project11——数据库名与既有卷内数据绑定，改名会导致旧数据不可见（全局改名任务明确不改）
       POSTGRES_DB: ${POSTGRES_DB:-project11}
     volumes:
       - pg_data:/var/lib/postgresql/data
@@ -31,8 +32,9 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: project11-redis
+    container_name: novel-agent-redis
     restart: unless-stopped
+    # NAMING: REDIS_PASSWORD 默认值保留（project11-redis）——它是 redis 与 backend 间的共享认证凭据，属行为面不改名
     command: ["redis-server", "--port", "16379", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-project11-redis}"]
     volumes:
       - redis_data:/data
@@ -46,7 +48,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: project11-backend
+    container_name: novel-agent-backend
     restart: unless-stopped
     env_file:
       - ./backend/.env
@@ -67,7 +69,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: project11-frontend
+    container_name: novel-agent-frontend
     restart: unless-stopped
     depends_on:
       - backend
@@ -76,7 +78,7 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: project11-nginx
+    container_name: novel-agent-nginx
     restart: unless-stopped
     ports:
       - "${NGINX_HTTP_PORT:-8080}:80"

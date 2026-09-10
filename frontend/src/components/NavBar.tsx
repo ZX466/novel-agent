@@ -64,7 +64,7 @@ export function NavBar() {
               letterSpacing: "-0.02em",
             }}
           >
-            P
+            N
             <span
               className="absolute bottom-[-1px] left-[3px] right-[3px] h-px opacity-50"
               style={{ background: "var(--accent-muted)" }}
@@ -74,7 +74,7 @@ export function NavBar() {
             className="font-display text-xl font-semibold"
             style={{ color: "var(--fg)", letterSpacing: "-0.02em" }}
           >
-            Project11
+            novel-agent
           </span>
           <span
             className="w-px h-[18px] opacity-60"

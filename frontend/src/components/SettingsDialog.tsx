@@ -615,7 +615,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                             <textarea
                               value={form.extra_headers_json}
                               onChange={(e) => updateField(stageKey, "extra_headers_json", e.target.value)}
-                              placeholder='{"X-Title": "Project11", "HTTP-Referer": "https://p11.dev"}'
+                              placeholder='{"X-Title": "novel-agent", "HTTP-Referer": "https://p11.dev"}'
                               rows={3}
                               className="w-full px-sp-3 py-sp-2 border rounded-sm text-xs font-mono outline-none transition-all"
                               style={{

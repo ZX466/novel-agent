@@ -1,7 +1,7 @@
 [project]
 name = "project11-backend"
 version = "0.1.0"
-description = "Project11 AI 小说创作平台后端 — 三阶段 LLM 流水线 + BYOK + RAG"
+description = "novel-agent AI 小说创作平台后端 — 三阶段 LLM 流水线 + BYOK + RAG"
 requires-python = ">=3.11"
 dependencies = [
     # Web framework

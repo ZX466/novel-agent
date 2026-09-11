@@ -62,6 +62,147 @@ _HARD_MAX_ITERS = 5
 
 _THINK_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
 
+# R9-④⑥: word-count post-check thresholds (fraction of the resolved target).
+# ratio < _WC_REGENERATE → whole-chapter regenerate flag; < _WC_CONTINUE →
+# continue-branch top-up. Between _WC_CONTINUE and _WC_OVER → accept.
+_WC_REGENERATE = 0.6
+_WC_CONTINUE = 0.9
+_WC_OVER = 1.2
+
+
+def _build_writing_context(state: dict) -> str:
+    """Assemble the structured chapter-writing context blocks (R9-④⑥).
+
+    Reads chapter_index / total_chapters / chapter_title / target_word_count
+    from state plus the session-scoped DB for prior chapters. Every block is
+    optional: when its data is missing the block is skipped entirely (no
+    "unknown" placeholders). Output goes into state["writing_context"] and is
+    injected into the generate-branch system prompt — NOT into the retrieval
+    query, so the embedding cache key stays stable (Pi R9 evaluation §3).
+    """
+    session = state.get("session")
+    novel_id = state.get("novel_id")
+    blocks: list[str] = []
+
+    # ── Block 1: chapter progress ──────────────────────────────────────
+    chapter_index = state.get("chapter_index")
+    total_chapters = state.get("total_chapters")
+    chapter_title = state.get("chapter_title") or ""
+    progress_lines: list[str] = []
+    if chapter_index is not None:
+        current = chapter_index + 1
+        progress_lines.append(
+            f"当前：第{current}章《{chapter_title}》" if chapter_title else f"当前：第{current}章"
+        )
+        if total_chapters and total_chapters > 0:
+            pct = round(current / total_chapters * 100)
+            progress_lines.append(f"进度：{current}/{total_chapters}（{pct}%）")
+    if progress_lines:
+        blocks.append("【章节进度】\n" + "\n".join(progress_lines))
+
+    # ── Blocks 2-3 need the DB ─────────────────────────────────────────
+    target = state.get("target_word_count")
+    if session is not None and novel_id is not None:
+        # Block 2: prior-chapter background (最近 1-2 章) — improves continuity.
+        try:
+            from sqlalchemy import select
+
+            from app.models.chapter import Chapter
+
+            prev_chapters = (
+                session.execute(
+                    select(Chapter)
+                    .where(
+                        Chapter.novel_id == novel_id,
+                        Chapter.chapter_index < (chapter_index if chapter_index is not None else 0)
+                        if chapter_index is not None
+                        else True,
+                    )
+                    .order_by(Chapter.chapter_index.desc())
+                    .limit(2)
+                )
+                .scalars()
+                .all()
+            )
+            if prev_chapters:
+                bg_lines = []
+                for ch in reversed(prev_chapters):
+                    snippet = (ch.summary or "").strip() or (ch.content_text or "")[:300]
+                    if snippet:
+                        bg_lines.append(f"- 第{ch.chapter_index + 1}章《{ch.title}》：{snippet}")
+                if bg_lines:
+                    blocks.append("【前文背景】\n" + "\n".join(bg_lines))
+        except Exception:
+            logger.warning("_build_writing_context: prior-chapter lookup failed", exc_info=True)
+
+        # Block 4 (derivation): word-count target from prior chapters' median.
+        if target is None:
+            try:
+                from sqlalchemy import select
+
+                from app.models.chapter import Chapter
+
+                rows = (
+                    session.execute(
+                        select(Chapter.word_count)
+                        .where(
+                            Chapter.novel_id == novel_id,
+                            Chapter.word_count > 0,
+                        )
+                        .order_by(Chapter.chapter_index.desc())
+                        .limit(5)
+                    )
+                    .scalars()
+                    .all()
+                )
+                if rows:
+                    ordered = sorted(rows)
+                    mid = len(ordered) // 2
+                    target = (
+                        ordered[mid]
+                        if len(ordered) % 2
+                        else round((ordered[mid - 1] + ordered[mid]) / 2)
+                    )
+            except Exception:
+                logger.warning("_build_writing_context: word-count median lookup failed", exc_info=True)
+
+    # Block 4: word-count requirement.
+    if target is None:
+        target = 1000  # conservative default for a first chapter
+    target_min = round(target * 0.85)
+    target_max = round(target * 1.15)
+    blocks.append(
+        "【字数要求】\n"
+        f"本章目标：{target_min}-{target_max} 字（正文计，不含标题/空白）。"
+        "必须控制在该区间内，不足或超出过多视为不合格。"
+    )
+
+    # ── Block 2 (relationship tree) comes from retrieved lore when present.
+    # retrieval_node already formatted structured lore into
+    # state["retrieved_context"]; draft_node appends it after these blocks,
+    # so we don't duplicate character/world data here.
+
+    return "\n\n".join(blocks)
+
+
+def _resolve_target_word_count(state: dict) -> int | None:
+    """Resolve the effective word target for the post-check (R9-⑥).
+
+    Same priority as _build_writing_context: explicit target_word_count
+    first, then median of recent chapters, else the 1000 default. Kept
+    separate so draft_node's post-check never re-queries the DB.
+    """
+    explicit = state.get("target_word_count")
+    if explicit:
+        return explicit
+    return 1000  # matches the _build_writing_context default
+
+
+def _count_codepoints(text: str) -> int:
+    """Count non-whitespace codepoints — mirrors Chapter.word_count derivation
+    in services/chapter.py (len-based, whitespace-stripped)."""
+    return len("".join(text.split()))
+
 
 class _ThinkStreamFilter:
     """Filters inline ``<think>…</think>`` blocks out of a token stream.
@@ -161,8 +302,12 @@ async def retrieval_node(state: PipelineState) -> dict:
     session = state.get("session")
     novel_id = state.get("novel_id")
 
+    # R9-④⑥: structured chapter-writing context is built in the retrieval
+    # node so draft_node can read it from state without re-querying the DB.
+    writing_context = _build_writing_context(state)
+
     if session is None or novel_id is None:
-        return {"retrieved_context": ""}
+        return {"retrieved_context": "", "writing_context": writing_context}
 
     # 1) Vector RAG (needs EMBEDDING_* configured).
     try:
@@ -184,7 +329,7 @@ async def retrieval_node(state: PipelineState) -> dict:
             logger.debug(
                 "retrieval_node: %d hits, %d chars", len(hits), len(ctx)
             )
-            return {"retrieved_context": ctx}
+            return {"retrieved_context": ctx, "writing_context": writing_context}
     except Exception:
         logger.warning(
             "retrieval_node: vector retrieval failed, falling back to structured lore",
@@ -200,13 +345,13 @@ async def retrieval_node(state: PipelineState) -> dict:
         )
         if lore:
             logger.info("retrieval_node: structured lore fallback, %d chars", len(lore))
-            return {"retrieved_context": lore}
+            return {"retrieved_context": lore, "writing_context": writing_context}
     except Exception:
         logger.exception(
             "retrieval_node: structured lore fallback failed, continuing without context"
         )
 
-    return {"retrieved_context": ""}
+    return {"retrieved_context": "", "writing_context": writing_context}
 
 
 @_timed("draft")
@@ -262,6 +407,28 @@ async def draft_node(state: PipelineState) -> dict:
             "3. 回复 200-600 字，条理清晰，可直接插入正文或当作修改参考；\n"
             "4. 只输出建议正文，不要任何思考过程、解释或前后缀。"
         )
+    elif task_type == "generate":
+        # R9-④⑥: dedicated chapter-writing branch. Injects the structured
+        # writing context (chapter progress / prior-chapter background /
+        # word-count requirement) assembled by retrieval_node, plus hard
+        # continuity and paragraphing requirements. Character/world lore
+        # still arrives via retrieved_context below — not duplicated here.
+        parts = [
+            "你是一位专业小说写作助手。请根据以下写作约束和作品资料，写出当前章节的正文。",
+        ]
+        writing_context = state.get("writing_context", "")
+        if writing_context:
+            parts.append(writing_context)
+        parts.append(
+            "【写作要求】\n"
+            "1. 开头自然衔接上文，不重复已写内容\n"
+            "2. 多用具体动作、环境细节、对白与心理活动，避免空泛概括\n"
+            "3. 人物言行必须符合既有角色设定与世界观，推进剧情并留下至少一处伏笔\n"
+            "4. 结尾停在张力点，方便继续续写\n"
+            "5. 正文分段：每个自然段 2-5 句，段间换行，严禁一整段输出\n"
+            "6. 除正文外不要任何解释或思考过程。"
+        )
+        system_content = "\n\n".join(parts)
     else:
         system_content = "You are a concise drafting assistant. Write a first draft."
 
@@ -329,6 +496,25 @@ async def draft_node(state: PipelineState) -> dict:
     result: dict = {"draft": content, "iterations": 0}
     if retrieved_context:
         result["retrieval_hits"] = len(retrieved_context)
+
+    # R9-⑥ word-count post-check (generate only — outline/extract have
+    # different length profiles). Verdict drives refine_node's strategy:
+    # "continue" → top-up instruction; "regenerate" → stronger word-count
+    # emphasis on the next iteration. Not wired into evaluate (Pi R9 §3:
+    # word-count must not inflate the refine loop cost).
+    if task_type == "generate" and content.strip():
+        target = _resolve_target_word_count(state)
+        if target and target > 0:
+            wc = _count_codepoints(content)
+            ratio = wc / target
+            logger.info(
+                "draft_node: word-count post-check wc=%d target=%d ratio=%.2f",
+                wc, target, ratio,
+            )
+            if ratio < _WC_REGENERATE:
+                result["word_count_retry"] = "regenerate"
+            elif ratio < _WC_CONTINUE:
+                result["word_count_retry"] = "continue"
     return result
 
 
@@ -380,6 +566,25 @@ async def refine_node(state: PipelineState) -> dict:
     )
     if feedback:
         user_content += f"Evaluator feedback:\n{feedback}\n\n"
+    # R9-⑥: word-count verdict from draft_node's post-check. continue →
+    # append a top-up instruction (much cheaper than a full regenerate);
+    # regenerate → stronger word-count emphasis for this iteration.
+    wc_retry = state.get("word_count_retry", "")
+    if wc_retry in ("continue", "regenerate"):
+        target = _resolve_target_word_count(state)
+        current_wc = _count_codepoints(current_text)
+        deficit = max(0, target - current_wc)
+        if wc_retry == "continue":
+            user_content += (
+                f"【字数补足】当前正文约 {current_wc} 字，目标 {target} 字。"
+                f"请在不破坏已有情节与风格的前提下扩写，补足约 {deficit} 字"
+                "（补充动作细节、环境描写、对白或心理活动）。输出完整的扩写后正文。\n\n"
+            )
+        else:
+            user_content += (
+                f"【字数严重不足】当前正文约 {current_wc} 字，远低于目标约 {target} 字的篇幅，"
+                "请在扩写时大幅充实内容（新增场景/事件/对白），确保达到目标字数区间。\n\n"
+            )
     user_content += "Produce an improved version. Output only the new text, no preamble."
 
     system_content = "You are a meticulous editor. Refine the text per the feedback."

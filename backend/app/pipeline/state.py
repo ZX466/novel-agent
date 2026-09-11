@@ -49,3 +49,12 @@ class PipelineState(TypedDict, total=False):
     fallback_mode: bool                 # True when a stage was skipped due to failure
     fallback_reason: str                # which stage failed and was skipped
     on_token: Any                       # async callback for real-time streaming: await on_token(text)
+    # R9-④⑥ chapter-writing context. All optional — absent fields mean the
+    # caller (frontend) didn't supply them and the corresponding prompt
+    # block is skipped (backward compatible with older clients).
+    chapter_index: int | None           # 0-based index of the chapter being written
+    total_chapters: int | None          # planned chapter count (from outline/frontend)
+    chapter_title: str                  # title of the chapter being written ("" = unknown)
+    target_word_count: int | None       # explicit per-chapter word target (None = derive)
+    writing_context: str                # structured blocks built by retrieval_node for draft_node
+    word_count_retry: str               # "" | "continue" | "regenerate" (word-count post-check verdict)

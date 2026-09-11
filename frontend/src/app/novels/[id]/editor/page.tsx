@@ -9,6 +9,7 @@ import { useEditor } from "@tiptap/react";
 import { EditorContent } from "@tiptap/react";
 
 import { getDocument, updateDocument } from "@/lib/documents";
+import { textToParagraphNodes } from "@/lib/insert-text";
 import { listChapters, createChapter, updateChapter, deleteChapter, reorderChapters } from "@/lib/chapters";
 import type { EditorDoc, ChapterListItem, ChapterRead, DocumentPartial, DocumentInput } from "@/lib/types";
 import type { SaveState } from "@/hooks/use-documents";
@@ -467,7 +468,7 @@ export default function NovelEditorPage() {
         .chain()
         .focus()
         .deleteRange({ from: m.from, to: m.to })
-        .insertContentAt(m.from, replacement)
+        .insertContentAt(m.from, textToParagraphNodes(replacement))
         .run();
       // Rebuild matches after replace.
       const newMatches = buildMatchList(query);
@@ -493,7 +494,7 @@ export default function NovelEditorPage() {
         editor
           .chain()
           .deleteRange({ from: m.from, to: m.to })
-          .insertContentAt(m.from, replacement)
+          .insertContentAt(m.from, textToParagraphNodes(replacement))
           .run();
       }
       setFindMatches([]);
@@ -614,7 +615,7 @@ export default function NovelEditorPage() {
           // Best-effort; never block the insertion on a failed snapshot.
         }
       }
-      editor?.chain().focus().insertContent(text).run();
+      editor?.chain().focus().insertContent(textToParagraphNodes(text)).run();
     },
     [editor, docId, activeChapter],
   );
@@ -635,9 +636,9 @@ export default function NovelEditorPage() {
       }
       const { from, to } = editor.state.selection;
       if (from !== to) {
-        editor.chain().focus().deleteRange({ from, to }).insertContentAt(from, text).run();
+        editor.chain().focus().deleteRange({ from, to }).insertContentAt(from, textToParagraphNodes(text)).run();
       } else {
-        editor.chain().focus().insertContent(text).run();
+        editor.chain().focus().insertContent(textToParagraphNodes(text)).run();
       }
     },
     [editor, docId, activeChapter],

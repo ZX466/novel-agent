@@ -176,6 +176,10 @@ async def run_pipeline(
     task_type: str = "generate",
     on_token=None,
     perf: dict | None = None,
+    chapter_index: int | None = None,
+    total_chapters: int | None = None,
+    chapter_title: str = "",
+    target_word_count: int | None = None,
 ) -> PipelineState:
     """Runs the full pipeline non-streaming; returns final state.
 
@@ -186,6 +190,10 @@ async def run_pipeline(
     `perf` is an optional mutable dict (PerfPulse). Pipeline nodes write
     stage timings into ``state["perf"]``; the same dict reference is
     passed in as initial state so callers can read it back after invoke.
+
+    R9-④⑥ chapter fields (chapter_index/total_chapters/chapter_title/
+    target_word_count) are optional — absent = no chapter-writing context
+    injected (backward compatible with older callers).
     """
     app = _get_pipeline_for_task(task_type)
     return await app.ainvoke(
@@ -198,6 +206,10 @@ async def run_pipeline(
             "task_type": task_type,
             "on_token": on_token,
             "perf": perf if perf is not None else {},
+            "chapter_index": chapter_index,
+            "total_chapters": total_chapters,
+            "chapter_title": chapter_title,
+            "target_word_count": target_word_count,
         },
         config={"recursion_limit": _recursion_limit()},
     )
@@ -212,6 +224,10 @@ async def stream_pipeline(
     task_type: str = "generate",
     perf: dict | None = None,
     persist_key: str | None = None,
+    chapter_index: int | None = None,
+    total_chapters: int | None = None,
+    chapter_title: str = "",
+    target_word_count: int | None = None,
 ) -> AsyncIterator[str]:
     """True streaming: yields tokens as the LLM generates them.
 
@@ -251,6 +267,10 @@ async def stream_pipeline(
                 task_type=task_type,
                 on_token=on_token,
                 perf=perf,
+                chapter_index=chapter_index,
+                total_chapters=total_chapters,
+                chapter_title=chapter_title,
+                target_word_count=target_word_count,
             )
             final_text = state.get("refined") or state.get("draft") or ""
             # Expose for _persist_later (detached completion after disconnect).
@@ -300,6 +320,10 @@ async def stream_pipeline(
             novel_id=novel_id,
             task_type=task_type,
             perf=perf,
+            chapter_index=chapter_index,
+            total_chapters=total_chapters,
+            chapter_title=chapter_title,
+            target_word_count=target_word_count,
         )
         final_text = final_state.get("refined") or final_state.get("draft") or ""
 

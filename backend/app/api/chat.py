@@ -102,6 +102,14 @@ class ChatRequest(BaseModel):
     context_mode: Literal["outline", "selected", "full"] | None = None
     context_max_chars: int | None = None
 
+    # R9-④⑥ chapter-writing context (optional; absent = no chapter blocks
+    # injected). Explicit fields — never parsed from message text, so user
+    # prose can't forge pipeline routing.
+    chapter_index: int | None = None
+    total_chapters: int | None = None
+    chapter_title: str = ""
+    target_word_count: int | None = None
+
     model_config = {"extra": "ignore"}
 
     @model_validator(mode="after")
@@ -355,6 +363,10 @@ async def _event_stream(
     session=None,
     novel_id: int | None = None,
     task_type: str = "generate",
+    chapter_index: int | None = None,
+    total_chapters: int | None = None,
+    chapter_title: str = "",
+    target_word_count: int | None = None,
 ) -> AsyncIterator[str]:
     """Runs the pipeline and emits AI SDK v5 UI Message Stream SSE events.
 
@@ -386,6 +398,8 @@ async def _event_stream(
             session=session, evaluator=evaluator, novel_id=novel_id,
             task_type=task_type, perf=perf,
             persist_key=f"ai-draft:{novel_id}" if novel_id else None,
+            chapter_index=chapter_index, total_chapters=total_chapters,
+            chapter_title=chapter_title, target_word_count=target_word_count,
         ):
             if not text_started:
                 yield _encode_text_start()
@@ -521,6 +535,8 @@ async def chat(
         _event_stream(
             topic, provider_config,
             session=session, novel_id=novel_id, task_type=task_type,
+            chapter_index=req.chapter_index, total_chapters=req.total_chapters,
+            chapter_title=req.chapter_title, target_word_count=req.target_word_count,
         ),
         media_type="text/event-stream",
         headers=_sse_headers(),

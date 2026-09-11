@@ -4,34 +4,26 @@
 
 ## Current State
 
-✅ **R9-② 事件流协议 v1：设计 + cline 评审通过**（设计 `480d802`，仅文档未改代码；评审结论已并入本板）：
-- 协议：复用现有 SSE 通道，新增 `stage` 事件（started/succeeded/failed/skipped）+ seq 单写入点 + 64 条/请求硬上限（最坏 46 条）
-- cline 核验通过：perf-transport default 分支静默忽略未知 type ✅；summary 需**闭合白名单**（按阶段显式构造，序列化点拒绝白名单外键）✅；failed 枚举对齐 llm 异常分支：`llm_auth | llm_rate_limit | llm_timeout | llm_context_length | stage_error` ✅
-- 评审澄清点（实施时必须遵守）：
-  - M1 skipped 由 pipeline 层发（`build_pipeline_for_task` graph.py:109-151 不加非活动节点，`_timed` 钩子不执行）
-  - M2 非流式 fallback（graph.py:286-317）无 on_event → 前端需容忍 stage 缺失，回退现有 isBusy 展示
-- 归属：后端事件产生/传递=实施 Agent；前端 stage 消费=Claude；实施第一步先落 S1/S2 单测
+✅ **R9-② 事件流协议 v1：设计 + cline 评审通过**（`480d802`，待派实施）：
+- 协议：复用 SSE 通道，新增 `stage` 事件（started/succeeded/failed/skipped）+ seq 单写入点 + 64 条/请求上限
+- summary **闭合白名单**；failed 枚举：`llm_auth | llm_rate_limit | llm_timeout | llm_context_length | stage_error`
+- 实施前必须遵守：**M1** skipped 由 pipeline 层发（非活动节点不在图内）；**M2** 非流式 fallback 无 on_event → 前端容忍 stage 缺失
+- 归属：后端事件=实施 Agent；前端 stage 消费=Claude；实施第一步先落 S1/S2 单测
 
-✅ **R9-③ 人物关系模型与 API：设计评审 + 实施复核均已完成**（数据/数据库域，reviewer=Codex）：设计=有条件通过；实施 `9eb8d1a` 复核=**有条件通过（2 个 P1）**
-- P1-1 FK 需 `ondelete="CASCADE"` + passive_deletes（否则删角色 500）；P1-2 跨作品需复合 FK 兜底（照 plot_events 先例）；P1-3 GET /graph 两条查询防 N+1 + 稳定排序
-- P2：有向/无向唯一键语义、strength 0-10 约束、import 幂等与上限、updated_at onupdate
-- P1-1/2/3 与 S-a~S-c 已核实落实；**实施待修 [P1-A] import 同批次重复项 → 唯一约束 500（autoflush=False + select-then-add）**、**[P1-B] 补 2 条 skipif real-DB 用例**（删角色级联 / 跨作品建边被拒）
+✅ **R9-③ 实施复核完成**：有条件通过——P1-1/2/3 与 S-a~S-c 已核实落实；**待 opencode-2 修 P1-A**（import 同批次重复项 → 唯一约束 500，autoflush=False + select-then-add）+ **P1-B**（补 2 条 skipif real-DB 用例）
 
-🟡 **R9-④⑥ 章节上下文注入+字数控制：安全/兼容性交叉复核 = 不通过（3 个 P1）**（被评 `48bb1d2`，main）
-- 安全域发现（我的主责）：**P1-3** 4 个新字段无边界校验——`chapter_title` 无长度上限且**逐字拼进 system prompt**（实测 200000 字通过校验、可注入换行+指令）；`target_word_count=-5` / `chapter_index=-3` / `total_chapters=999999999` 均被接受并写入提示词（同文件其余用户可控串都有 Field 约束，风格不一致）
-- 功能缺陷：**P1-1** `_build_writing_context` 两处 `session.execute` 未 `await`（AsyncSession）→ 前文背景/中位数推导被 except 静默吞掉，从未生效（实测 AttributeError + RuntimeWarning）；**P1-2** 推导 target 不回写 state → 提示词目标与 post-check 目标（硬编码 1000）不一致
-- 通过项：向后兼容、注入 system 不污染 embedding 键、字数不绑 evaluate、字数口径一致、⑤ 前端分段修复
-- 评审全文已写入 kiro 板（④⑥ 归属域）；P2 含 word_count_retry 跨迭代残留 / 人物树未落地 / 前端 transport 未传字段
+🟡 **R9-④⑥ 交叉复核**：3 P1（未 await / target 不回写 / 字段无边界）→ **Claude 已修复 `b66c9d0`**（含我的 P1-3 安全面：Field 边界 + title ≤200），**待我复核确认**
+
 ## Current Queue
 
-- [ ] **R9-② 待 Claude 派实施**（协议已定稿，勿再改设计；实施前按 M1/M2 澄清点落地）
-- [ ] **R9-③ 待 opencode-2 修完 P1-A/P1-B 回写"已修订"** → codex 复核 → 交 Claude 确认并入 main
-- [ ] **R9-④⑥ 待 Claude 修完 P1-1/P1-2/P1-3** → codex 复核（评审全文在 kiro 板）
+- [ ] **复核 R9-④⑥ 修复 `b66c9d0`**（评审全文在 kiro 板；回归 486 passed）
+- [ ] **R9-③ 等 opencode-2 修 P1-A/P1-B 回写** → 我复核 → Claude 确认并入 main
+- [ ] **R9-② 实施待 Claude 派**（后端事件归我，按 M1/M2 落地；勿再改设计）
 
 ## Notes
 
 - 队列为空时待命，不从历史转录自行生成任务。
-- 双远程已同点（2026-09-11 23:45）：main `ef39244` + 5 条 agent 分支均推达 origin/gitee；GitHub 443 已恢复。
+- 双远程已同点（2026-09-12）：main `b66c9d0` + 5 条 agent 分支均推达 origin/gitee。
 
 ## Update Rule
 
@@ -39,4 +31,4 @@
 
 ## Closed (one-line)
 
-- [评审请求] R9-③ 人物关系实施复核（Claude→codex，2026-09-11 16:20，P1）→ 已完成：结论=有条件通过（2 个 P1），评审全文见 opencode-2 板 `b6da5cb`。
+- ②设计+评审闭环（`ad0f72d`）✅ ｜ ③设计评审+实施复核（`fc33295`）✅ ｜ ④⑥交叉复核发现问题（`1935656`）✅ ｜ GitHub 补推（23:45）✅

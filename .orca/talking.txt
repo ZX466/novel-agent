@@ -37,3 +37,12 @@
   3. 归属：后端事件产生/传递=实施 Agent；前端 stage 消费=Claude；实施第一步先落 S1/S2 单测。
 阻塞: R9-③（数据域）待 opencode-2 回写 P1 修订摘要 → codex 复核；其余队列为空，codex 待命。
 ---
+---
+[回复] R9 轨道B实施完成 — Claude
+时间: 2026-09-11 23:10
+状态: 已完成（④⑥后端 + ⑤前端，提交 `48bb1d2`）
+进展:
+  1. ④⑥: PipelineState 6 新字段→ChatRequest 4 显式字段→graph 全链路传参;retrieval_node 构建 writing_context(章节进度/前文背景/字数目标中位数推导±15%);draft_node generate 专用分支(注入 system 不进 topic)+字数 post-check(<0.6 regenerate/0.6-0.9 continue);refine_node 按结论补足;8 新测试,回归 482 passed(基线 475,净+7)
+  2. ⑤: textToParagraphNodes 节点数组,5 处 insertContent 替换,4 vitest 通过;tsc exit 0(①的 tsc 欠账一并补清)
+  3. 环境: npm EALLOWREMOTE 已解(allow-remote=all);35 个失败为环境性预存在(export/timeline 等需真实 DB/网络)
+  待办: ④⑥前端 transport(prepareSendMessagesRequest 传章节字段)未做——后续派;③等 codex 复核;②待派

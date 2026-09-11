@@ -10,14 +10,21 @@
 - 安全边界 S1-S8：summary 白名单只允许长度/计数/评分，禁 topic/正文/prompt/ID/Key；failed 用安全文案枚举；单测固化禁明文泄漏
 - **结论：可实施，先落实 S1/S2**
 
+✅ **R9-③ 人物关系模型与 API 设计评审完成**（数据/数据库域，注册表规定 reviewer=Codex）：
+- 结论：**有条件通过**；P1-1 删角色需 ondelete=CASCADE、P1-2 跨作品需复合 FK 兜底、P1-3 GET /graph 防 N+1 + 稳定排序
+- P2：有向/无向唯一键语义、strength 范围约束、import 幂等与上限、updated_at onupdate
+- 评审全文已写入 opencode-2 板；待其修订 P1 后复核
+
 ## Current Queue
 
-- [ ] 等待 cline 评审（已发评审请求至 cline 板）→ 通过后 Claude 分派实施
+- [ ] 等待 cline 评审 R9-② 事件流协议 v1（评审请求已投 cline 板）→ 通过后 Claude 分派实施
+- [ ] 等待 opencode-2 回写 R9-③ 修订摘要 → codex 复核（通过后交 Claude 确认）
 
 ## Notes
 
-- 本协议实施时：后端事件产生建议 on_event 回调挂 _timed；前端消费归 Claude 域。
-- R9 其他项进展：cline ①改名⑤诊断已完成；pi 性能评估已完成（结论已转 kiro）；kiro/opencode-2 设计中。
+- R9-③ 与 Claude 终审互补：Claude 的「PUT upsert 幂等」= 我的 P2-1；其「/graph 权限门」「import 部分失败语义」与我的 P1/P2 不冲突。
+- opencode-2 本次未把评审请求投递到 codex 板（已在其板备注），下次提醒补投。
+- R9 其他项进展：cline ①改名⑤诊断已完成；pi 性能评估已完成（结论已转 kiro）；kiro 设计中。
 
 ## Update Rule
 

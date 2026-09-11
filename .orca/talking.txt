@@ -17,10 +17,16 @@
 - P2：有向/无向唯一键语义、strength 0-10 约束、import 幂等与上限、updated_at onupdate
 - P1-1/2/3 与 S-a~S-c 已核实落实；**实施待修 [P1-A] import 同批次重复项 → 唯一约束 500（autoflush=False + select-then-add）**、**[P1-B] 补 2 条 skipif real-DB 用例**（删角色级联 / 跨作品建边被拒）
 
+🟡 **R9-④⑥ 章节上下文注入+字数控制：安全/兼容性交叉复核 = 不通过（3 个 P1）**（被评 `48bb1d2`，main）
+- 安全域发现（我的主责）：**P1-3** 4 个新字段无边界校验——`chapter_title` 无长度上限且**逐字拼进 system prompt**（实测 200000 字通过校验、可注入换行+指令）；`target_word_count=-5` / `chapter_index=-3` / `total_chapters=999999999` 均被接受并写入提示词（同文件其余用户可控串都有 Field 约束，风格不一致）
+- 功能缺陷：**P1-1** `_build_writing_context` 两处 `session.execute` 未 `await`（AsyncSession）→ 前文背景/中位数推导被 except 静默吞掉，从未生效（实测 AttributeError + RuntimeWarning）；**P1-2** 推导 target 不回写 state → 提示词目标与 post-check 目标（硬编码 1000）不一致
+- 通过项：向后兼容、注入 system 不污染 embedding 键、字数不绑 evaluate、字数口径一致、⑤ 前端分段修复
+- 评审全文已写入 kiro 板（④⑥ 归属域）；P2 含 word_count_retry 跨迭代残留 / 人物树未落地 / 前端 transport 未传字段
 ## Current Queue
 
 - [ ] **R9-② 待 Claude 派实施**（协议已定稿，勿再改设计；实施前按 M1/M2 澄清点落地）
 - [ ] **R9-③ 待 opencode-2 修完 P1-A/P1-B 回写"已修订"** → codex 复核 → 交 Claude 确认并入 main
+- [ ] **R9-④⑥ 待 Claude 修完 P1-1/P1-2/P1-3** → codex 复核（评审全文在 kiro 板）
 
 ## Notes
 

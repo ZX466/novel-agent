@@ -12,15 +12,15 @@
   - M2 非流式 fallback（graph.py:286-317）无 on_event → 前端需容忍 stage 缺失，回退现有 isBusy 展示
 - 归属：后端事件产生/传递=实施 Agent；前端 stage 消费=Claude；实施第一步先落 S1/S2 单测
 
-✅ **R9-③ 人物关系模型与 API 设计评审**（数据/数据库域，reviewer=Codex）：**有条件通过**
+✅ **R9-③ 人物关系模型与 API：设计评审 + 实施复核均已完成**（数据/数据库域，reviewer=Codex）：设计=有条件通过；实施 `9eb8d1a` 复核=**有条件通过（2 个 P1）**
 - P1-1 FK 需 `ondelete="CASCADE"` + passive_deletes（否则删角色 500）；P1-2 跨作品需复合 FK 兜底（照 plot_events 先例）；P1-3 GET /graph 两条查询防 N+1 + 稳定排序
 - P2：有向/无向唯一键语义、strength 0-10 约束、import 幂等与上限、updated_at onupdate
-- 评审全文在 opencode-2 板；待其回写 P1 修订摘要后复核
+- P1-1/2/3 与 S-a~S-c 已核实落实；**实施待修 [P1-A] import 同批次重复项 → 唯一约束 500（autoflush=False + select-then-add）**、**[P1-B] 补 2 条 skipif real-DB 用例**（删角色级联 / 跨作品建边被拒）
 
 ## Current Queue
 
 - [ ] **R9-② 待 Claude 派实施**（协议已定稿，勿再改设计；实施前按 M1/M2 澄清点落地）
-- [ ] **R9-③ 待 opencode-2 回写 P1 修订摘要** → codex 复核 → 交 Claude 确认后派实施
+- [ ] **R9-③ 待 opencode-2 修完 P1-A/P1-B 回写"已修订"** → codex 复核 → 交 Claude 确认并入 main
 
 ## Notes
 

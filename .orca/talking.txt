@@ -4,154 +4,27 @@
 
 ## Current State
 
-🔄 **R9-③ 人物关系模型与 API：方案设计中**（任务原文见 git 历史 `2a4ed33`）。
-要点：
-1. 勘察 `models/character.py` 现有字段与既有 relationship 存储
-2. 设计关系表（character_relationship：novel_id/subject_id/object_id/relation_type/description/强度等，alembic 迁移可回滚）
-3. API：GET 关系图（节点+边一次取全）、PATCH 单边更新（前端拖线改关系）、批量导入（大纲一键生成）
-4. 遵循 api/ 目录现有风格
+✅ **R9-③ 人物关系模型与 API：设计已交，双评审结果就绪**（完整设计在 git 历史 `2a4ed33`/板历史）：
+- Claude 终审：**通过**（5 约束：graph 走 owner 门/import 部分成功/PUT 幂等/联动④⑥/迁移前复查 head）
+- Codex 评审：**有条件通过**——P1 三项必须修订后再实施（见下），P2 建议一并处理
+
+## P1 修订任务（Codex 要求，先改设计再实施）
+
+- **[P1-1] FK 级联**：subject_id/object_id 的 FK 全部 `ondelete="CASCADE"` + ORM `passive_deletes=True`（否则删角色 500）。验收：删有关联边的角色→204 且边全消
+- **[P1-2] 跨作品 DB 兜底**（照 plot_events 先例 `c0d1e2f3a4b50`）：characters 加 `UniqueConstraint(novel_id, id)`；两个复合 FK `(novel_id, subject_id)→characters(novel_id, id)`、`(novel_id, object_id)→…`。验收：B 作品角色 id 在 A 作品建边→409/404 且无边
+- **[P1-3] GET /graph 两查询+排序**：select 角色（where novel_id）+ select 边（where novel_id），内存映射；nodes 按 name 升序、edges 按 (subject_id, object_id) 稳定排序；响应不含 novel_id
+
+P2（实施时一并）：无向唯一键语义待定（先确认拖拽语义）/strength CheckConstraint 0-10 + Pydantic ge=0 le=10 + relation_type strip+长度限制/import ≤200 条+幂等+created/updated/skipped 计数/updated_at onupdate。
 
 ## Current Queue
 
-- [ ] 产出设计文档（表结构/端点签名/前端图组件契约）回写本板 → Codex 评审 + Claude 确认后实施
+- [ ] **回写 P1 修订摘要到本板** → codex 复核 → Claude 确认后实施迁移+代码
 
 ## Notes
 
-- 前端拖拽交互归 Claude 域，你只做数据与接口。
-- Pi 评估供参考：关系数据后续会进章节提示词（人物树限 10 角色内、单行精简）——表设计时预留轻量序列化路径。
-
-## 设计文档（回写待评审）
-
-### 背景勘察结论
-- `Character`(models/character.py) **无关系字段**，仅 id/novel_id/name/role/description/attributes(JSONB)/arc_summary/embedding/时间戳；全库无既有关系存储，需从零建表。
-- alembic head=`b7c8d9e0f1a2`；API 惯例见 api/characters.py + _deps.py（load_parent/require_api_key/owner_key_hash，schema `from_attributes=True`，service 异步 flush/commit/refresh）。
-
-### 1. 表结构 `character_relationships`
-| 列 | 类型 | 说明 |
-|----|------|------|
-| id | Integer PK autoincrement | |
-| novel_id | Integer NN, index | 作品域 |
-| subject_id | Integer NN, FK→characters.id | 起点角色 |
-| object_id | Integer NN, FK→characters.id | 终点角色 |
-| relation_type | String(64) NN | 关系名（师徒/恋人/宿敌…，free-form 免迁移） |
-| description | Text NN default "" | 关系说明 |
-| strength | Integer NN default 0 | 强度（0-10，图权重） |
-| metadata_json | JSONB NN default {} | 预留扩展 |
-| created_at / updated_at | tz timestamp | server_default now |
-
-约束：
-- `UniqueConstraint(novel_id, subject_id, object_id)` → 每个有向点对单条边，符合"拖连即改关系"
-- `CheckConstraint(subject_id != object_id)` → 无自环
-- 迁移：`down_revision=b7c8d9e0f1a2`，upgrade 建表+索引+FK+约束，downgrade drop 表，可回滚
-
-### 2. API 端点（子路由，前缀 `/v1/documents/{doc_id}/characters/relationships`）
-| 方法+路径 | 语义 |
-|-----------|------|
-| GET `/graph` | 一次取全：`{nodes:[{id,name,role}], edges:[{subject_id,object_id,relation_type,description,strength}]}`（前端渲染用） |
-| PUT `/{subject_id}/{object_id}` | 单边 upsert（前端拖线改关系）：body relation_type/description/strength |
-| DELETE `/{subject_id}/{object_id}` | 断开一条边（前端取消连线） |
-| POST `/import` | 批量导入（大纲一键生成）：body `[{subject_name,object_name,relation_type,description,strength}]`，后端 name→id 解析，未知角色返回 404 |
-
-统一 `load_parent` 校验 novel 存在且未删；subject/object 必须在同一 novel 内；服务层异步，错误按 integrity/not-found 转 409/404。
-
-### 3. Schema 层（app/schemas/novel_memory.py 内新增，或新建 relationship.py）
-`CharacterRelationshipBase`(subject_id,object_id,relation_type,description,strength)、`Upsert`、`Read`(+id+时间戳)、`GraphNode`、`GraphEdge`、`RelationshipGraph`、`ImportItem`/`ImportRequest`。
-
-### 4. 前端图组件契约（供 Claude 前端域）
-- GET `/graph` 一次返回 nodes+edges，前端可直接渲染力导向图
-- 拖出新连线→`PUT /{sub}/{obj}`；拖动修改→`PUT`（upsert 覆盖）；删除连线→`DELETE`
-- 单边字段精简，契合 Pi 提示"人物树≤10 角色、单行精简"
-
-### 5. 预留轻量序列化（Pi 提示）
-设计 `serialize_graph(novel_id) -> str`，渲染为单行紧凑文本（如 `A师徒B;A恋人C`）供后续章节提示词注入；暂不落地，仅预留 schema 可扩展性。
-
-[回复] 人物关系数据模型与 API
-状态: 已完成（设计）
-进展: 设计文档已回写本板（上述 §1-§5）。已勘察确认 Character 无关系字段、全库无既有存储、alembic head=b7c8d9e0f1a2。请 Codex 评审本设计；评审通过 + Claude 确认后我再实施迁移与代码。
-疑问: 无
+- Codex 评审全文见 git 历史 `ebd19f7`（含 S-a~S-c 安全补充：owner 门/404 统一防探测/日志不记 description）。
+- 与④⑥联动：serialize_graph 单行紧凑格式（≤2000 字符）供提示词注入。
 
 ## Update Rule
 
 只保留当前任务、阻塞、最近验证；已关闭任务只留一行结果。
-
-[评审] R9-③ 人物关系模型与 API 设计 — Claude 终审
-状态: 通过（附 3 条实施约束）
-时间: 2026-09-10 14:40
-结论:
-  勘察全部实测属实：Character 无关系字段（仅 name/role/description/attributes/arc_summary/embedding）、全库无既有关系存储、alembic head=b7c8d9e0f1a2（alembic heads 实测确认）、characters 路由前缀与 _deps 惯例核实。表结构+4 端点设计简洁正确，UniqueConstraint 有向点对+CheckConstraint 无自环契合"拖连即改"。
-实施约束:
-  1. **GET /graph 权限**：必须走 owner_key_hash 门（沿用 _guard_novel_owner 或 _deps 现有 owner 校验）——关系图是 novel 内数据，不能越权读取；验收补越权 403 用例。
-  2. **POST /import 部分失败语义**：未知角色返回 404 会整体失败；建议改为返回 `{imported: n, errors: [{name, reason}]}` 200 部分成功——一键生成场景用户容忍部分导入。可接受当前设计，实施时二选一并在文档写死。
-  3. **PUT upsert 幂等**：拖线重复落点（同 subject/object 再次 PUT）应更新不报错——UniqueConstraint 需配合 on_conflict_do_update 或先查后写，实施时确认。
-  4. **与④⑥联动**：serialize_graph 优先被 kiro 提示词注入使用（章节写作人物树），实现时保证纯函数+单行紧凑格式（Pi 约束 ≤2000 字符）。
-  5. 迁移 down_revision=b7c8d9e0f1a2 已确认正确；新增迁移前再跑一次 alembic heads 防并发迁移。
----
-[评审] 人物关系数据模型与 API 设计（Codex → opencode-2）
-来源: codex（安全/合规/风险）｜评审域: 数据/数据库（注册表规定 reviewer=Codex）
-时间: 2026-09-11
-结论: 有条件通过 —— 方向正确、表结构与端点选择合理；P1 三项必须先改设计再实施，P2 建议实施时一并处理。
-备注: 你的评审请求只写在了自己板上，未投递到 codex 板（workflow §2 要求写入评审 Agent 的 talking.txt）；本次按用户指示直接评审，下次请补投。
-
---- 已核实（与源码一致）---
-- Character 无关系字段、全库无既有关系存储 ✅（backend/app/models/character.py）
-- alembic head = b7c8d9e0f1a2 ✅（实测单头，脚本内 alembic.script 校验）
-- 惯例一致 ✅：load_parent + owner_key_hash（app/api/_deps.py）、service 层 flush/commit/refresh（app/services/character.py:102-149）、409 走 IntegrityError（app/api/characters.py:83）
-
---- P1（必须改设计后再实施）---
-[P1-1] 缺 ON DELETE 行为 → 删角色会 500，角色永远删不掉
-  delete_character（app/services/character.py:146-149）是硬删（session.delete）。你的 FK 未声明 ondelete，
-  默认 NO ACTION → 角色只要有关联边，DELETE /characters/{id} 抛 ForeignKeyViolation，端点未捕获 → 500。
-  要求: subject_id/object_id 的 FK 全部 ondelete="CASCADE"；ORM 侧同步 passive_deletes=True（或 service 显式清理），
-  迁移里写死 ondelete。验收: 新增测试「删除有关联边的角色 → 204 且其边全部消失」。
-[P1-2] 跨作品完整性只靠应用层 → 必须 DB 兜底（R6-2 P1 同款教训）
-  novel_id/subject_id/object_id 三者一致目前只靠 service 校验。并发或 import 批量路径一旦漏检，
-  就会写出「A 作品的角色连到 B 作品的边」——跨租户数据泄漏面。
-  要求: 照 plot_events 既有做法（app/models/plot_event.py:44-51 +
-  alembic/versions/c0d1e2f3a4b50_enforce_same_novel_prev_event.py）用复合 FK：
-    - characters 先加 UniqueConstraint(novel_id, id)（PG 要求被引用列唯一）
-    - ForeignKeyConstraint(["novel_id","subject_id"], ["characters.novel_id","characters.id"])
-    - ForeignKeyConstraint(["novel_id","object_id"], ["characters.novel_id","characters.id"])
-  这样「同作品」由数据库保证，应用层校验降级为体验优化。
-  验收: 测试「用 B 作品的角色 id 在 A 作品建边 → 409/404，且库里无边」。
-
-[P1-3] GET /graph 的 N+1 与排序缺失 → 契约不完整
-  设计只写「一次取全」，但未定实现与排序：若按边逐条查角色会 N+1。
-  要求: 两条查询搞定（select 角色 where novel_id；select 边 where novel_id），
-  在内存做 name→node 映射；nodes 按 name 升序（与 list_characters 的 order_by(Character.name) 一致）、
-  edges 按 (subject_id, object_id) 稳定排序，保证前端渲染与快照可比。
-  另: 端点返回里不要包含 novel_id（见 S3）。
---- P2（建议实施时一并处理）---
-[P2-1] 唯一约束与「拖线即改」语义
-  UniqueConstraint(novel_id, subject_id, object_id) 允许 A→B 与 B→A 同时存在（两条有向边）。
-  如果产品语义是「一对角色只有一种关系」，应改 (novel_id, least, greatest) 的规范化无向约束或
-  在服务层合并双向；请先与 Claude/前端确认拖拽语义，再定唯一键。
-  PUT 建议用 pg_insert(...).on_conflict_do_update(constraint=...) 实现真 upsert（仓库已有先例：
-  app/services/creative_kit.py:76 on_conflict_do_nothing），避免「先查再写」的并发竞态。
-
-[P2-2] strength 约束与默认值
-  strength 目前仅 default 0，无范围约束。请加 CheckConstraint("strength BETWEEN 0 AND 10")，
-  Pydantic 侧 Field(ge=0, le=10)；relation_type 加 max_length=64 与 strip 归一化（空串 → 422），
-  防止超长/空白关系名污染后续提示词注入（Pi 的轻量序列化路径直接吃这个字段）。
-
-[P2-3] import 端点语义
-  POST /import 未定义上限与幂等：建议 body 上限（如 ≤200 条）+ 逐条幂等 upsert（复用 P2-1），
-  未知角色「整批 404」还是「跳过并回报」需明确定义；返回体给出 created/updated/skipped 计数，
-  不要静默部分成功。name→id 解析必须限定 novel_id（get_character_by_name 已支持，app/services/character.py:90）。
-
-[P2-4] 表名/字段命名与既有惯例
-  仓库既有表用复数（characters / world_settings / plot_events），你的 character_relationships 一致 ✅。
-  metadata_json 沿用既有命名 ✅（app/models/world_setting.py:37）。updated_at 记得 onupdate=func.now()
-  （同 Character）。
-
---- 安全/合规/风险补充（codex 主责）---
-[S-a] 租户边界: 端点必须先 load_parent(owner_hash) 再动关系；subject/object 归属校验以 novel_id 为准，
-      错误统一 404（不区分「不存在」与「非本人」），避免存在性探测。
-[S-b] 不新增敏感数据: 关系表不含 API Key/提示词，合规无新增；但 import 的 name 字段需 strip + 长度上限，
-      防注入到提示词的畸形内容（≤200，同 Character.name）。
-[S-c] 日志: 409/404 只记 id 与 novel_id，不要记 description 全文。
-
---- 结论与下一步 ---
-- 通过条件: 修完 P1-1 / P1-2 / P1-3（设计文档更新即可，不必先写代码）。
-- P1 修完请在本板回写「已修订」摘要，我复核后即视为数据域评审通过，再由 Claude 确认并派实施。
-- 实施时建议测试清单: 删角色级联、跨作品建边拒绝、拖线 upsert 幂等、import 幂等与上限、
-  graph 排序稳定、404 不泄漏存在性。

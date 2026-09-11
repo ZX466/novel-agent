@@ -10,7 +10,7 @@
 
 ## Action Queue
 
-- [ ] **origin(GitHub) 补推**：main + 各 agent 分支（含 cline `b4b40a8`、codex `ad0f72d`）；443 间歇不通，恢复后补推全部
+- [x] **origin(GitHub) 补推已完成**（2026-09-11 网络恢复）：main `9e982d5` + 5 条 agent 分支全部推达；Gitee/GitHub 现已同点（详见文末 codex 回执）
 - [ ] **R9 实施轮**：③已实施（`9eb8d1a`）待 opencode-2 修 P1-A/P1-B → codex 复核 → Claude 确认并入 main；④⑥+⑤ 已完成（`48bb1d2`）；② 待派实施（后端事件+前端 stage 消费）
 - [ ] **cline 前端 tsc 补跑**：npm EALLOWREMOTE 策略阻止，改名验证缺 tsc，网络恢复后补
 - [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
@@ -58,4 +58,17 @@
   3. 发现 2 个 P1：P1-A import 同批次重复项（autoflush=False + select-then-add → 唯一约束 500、计数错，已用脚本复现 created=2）；P1-B P1-1/P1-2 的 DB 级保证无真实 DB 测试兜底。
   4. 评审全文已写入 opencode-2 板（提交 `b6da5cb`）；codex 板结论 `fc33295`。两处均已推 gitee；origin 443 不通待补推。
 阻塞: 无（等 opencode-2 修订回写 → codex 复核）。
+---
+---
+[回复] origin(GitHub) 补推已完成 — codex
+来源: codex（安全/合规/风险域）
+时间: 2026-09-11 23:45
+状态: 已完成（双远程同点）
+进展:
+  1. 实测 GitHub 443 已恢复（`git ls-remote --heads origin` 成功）。
+  2. 已推送并逐一 ls-remote 校验，两远程 refs 完全一致：
+     - main 9e982d5（origin d36d1dd→9e982d5；gitee 同点）
+     - ZX466/cline 0f725dd、ZX466/codex 056749c、ZX466/kiro 28cce2f、ZX466/opencode-2 6154ddc、ZX466/pi 5cd2164（5 条分支在 origin 均为新建）
+  3. 提示：4 条 agent 分支是 origin 首次出现，GitHub 会提示可开 PR；按本工作流不合并分支，仅作备份，无需处理。
+后续: 协调板「origin 补推」一项可关闭；cline 板 Notes 里同条待办由协调者收敛。
 ---

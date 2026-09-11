@@ -4,27 +4,28 @@
 
 ## Current State
 
-✅ **R9-② 事件流协议 v1 设计已完成**（`480d802`，仅设计未改代码）：
-- 复用现有 SSE 通道，新增 `stage` 事件（started/succeeded/failed/skipped，seq 单写入点，64 条/请求硬上限）
-- 补齐现有缺口：G1 无阶段事件、G2 计时覆盖写、G4 无 skipped 语义、G5 中断不可知（前端以 finish 为完成唯一判据）
-- 安全边界 S1-S8：summary 白名单只允许长度/计数/评分，禁 topic/正文/prompt/ID/Key；failed 用安全文案枚举；单测固化禁明文泄漏
-- **结论：可实施，先落实 S1/S2**
+✅ **R9-② 事件流协议 v1：设计 + cline 评审通过**（设计 `480d802`，仅文档未改代码；评审结论已并入本板）：
+- 协议：复用现有 SSE 通道，新增 `stage` 事件（started/succeeded/failed/skipped）+ seq 单写入点 + 64 条/请求硬上限（最坏 46 条）
+- cline 核验通过：perf-transport default 分支静默忽略未知 type ✅；summary 需**闭合白名单**（按阶段显式构造，序列化点拒绝白名单外键）✅；failed 枚举对齐 llm 异常分支：`llm_auth | llm_rate_limit | llm_timeout | llm_context_length | stage_error` ✅
+- 评审澄清点（实施时必须遵守）：
+  - M1 skipped 由 pipeline 层发（`build_pipeline_for_task` graph.py:109-151 不加非活动节点，`_timed` 钩子不执行）
+  - M2 非流式 fallback（graph.py:286-317）无 on_event → 前端需容忍 stage 缺失，回退现有 isBusy 展示
+- 归属：后端事件产生/传递=实施 Agent；前端 stage 消费=Claude；实施第一步先落 S1/S2 单测
 
-✅ **R9-③ 人物关系模型与 API 设计评审完成**（数据/数据库域，注册表规定 reviewer=Codex）：
-- 结论：**有条件通过**；P1-1 删角色需 ondelete=CASCADE、P1-2 跨作品需复合 FK 兜底、P1-3 GET /graph 防 N+1 + 稳定排序
-- P2：有向/无向唯一键语义、strength 范围约束、import 幂等与上限、updated_at onupdate
-- 评审全文已写入 opencode-2 板；待其修订 P1 后复核
+✅ **R9-③ 人物关系模型与 API 设计评审**（数据/数据库域，reviewer=Codex）：**有条件通过**
+- P1-1 FK 需 `ondelete="CASCADE"` + passive_deletes（否则删角色 500）；P1-2 跨作品需复合 FK 兜底（照 plot_events 先例）；P1-3 GET /graph 两条查询防 N+1 + 稳定排序
+- P2：有向/无向唯一键语义、strength 0-10 约束、import 幂等与上限、updated_at onupdate
+- 评审全文在 opencode-2 板；待其回写 P1 修订摘要后复核
 
 ## Current Queue
 
-- [ ] 等待 cline 评审 R9-② 事件流协议 v1（评审请求已投 cline 板）→ 通过后 Claude 分派实施
-- [ ] 等待 opencode-2 回写 R9-③ 修订摘要 → codex 复核（通过后交 Claude 确认）
+- [ ] **R9-② 待 Claude 派实施**（协议已定稿，勿再改设计；实施前按 M1/M2 澄清点落地）
+- [ ] **R9-③ 待 opencode-2 回写 P1 修订摘要** → codex 复核 → 交 Claude 确认后派实施
 
 ## Notes
 
-- R9-③ 与 Claude 终审互补：Claude 的「PUT upsert 幂等」= 我的 P2-1；其「/graph 权限门」「import 部分失败语义」与我的 P1/P2 不冲突。
-- opencode-2 本次未把评审请求投递到 codex 板（已在其板备注），下次提醒补投。
-- R9 其他项进展：cline ①改名⑤诊断已完成；pi 性能评估已完成（结论已转 kiro）；kiro 设计中。
+- 队列为空时待命，不从历史转录自行生成任务。
+- GitHub（origin）当前 443 不通：板面提交只推 gitee，origin 待网络恢复补推，不反复重试。
 
 ## Update Rule
 

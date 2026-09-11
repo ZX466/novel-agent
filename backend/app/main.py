@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 
 from app.api import chat as chat_router_module
 from app.api import chapters as chapters_router_module
+from app.api import character_relationships as character_relationships_router_module
 from app.api import characters as characters_router_module
 from app.api import consistency as consistency_router_module
 from app.api import creative_kit as creative_kit_router_module
@@ -134,6 +135,7 @@ app.include_router(chat_router_module.router)
 app.include_router(documents_router_module.router)
 app.include_router(chapters_router_module.router)
 app.include_router(characters_router_module.router)
+app.include_router(character_relationships_router_module.router)
 app.include_router(world_settings_router_module.router)
 app.include_router(plot_events_router_module.router)
 app.include_router(retrieval_router_module.router)

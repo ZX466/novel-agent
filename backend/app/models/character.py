@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +24,10 @@ class Character(Base):
     """A character profile in the novel."""
 
     __tablename__ = "characters"
+    __table_args__ = (
+        # Composite key target for character_relationships same-novel FKs.
+        UniqueConstraint("novel_id", "id", name="uq_characters_novel_id_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     novel_id: Mapped[int] = mapped_column(

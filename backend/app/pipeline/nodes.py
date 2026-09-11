@@ -70,7 +70,7 @@ _WC_CONTINUE = 0.9
 _WC_OVER = 1.2
 
 
-def _build_writing_context(state: dict) -> str:
+async def _build_writing_context(state: dict) -> str:
     """Assemble the structured chapter-writing context blocks (R9-④⑥).
 
     Reads chapter_index / total_chapters / chapter_title / target_word_count
@@ -110,16 +110,18 @@ def _build_writing_context(state: dict) -> str:
             from app.models.chapter import Chapter
 
             prev_chapters = (
-                session.execute(
-                    select(Chapter)
-                    .where(
-                        Chapter.novel_id == novel_id,
-                        Chapter.chapter_index < (chapter_index if chapter_index is not None else 0)
-                        if chapter_index is not None
-                        else True,
+                (
+                    await session.execute(
+                        select(Chapter)
+                        .where(
+                            Chapter.novel_id == novel_id,
+                            Chapter.chapter_index < (chapter_index if chapter_index is not None else 0)
+                            if chapter_index is not None
+                            else True,
+                        )
+                        .order_by(Chapter.chapter_index.desc())
+                        .limit(2)
                     )
-                    .order_by(Chapter.chapter_index.desc())
-                    .limit(2)
                 )
                 .scalars()
                 .all()
@@ -143,14 +145,16 @@ def _build_writing_context(state: dict) -> str:
                 from app.models.chapter import Chapter
 
                 rows = (
-                    session.execute(
-                        select(Chapter.word_count)
-                        .where(
-                            Chapter.novel_id == novel_id,
-                            Chapter.word_count > 0,
+                    (
+                        await session.execute(
+                            select(Chapter.word_count)
+                            .where(
+                                Chapter.novel_id == novel_id,
+                                Chapter.word_count > 0,
+                            )
+                            .order_by(Chapter.chapter_index.desc())
+                            .limit(5)
                         )
-                        .order_by(Chapter.chapter_index.desc())
-                        .limit(5)
                     )
                     .scalars()
                     .all()
@@ -169,6 +173,11 @@ def _build_writing_context(state: dict) -> str:
     # Block 4: word-count requirement.
     if target is None:
         target = 1000  # conservative default for a first chapter
+    # R9 P1-2 fix: write the resolved target back into state so the
+    # draft/refine post-check uses the SAME number the prompt advertises —
+    # otherwise a median-derived target (e.g. 2000) would coexist with a
+    # post-check against the 1000 default and the verdicts contradict.
+    state["target_word_count"] = target
     target_min = round(target * 0.85)
     target_max = round(target * 1.15)
     blocks.append(
@@ -304,7 +313,7 @@ async def retrieval_node(state: PipelineState) -> dict:
 
     # R9-④⑥: structured chapter-writing context is built in the retrieval
     # node so draft_node can read it from state without re-querying the DB.
-    writing_context = _build_writing_context(state)
+    writing_context = await _build_writing_context(state)
 
     if session is None or novel_id is None:
         return {"retrieved_context": "", "writing_context": writing_context}
@@ -515,6 +524,12 @@ async def draft_node(state: PipelineState) -> dict:
                 result["word_count_retry"] = "regenerate"
             elif ratio < _WC_CONTINUE:
                 result["word_count_retry"] = "continue"
+            else:
+                # R9 review P2-1: clear any stale verdict — state is
+                # cumulative across refine iterations, so an un-cleared
+                # flag would keep appending top-up instructions even
+                # after the text reached its target.
+                result["word_count_retry"] = ""
     return result
 
 

@@ -104,11 +104,13 @@ class ChatRequest(BaseModel):
 
     # R9-④⑥ chapter-writing context (optional; absent = no chapter blocks
     # injected). Explicit fields — never parsed from message text, so user
-    # prose can't forge pipeline routing.
-    chapter_index: int | None = None
-    total_chapters: int | None = None
-    chapter_title: str = ""
-    target_word_count: int | None = None
+    # prose can't forge pipeline routing. Bounded (R9 review P1-3): these
+    # values are formatted into the system prompt, so unbounded client text
+    # or absurd numbers would flow straight in.
+    chapter_index: int | None = Field(None, ge=0, le=100_000)
+    total_chapters: int | None = Field(None, ge=1, le=100_000)
+    chapter_title: str = Field("", max_length=200)
+    target_word_count: int | None = Field(None, ge=1, le=100_000)
 
     model_config = {"extra": "ignore"}
 

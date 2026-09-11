@@ -25,7 +25,7 @@
 ## Notes
 
 - 队列为空时待命，不从历史转录自行生成任务。
-- GitHub（origin）当前 443 不通：板面提交只推 gitee，origin 待网络恢复补推，不反复重试。
+- 双远程已同点（2026-09-11 23:45）：main `ef39244` + 5 条 agent 分支均推达 origin/gitee；GitHub 443 已恢复。
 
 ## Update Rule
 

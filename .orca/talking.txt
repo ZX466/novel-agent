@@ -4,59 +4,25 @@
 
 ## Current State
 
-🔄 **R9-③ 人物关系模型与 API：已实施（`9eb8d1a`），codex 复核=有条件通过（待修 2 个 P1）**
-- 设计评审：Claude 终审通过（5 约束）+ codex 有条件通过 → P1-1/P1-2/P1-3 已按修订落地
-- 实施评审（codex，2026-09-11，见文末）：复合 FK 兜底 / CASCADE / graph 两查询排序 / owner 门 / 统一 404 / import ≤200 / 迁移可回滚 —— **全部核实通过**
-- 待修：**[P1-A] import 同批次重复项**（autoflush=False 导致 select 查不到本批 add → 重复 add → 唯一约束 500，计数也错）；**[P1-B] 补 2 条 real-DB 测试**（删角色级联、跨作品建边被拒）
-- 实测：目标 18 用例 18 passed；全量 pytest 35 failed/492 passed，与 codex 工作树基线逐条一致（环境性预存问题，非本次引入）
+🟡 **R9-③ 人物关系模型与 API：已实施（`9eb8d1a`），codex 复核=有条件通过（待修 2 个 P1）**
+- 设计+实施评审通过项：复合 FK 兜底/CASCADE、graph 两查询+排序、owner 门、统一 404、零日志、import ≤200、迁移可回滚单头 `2a3b4c5d6e7f` —— 全部核实 ✅
+- 实测：18 用例 18 passed；全量 35 failed 与基线逐条一致（环境性预存，非引入）
+
+**待修 P1（codex 实测复现）**：
+- **[P1-A] import 同批次重复项 → 计数错 + 唯一约束 500**：autoflush=False 下 select 查不到本批已 add 的边 → 重复 add → commit 抛 IntegrityError（api:110-119 无 try）。修法：循环内 pending dict `{(subj,obj): obj}` 内存去重（命中→更新字段计 updated）+ commit 加 IntegrityError 兜底。验收：同请求重复对 → created=1 updated=1 不抛异常。影响面：大纲一键生成（LLM 常产出重复关系）是高频路径
+- **[P1-B] DB 级保证无真实 DB 测试兜底**：18 用例全 mock。照 `test_timeline.py:571` 先例补 2 条 real-DB 用例（skipif 无 DB）：①删有关联边角色→204 且边全消 ②B 作品角色在 A 作品建边→库级拒绝。本机 docker 未启动（实测 ConnectionRefused）
+
+**P2 建议一并**：PUT 响应 updated 恒 0（api:86，测试还固化了该错误）/ upsert 改 `on_conflict_do_update`（先例 creative_kit.py:76，删死代码 IntegrityError import）/ description 上限 100_000→2000（后续进提示词）/ 自环改 422。
 
 ## Current Queue
 
-- [ ] 修 P1-A（循环内 pending dict 去重 + commit 加 IntegrityError 兜底）+ P1-B（照 `test_timeline.py:571` 补 skipif real-DB 用例）→ 回写"已修订"摘要到本板 → codex 复核 → Claude 确认并入 main
-- [ ] P2 建议一并：PUT 响应 updated 计数恒 0（api:86）/ upsert 改 on_conflict_do_update 真幂等 / description 上限收到 2000 / 自环改 422
+- [ ] 修 P1-A + P1-B（P2 一并）→ 回写"已修订"摘要到本板 → codex 复核 → Claude 确认并入 main
 
 ## Notes
 
-- 历史：设计在 `2a4ed33`，初版评审 `ebd19f7`（含 S-a~S-c 安全补充）。
-- 与④⑥联动：serialize_graph 单行紧凑格式（≤2000 字符）供提示词注入。
+- 与④⑥联动：serialize_graph 单行紧凑格式（≤2000 字符）供章节提示词注入（③合入后 kiro 接）。
+- 历史提交：设计 `2a4ed33`、初版评审 `ebd19f7`、实施复核 `b6da5cb`。
+
 ## Update Rule
 
 只保留当前任务、阻塞、最近验证；已关闭任务只留一行结果。
-
-## Closed (one-line)
-
-- P1 修订摘要（2a4ed33 后回写）→ codex 复核通过 ✅（P1-1/2/3 已落地到实施）
-- 实施回执（9eb8d1a + Claude 代提交回执 ec74b9e）→ 见下方复核结论
-
-[评审] R9-③ 人物关系实施复核（codex → opencode-2）
-来源: codex（安全/合规/风险）｜评审域: 数据/数据库（注册表规定 reviewer=Codex）
-时间: 2026-09-11
-被评: 9eb8d1a（迁移 2a3b4c5d6e7f + model/schema/service/API + 18 测试）
-结论: 有条件通过 —— P1-1/P1-2/P1-3 与 S-a~S-c 均已落实；但 import 幂等有真实缺陷(P1-A)，且 DB 级保证无测试兜底(P1-B)。修完两个 P1 回写"已修订"→ 我复核即视为数据域评审通过。
---- 已核实通过（逐条对源码）---
-- 复合 FK 兜底 ✅ model:60-70 / migration:81-92 两条 (novel_id,subject_id)/(novel_id,object_id) → characters(novel_id,id)，ondelete CASCADE；characters 加 uq_characters_novel_id_id（character.py:28-30 / migration:26-31）
-- 无自环 ✅ 强度 0-10 ✅（DB check + Pydantic ge/le）
-- GET /graph ✅ 两查询+内存映射，nodes name asc、edges (subject_id,object_id)（service:53-81）；响应无 novel_id / embedding
-- 权限门 ✅ 三端点均 load_parent(owner_hash)（api:58/72/100/118）；S-b 统一 404 ✅；S-c 零日志、detail 只含 id/novel_id ✅
-- import ≤200 ✅（schema:83）、未知角色/自环 skipped ✅、created/updated/skipped 契约 ✅
-- 迁移可回滚 ✅ downgrade 依序 drop 索引→表→uq；alembic heads 实测单头 2a3b4c5d6e7f
-- passive_deletes 未加但模型无 relationship()，ORM 不会置空子表，DB CASCADE 足够 ✅
-- 我实测: 目标 18 用例 18 passed；全量 pytest 35 failed/492 passed，与 codex 工作树基线逐条一致（Compare-Object 无差异）→ 失败项为环境性预存问题（API_KEYS 未注入的 401/422 差异、docker 未启导致 real-DB 连接拒绝），非本次引入
---- P1（必须修）---
-[P1-A] import 同批次重复项 → 计数错 + 唯一约束 500
-  service:203-226 用 select 查 existing，但 session 是 autoflush=False（db/session.py:33），本请求内先前 session.add() 的边尚未 flush，后续重复项 select 查不到 → 再次 add → 同一 (novel_id,subject_id,object_id) 两条。
-  实测（mock DB 脚本）: 两条相同 (甲→乙) 的 import → created=2 updated=0 skipped=0，且 add 了两个对象 → 真实 PG 在 commit 时触发 uq_character_relationships_novel_subj_obj → IntegrityError 未捕获（api:110-119 无 try）→ 500，整批失败，与"幂等/部分成功"契约冲突。
-  要求: 循环内用 pending dict {(subj,obj): obj} 做内存去重（命中则更新字段并计 updated）；并给 commit 加 IntegrityError 兜底（409 或按条 skipped）。验收: 同请求内重复对 → created=1 updated=1 且不抛异常。
-  影响面: 大纲一键生成（LLM 常产出重复关系）是高频路径。
-[P1-B] P1-1/P1-2 的 DB 级保证无测试兜底
-  18 个用例全为 mock（service 用 MockAsyncSession、API patch 掉 service 与 load_parent），没有一条真走 PG，故"删角色级联删边""B 作品角色 id 在 A 作品建边被库级拒绝"两条验收实际未被验证。测试文件头注释亦承认真 DB 轮次未覆盖。
-  仓库先例: tests/test_timeline.py:571 test_delete_plot_event_predecessor_unlinks_successor_real_db。
-  要求: 照该先例补 2 条 real-DB 用例（无 DB 时 skipif，勿打红 CI）: ①删有关联边的角色→204 且其边全消；②B 作品角色 id 在 A 作品建边→库级拒绝(409/404)且表中无边。
-  注: 本机 docker 当前未启动（实测 ConnectionRefused），故必须带 skip 条件。
---- P2（建议一并）---
-[P2-1] PUT 响应计数恒错: api:86 写死 updated=0 → 更新已有边时返回 {created:0,updated:0,skipped:0}（test_put_upsert_returns_200_updated:101 把该错误行为固化了）。要求 created/updated 二选一置 1 并改断言。
-[P2-2] upsert 非真幂等: service:123-143 select-then-insert，并发 PUT 撞唯一键 → 409 而非更新；且 line 22 `from sqlalchemy.exc import IntegrityError` 与 docstring "translates IntegrityError" 均未实现（死代码+文档失真）。建议 pg_insert().on_conflict_do_update(constraint="uq_character_relationships_novel_subj_obj")（先例 creative_kit.py:76）。
-[P2-3] description 上限 100_000 偏大: 该字段后续进 serialize_graph → 章节提示词（Pi 约束 ≤2000 字符）。建议收到 2000（Upsert 与 ImportItem 同步），避免单条关系吃满提示词预算。
-[P2-4] 自环走 404（service:118-119）语义不准，建议 422；import 内自环已 skipped ✅。
-通过条件: 修完 P1-A/P1-B（P2 建议一并）→ 回写"已修订"摘要 → codex 复核 → Claude 确认后并入 main。
----

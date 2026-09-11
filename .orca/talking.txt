@@ -5,7 +5,7 @@
 ## Current State
 
 ✅ **仓库状态（2026-09-10）**：main=`f146715`（gitee 已推至 `6648c30`，f146715 待补推；GitHub 待补）。5 工作树拓扑与 junction 共享已就绪（kilo→`kiro`、opencode→`opencode-2`）。
-✅ **R9 批次（2026-09-10）**：六项需求已派发。①改名⑤分段诊断（cline）已完成；②事件协议设计（codex）已完成待评审；④⑥方案设计（kiro）、③关系模型（opencode-2）进行中；性能评估（pi）已完成。
+✅ **R9 批次（2026-09-10）**：①改名⑤分段诊断（cline）完成；②事件协议（codex）完成待 cline 评审；**④⑥提示词设计（kiro）已通过 Claude 终审**（5 约束：regenerate 落 graph 拓扑/字数口径/transport 用 prepareSendMessagesRequest/联动③/默认 1000 可调）；**③关系模型设计（opencode-2）已通过 Claude 终审**（5 约束：graph 走 owner 门/import 部分成功语义/PUT 幂等/联动④⑥/迁移前复查 head）。性能评估（pi）完成。
 - ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
 
 ## Action Queue

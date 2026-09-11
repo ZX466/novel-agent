@@ -4,227 +4,29 @@
 
 ## Current State
 
-🔄 **R9-④⑥ 章节提示词增强+字数控制：方案设计中**（任务原文见 git 历史 `7558a58`，要点：task_type=generate 分支注入 章节数/人物关系树概要/前文 1-2 章梗概；字数目标硬约束写入提示词并推导基准）。
+✅ **R9-④⑥ 提示词增强+字数控制：设计完成，Claude 终审通过**（完整设计在 git 历史 `7558a58`/板历史，此处只留要点）。
 
-## Pi 性能评估结论（已定，直接采纳为设计约束）
+**设计要点（实施时执行）**：
+1. generate 分支新增专用 prompt（现 nodes.py:265-266 走 else 泛用文案）；注入**system** 而非 topic
+2. 新增 PipelineState 字段：chapter_index/total_chapters/chapter_title/target_word_count/writing_context（全 Optional 向后兼容）；ChatRequest 显式加 4 字段（extra=ignore 已有先例）
+3. `_build_writing_context` 四块：章节进度 / 人物树（≤10 角色、≤2000 字符）/ 前文 1-2 章 / 字数目标（中位数推导±15%）
+4. 字数 post-check（draft 后）：ratio<0.6→regenerate、0.6-0.9→continue 续写；**不绑 evaluate**
 
-1. **注入必须进 system prompt，不得拼进 topic**——否则 retrieval query 每次变化，embedding 缓存全 miss（+100-500ms/次网络 embed）。
-2. **token 预算**：三项注入合计 +400-1400 tokens/次（+7%~25% input），可接受。人物树**限 10 角色内**、relations 单行精简，避免把 6000 字符 lore 顶到 8000+。
-3. **字数重试策略（按此设计）**：
-   - 差距 ≤10% → 接受不重试
-   - 少 10%-40% → continue 分支续写补足 1 次（成本仅整章重生 15-25%）
-   - 差距 >40% 或续写 2 次仍不足 → 才整章重生
-   - **不要把字数绑进 evaluate 评分**——会高频触发迭代，破坏 pipeline_max_iters=3 成本上限
-4. 现有管线参数：draft max_tokens=4096、refine 2048、pipeline_max_iters=3、_HARD_MAX_ITERS=5。
+**Claude 终审 5 条实施约束（必须遵守）**：
+1. ⚠️ regenerate 不能从 refine 内重跑 draft（拓扑不允许）——改为"下一次迭代以更强字数强调重生成"或新增 draft 重跑边，先看 graph.py 循环结构
+2. 字数口径：后端统一 codepoint（len()），勿用前端 countWords（CJK+分词）对照验收
+3. 前端 transport 用 AI SDK v5 `prepareSendMessagesRequest`（正式 API）；[chapter:N] 标签进 topic 的 fallback **禁用**
+4. 人物树注入优先用③的 `serialize_graph`（character_relationships 表）；PlotEvent 共现推导仅过渡
+5. 默认 target=1000 偏短，随 outline 目标长度/首章实际长度自适应
 
 ## Current Queue
 
-- [ ] 产出设计文档（注入字段/数据来源/提示词模板/字数策略）回写本板 → Claude 评审后实施
+- [ ] 待 Claude 派实施（依赖③关系表落地 → ④⑥再做）
 
 ## Notes
 
-- 勘察线索：nodes.py:230-260 task_type 分支、state.py PipelineState、retrieval.py retrieve_structured_lore、chapter.py:137-176 字数统计。
+- Pi 评估结论（token 预算/重试阈值/勿绑 evaluate）见 git 历史，已并入上述约束。
 
 ## Update Rule
 
 只保留当前任务、阻塞、最近验证；已关闭任务只留一行结果。
-
----
-
-[回复] R9-④⑥ 章节写作提示词增强+字数控制（方案设计）
-来源: kilo
-时间: 2026-09-10 14:26
-状态: 已完成（待 Claude 评审）
-进展:
-
-## 0. 勘察结论
-
-- 当前 `draft_node`（nodes.py:212-275）按 `task_type` 分支构建 `system_content`，但 **generate 分支没有专用分支**——走 else（nodes.py:265-266）只输出 "You are a concise drafting assistant. Write a first draft."。检索到的 lore 仅在 nodes.py:268-275 追加为 "Relevant memory from the novel's lore"。
-- `retrieve_structured_lore`（retrieval.py:444-536）已返回【主要角色】【世界观设定】【剧情事件】【最近章节】4 段文本，但：不区分当前章节号、不输出角色间关系（只逐角色列 name+role+desc+arc）、最近章节取尾部 5 章而非"当前章前 1-2 章"。
-- `PipelineState`（state.py:11-51）无 chapter_index、total_chapters、target_word_count 字段；`run_pipeline`（graph.py:170-203）和 `stream_pipeline`（graph.py:206-257）也不接收这些参数。
-- 前端 `buildPrompt`（AIToolPanel.tsx:135-192）已在 user prompt 里拼入 `（章节：第N章 标题）`和 `目标长度 800-1200 字`，但这些是 **topic 文本**，后端 `_extract_topic`（chat.py:117-130）会剥离 `[novel:]` `[task:]` 标签后原样传给 LLM——不进 system prompt，retrieval query 也会随这些文本变化。
-- 字数统计：`Chapter.word_count`（chapter.py:137-148）= `len(content_text)`（codepoint 数，非分词）。前端 `countWords`（editor/page.tsx:49-55）= CJK 字符数 + Latin 分词数，两者口径不同。
-- 大纲章节数：前端 `outlineForPrompt`（AIToolPanel.tsx:101-133）按 `/^第...章/` 匹配标题行计 count；后端无等价函数。
-
-## 1. 设计目标
-
-将章节数、人物关系树、前文梗概、字数目标注入 **system prompt（system_content）**，而非 topic；字数重试不绑 evaluate 评分（遵守 Pi 性能分析结论 §3）。
-
-## 2. 数据流设计
-
-### 2.1 新增 PipelineState 字段（state.py）
-
-```python
-# state.py PipelineState 新增（total=False，向后兼容）:
-chapter_index: int | None             # 当前章 0-based index（来自前端 activeChapter）
-total_chapters: int | None            # 大纲总章数（来自前端 outline heading count 或 targetChapters）
-chapter_title: str                     # 当前章标题（来自前端，可空）
-target_word_count: int | None         # 用户/前端指定目标字数（可空=自动推导）
-writing_context: str                  # retrieval_node 填充的结构化写作上下文（system prompt 注入用）
-```
-
-### 2.2 传参链路
-
-```
-前端 ChatRequest
-  └─ 新增可选字段: chapter_index, total_chapters, chapter_title, target_word_count
-     （ChatRequest schema 扩展，model_config extra="ignore" 改为显式 Optional 字段）
-
-chat() endpoint (chat.py:471-527)
-  └─ 从 req 读取上述字段（不从 messages text 解析，避免 prompt 注入风险）
-  └─ 传入 _event_stream → stream_pipeline → run_pipeline
-     （stream_pipeline / run_pipeline 签名新增 4 个可选参数）
-
-run_pipeline (graph.py:170-203)
-  └─ 写入 initial state dict: chapter_index, total_chapters, chapter_title, target_word_count
-  └─ ainvoke 时带入
-
-retrieval_node (nodes.py:146-209)
-  └─ vector RAG / structured lore 检索后，调用新增 _build_writing_context(state)
-  └─ 返回 {"retrieved_context": ctx, "writing_context": writing_ctx}
-
-draft_node (nodes.py:212-275)
-  └─ task_type=="generate" 分支读取 writing_context，拼入 system_content
-```
-
-### 2.3 前端变更
-
-- `DefaultChatTransport` 目前无 `prepareSendMessagesRequest` / body 自定义（AIToolPanel.tsx:274-284），只发 `{messages}`。需扩展为 `prepareSendMessagesRequest` 回调，在 body 中追加 `chapter_index`、`total_chapters`、`chapter_title`、`target_word_count`。
-- `sendMessage`（AIToolPanel.tsx:414-416）目前只传 `{text}`。AI SDK v5 `sendMessage` 支持 `metadata` 字段，可在 transport 的 `prepareSendMessagesRequest` 中读取并注入 body。或者直接在 transport 闭包中引用 props（chapterIndex 等）。
-- `total_chapters` 推导：复用 `outlineForPrompt` 的 `/^第...章/` 正则，对 `outlineText` 计行数；无大纲时 fallback `chapters.length`。
-
-### 2.4 兼容性
-
-- 所有新字段 `Optional` + `total=False`，旧客户端不传不报错；`writing_context` 为空时 generate 分支退化到现有 generic prompt + retrieved_context 追加。
-- 前端 `sendMessage` 不传新字段时，后端 `chapter_index=None` → 不注入"第N章/共M章"，不报错。
-
-## 3. 写作上下文构建（_build_writing_context）
-
-新增 `nodes.py` 内部函数（或 `retrieval.py` 扩展），输入 `state`，输出结构化文本块：
-
-### 3.1 章节进度
-
-```
-【章节进度】
-当前：第{chapter_index+1}章《{chapter_title}》
-进度：{chapter_index+1}/{total_chapters}（{百分比}%）
-```
-- 数据源：`state["chapter_index"]`、`state["total_chapters"]`、`state["chapter_title"]`
-- 任一缺失则跳过该行，不注入"未知"占位
-
-### 3.2 人物关系树概要
-
-```
-【人物关系树】
-- {name}（{role}）：{description}；弧线：{arc_summary}；关系：{relations}
-```
-- 数据源：`retrieve_structured_lore` 已查 `Character` 表（retrieval.py:462-482），可直接复用查询结果。需额外从 `PlotEvent.involved_character_ids`（plot_event.py JSONB 数组）提取共现关系。
-- **关系推导**：遍历 PlotEvent，若 `involved_character_ids` 含 ≥2 个角色，生成 "{A}—{B}：共同经历「{summary}」" 关系行。同一对角色出现多次时合并为 "A—B：共同经历事件1、事件2"。
-- **限制**（遵守 Pi 结论 §2）：最多 10 个角色、每角色 1 行精简；relations 合并到 2 条以内；整块 ≤2000 字符。
-- 无 Character 数据时返回空，不注入该块。
-
-### 3.3 前文背景（最近 1-2 章梗概）
-
-```
-【前文背景】
-- 第{N-1}章《{title}》：{summary or content_text[:300]...}
-- 第{N-2}章《{title}》：{summary or content_text[:300]...}
-```
-- 数据源：`Chapter` 表 `WHERE novel_id=? AND chapter_index < {current} ORDER BY chapter_index DESC LIMIT 2`
-- `summary` 为空时取 `content_text[:300]` 作为梗概（标注"前文摘录"）
-- 无前序章节时返回空
-
-### 3.4 字数目标
-
-```
-【字数要求】
-本章目标：{target_min}-{target_max} 字（正文 codepoint 计，不含标题/空白）
-```
-- 推导优先级：
-  1. 前端 `target_word_count` 非空 → `target = target_word_count`
-  2. 前 ≤5 章 `word_count` 中位数 → `target = median`（抗异常值）
-  3. 无前序章节 → `target = 1000`（默认）
-- 区间：`target_min = round(target * 0.85)`、`target_max = round(target * 1.15)`（±15%）
-- 硬约束措辞：`必须控制在 {target_min}-{target_max} 字以内，不足或超出过多视为不合格。`
-
-## 4. 提示词模板（generate 分支）
-
-nodes.py `task_type == "generate"` 新增专用分支（替换现有 else）：
-
-```python
-elif task_type == "generate":
-    parts = [
-        "你是一位专业小说写作助手。请根据以下写作约束和作品资料，写出当前章节的正文。",
-    ]
-    wc = state.get("writing_context", "")
-    if wc:
-        parts.append(wc)  # 包含 §3.1-§3.4 的结构化文本
-    parts.append(
-        "\n【写作要求】\n"
-        "1. 开头自然衔接上一段，不重复已写内容\n"
-        "2. 多用具体动作、环境细节、对白与心理活动，避免空泛概括\n"
-        "3. 人物言行必须符合既有角色设定与世界观，推进剧情并留下至少一处伏笔\n"
-        "4. 结尾停在张力点，方便继续续写\n"
-        "5. 正文分段：每个自然段 2-5 句，段间换行，严禁一整段输出\n"
-        "6. 第一行输出当前章节号和标题，空一行后开始正文；除首行外不要任何解释或思考过程。"
-    )
-    system_content = "\n\n".join(parts)
-```
-
-`retrieved_context` 追加逻辑（nodes.py:268-275）保持不变——若 vector RAG 有额外 hits，仍追加在 system_content 尾部。但 `writing_context` 已含结构化 lore，`retrieve_structured_lore` 的 fallback 不再重复调用（retrieval_node 已调用一次，draft_node 直接复用 state 里的结果）。
-
-## 5. 字数重试策略（不绑 evaluate）
-
-遵守 Pi 性能结论 §3，在 `draft_node` 完成 streaming 后、返回 state 前加 post-check：
-
-```python
-# draft_node 尾部（streaming 完成后）
-if task_type == "generate":
-    draft_text = content  # 已 strip think tags 的最终文本
-    wc = _count_codepoints(draft_text)  # 复用 len() 口径
-    target = _resolve_target_word_count(state)
-    if target and wc > 0:
-        ratio = wc / target
-        if ratio < 0.6:
-            # 标记需要整章重生（写入 state 供 refine 阶段或 fallback 处理）
-            return {"draft": draft_text, "_word_count_retry": "regenerate"}
-        elif ratio < 0.9:
-            # 标记需要续写补足
-            return {"draft": draft_text, "_word_count_retry": "continue"}
-    return {"draft": draft_text}
-```
-
-- `refine_node` 读取 `_word_count_retry`：`continue` → 追加续写指令（"请在现有正文基础上续写约 {target - wc} 字，保持风格衔接"）；`regenerate` → 替换 system_content 中的字数强调后重跑 draft。
-- **不修改 evaluate_node 评分逻辑**，不把字数加入 ReviewMatrix 维度。
-- 超出 `pipeline_max_iters=3` 时接受当前结果并在 `_word_count_retry` 中记录原因。
-
-## 6. 验收清单
-
-- [ ] 设计文档写回本板（本文档）→ Claude 评审
-- [ ] 评审通过后实施：扩展 state.py / chat.py / graph.py / nodes.py / 前端 transport
-- [ ] `uv run pytest backend/tests/` 全绿（现有 660+1 skipped 基线）
-- [ ] 新增 test：mock state 含 chapter_index/total_chapters/characters → 验证 generate 分支 system_content 包含 "第N章"、"人物关系树"、"前文背景"、"目标字数"
-- [ ] 新增 test：writing_context 为空时不注入（向后兼容）
-- [ ] 手工构造一次章节生成，检查实际 LLM system prompt（加日志或 mock）包含上述要素
-
-## 7. 风险与待决项
-
-- **前端 transport 扩展**：`DefaultChatTransport` 是否支持 `prepareSendMessagesRequest`？需查 AI SDK v5 文档确认。若不支持，fallback 方案是退回在 `sendMessage({text})` 的 text 里编码 `[chapter:N]` `[total:M]` `[target:W]` 标签，后端 `_extract_*` 解析（但违反"不进 topic"原则，仅作 fallback）。
-- **字数口径不一致**：`Chapter.word_count` = `len()`，前端 `countWords` = CJK+分词。建议后端统一用 `len(content_text)`（codepoint），前端也对齐。但这属于兼容性域范畴，需 Claude 确认是否本次一并改。
-- **人物关系推导精度**：`PlotEvent.involved_character_ids` 是 JSONB 数组，无关系类型（敌/友/师徒）。当前设计只输出"共同经历"，不臆造关系类型。若需更精确的关系，需后续加 Character 关系表或 attributes 中的 relationship 字段。
-
----
-
-
-[评审] R9-④⑥ 提示词增强+字数控制 设计 — Claude 终审
-状态: 通过（附 3 条实施约束）
-时间: 2026-09-10 14:40
-结论:
-  勘察结论全部实测属实：generate 分支无专用 prompt（nodes.py:265-266 else）、PipelineState 无章节字段、ChatRequest 有 extra=ignore+Optional 先例、前端已拼章节/长度到 topic。设计质量高，方向正确（注入 system 而非 topic、字数不绑 evaluate、全链路传参）。
-实施约束:
-  1. **_word_count_retry=regenerate 的路径需落 graph 拓扑**：现有 pipeline 是 draft→refine→evaluate 循环，refine 节点内**不能重跑 draft**（拓扑不允许）。建议：regenerate 语义改为"本轮结果作废、在下一次 refine 迭代以更强字数强调重新生成"，或明确 graph 中新增 draft 重跑边。实施时先确认 graph.py 循环结构再落。
-  2. **字数口径一致性**：§3.4 目标推导用 Chapter.word_count（codepoint），但 §5 post-check 用 len(content) 计算 wc——两者同口径（都 codepoint），OK；但前端 countWords（CJK+Latin 分词）与后端不同，勿在验收里用前端字数对照后端目标。
-  3. **前端 transport 待决项**：AI SDK v5 DefaultChatTransport 支持 prepareSendMessagesRequest（v5 正式 API），采用方案 A 无风险；fallback 标签方案（[chapter:N] 进 topic）仅作兜底、不得默认采用。
-  4. **与③联动**：④⑥人物树注入优先复用 opencode-2 的 character_relationships 表（serialize_graph），PlotEvent 共现推导仅作过渡——实施顺序建议③先落、④⑥后做。
-  5. 默认 target=1000 对小说偏短，建议随 outline 目标长度或首章实际长度自适应；可接受，实施时再调。
----

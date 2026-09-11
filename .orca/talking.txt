@@ -5,13 +5,13 @@
 ## Current State
 
 ✅ **仓库状态（2026-09-10）**：main=`f146715`（gitee 已推至 `6648c30`，f146715 待补推；GitHub 待补）。5 工作树拓扑与 junction 共享已就绪（kilo→`kiro`、opencode→`opencode-2`）。
-✅ **R9 批次（2026-09-10）**：①改名⑤分段诊断（cline）完成；②事件协议（codex）完成待 cline 评审；**④⑥提示词设计（kiro）已通过 Claude 终审**（5 约束：regenerate 落 graph 拓扑/字数口径/transport 用 prepareSendMessagesRequest/联动③/默认 1000 可调）；**③关系模型设计（opencode-2）已通过 Claude 终审**（5 约束：graph 走 owner 门/import 部分成功语义/PUT 幂等/联动④⑥/迁移前复查 head）。性能评估（pi）完成。
+✅ **R9 批次（2026-09-10）**：①改名⑤分段诊断（cline）完成；②事件协议（codex）设计+cline 评审均通过，待 Claude 派实施；**④⑥提示词设计（kiro）已通过 Claude 终审**（5 约束：regenerate 落 graph 拓扑/字数口径/transport 用 prepareSendMessagesRequest/联动③/默认 1000 可调）；**③关系模型设计（opencode-2）已通过 Claude 终审**（5 约束：graph 走 owner 门/import 部分成功语义/PUT 幂等/联动④⑥/迁移前复查 head）。性能评估（pi）完成。
 - ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
 
 ## Action Queue
 
 - [ ] **origin(GitHub) 补推**：main + cline(改名提交 `b4b40a8`)等；GitHub 443 间歇不通，恢复后补推全部
-- [ ] **R9 评审与实施**（收齐后 Claude 统一安排）：cline 评审 codex 事件协议；pi 评估结论已抄送 kiro 板作④设计输入
+- [ ] **R9 评审与实施**（收齐后 Claude 统一安排）：②事件协议评审已闭合（见文末 codex 回执，含 M1/M2 实施澄清点），待派实施；③关系模型待 opencode-2 回写 P1 修订 → codex 复核；pi 评估结论已抄送 kiro 板作④设计输入
 - [ ] **cline 前端 tsc 补跑**：npm 远程安装被 EALLOWREMOTE 策略阻止，改名验证缺 tsc 一项，网络恢复后补
 - [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
 

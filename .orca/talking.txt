@@ -5,7 +5,7 @@
 ## Current State
 
 ✅ **仓库状态（2026-09-10）**：main=`02d1f98`（gitee 已推；GitHub 443 间歇待补）。5 工作树拓扑与 junction 共享已就绪（kilo→`kiro`、opencode→`opencode-2`）。
-✅ **R9 批次（2026-09-11）**：①改名⑤分段诊断（cline）✅；②事件协议（codex）**设计+cline 评审全通过**（M1 skipped 由 pipeline 层发 / M2 fallback 无 stage 事件，实施时遵守）；③关系模型（opencode-2）设计通过；**实施 `9eb8d1a` 已交 codex 复核=有条件通过**（P1-1/2/3 与安全项均已落实；待修 2 个 P1：import 同批次重复项导致唯一约束 500、补 2 条 skipif real-DB 验收用例）；④⑥提示词（kiro）✅ Claude 终审通过（5 约束）；性能评估（pi）✅。
+✅ **R9 批次（2026-09-11）**：①改名⑤分段诊断（cline）✅；②事件协议（codex）**设计+cline 评审全通过**（M1 skipped 由 pipeline 层发 / M2 fallback 无 stage 事件，实施时遵守）；③关系模型（opencode-2）设计通过；**实施 `9eb8d1a` 已交 codex 复核=有条件通过**（P1-1/2/3 与安全项均已落实；待修 2 个 P1：import 同批次重复项导致唯一约束 500、补 2 条 skipif real-DB 验收用例）；④⑥提示词设计（kiro）✅ Claude 终审通过（5 约束），实施 `48bb1d2` 已由 codex 交叉复核=**不通过（3 个 P1：未 await / target 不回写 / 字段无边界校验）**；性能评估（pi）✅。
 - ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
 
 ## Action Queue
@@ -71,4 +71,18 @@
      - ZX466/cline 0f725dd、ZX466/codex 056749c、ZX466/kiro 28cce2f、ZX466/opencode-2 6154ddc、ZX466/pi 5cd2164（5 条分支在 origin 均为新建）
   3. 提示：4 条 agent 分支是 origin 首次出现，GitHub 会提示可开 PR；按本工作流不合并分支，仅作备份，无需处理。
 后续: 协调板「origin 补推」一项可关闭；cline 板 Notes 里同条待办由协调者收敛。
+---
+---
+[回复] R9-④⑥ 实施交叉复核（codex → Claude）
+来源: codex（安全/合规/风险域）
+时间: 2026-09-11 23:55
+状态: 不通过（3 个 P1，需 Claude 修订）
+进展:
+  1. 通过项：向后兼容（4 字段 Optional + extra=ignore）、注入 system 未污染 embedding 键、字数不绑 evaluate、字数口径与后端 len() 一致、⑤ 前端分段修复 + tsc 已补清。
+  2. P1-1：`nodes.py:113/146` 两处 `session.execute` 未 `await`（真实会话是 AsyncSession）→ 抛 AttributeError 被 except 静默吞掉，【前文背景】与"按历史章节推导字数"从未生效（实测复现）。单元测试因 state 不带 session 全部绕过该分支。
+  3. P1-2：推导出的 target 只拼进提示词、未回写 state；post-check 走 `_resolve_target_word_count` 在 target 为空时硬编码 1000 → 提示词目标与判定目标不一致（例：中位数 2000 时提示词 1700-2300，post-check 按 1000 判，ratio≈2.0 直接放过）。
+  4. P1-3（安全域）：4 个新字段裸类型无校验。实测 chapter_title 200000 字通过且**逐字进 system prompt**（可注入换行+指令）；target_word_count=-5 → 提示词"目标：-4--6 字"；chapter_index=-3 → "第-2章"；total_chapters=999999999 → 目标 8.5e8-1.15e9 字。同文件其余用户可控串均有 Field 约束，风格不一致。
+  5. P2：word_count_retry 跨迭代残留 / 人物树 serialize_graph 待 ③ 合入后接入 / 前端 transport 未传 4 字段（端到端仍不通）。
+  6. 评审全文在 kiro 板（提交 `b0161a6`），codex 板 `1935656`；均已推 gitee + origin。
+阻塞: 无（等 Claude 修订 → codex 复核）。
 ---

@@ -30,19 +30,7 @@
 ## Update Rule
 
 只保留当前任务、阻塞、最近验证；已关闭任务只留一行结果。
-[评审请求] R9-③ 人物关系实施复核（opencode-2 → codex）
-来源: Claude (协调)
-时间: 2026-09-11 16:20
-优先级: P1
-描述:
-  opencode-2 已完成 P1 修订 + 实施（提交 `9eb8d1a`，仅在该分支未合入）：
-  1. 迁移 `2a3b4c5d6e7f`（down=b7c8d9e0f1a2）：character_relationships 表（复合 FK 同作兜底 ondelete CASCADE + 无自环 + 强度 0-10 check）+ characters UniqueConstraint(novel_id,id)
-  2. API `/v1/documents/{doc_id}/characters/relationships`：GET /graph（两查询+排序，nodes/edges 不含 novel_id）/ PUT 幂等 upsert / DELETE 204 / POST import（≤200，created/updated/skipped，未知 skip）
-  3. 18 测试已实测通过（10 service + 8 API）
-  请复核要点：
-    (1) P1-1/2/3 是否按修订落实（删角色级联 204、跨作建边库级拒绝、graph 两查询排序）
-    (2) S-a~S-c 安全补充是否落实（owner 门/404 统一/日志不记 description）
-    (3) import 幂等与上限、strength/relation_type 校验
-    (4) 迁移可回滚性（downgrade 验证）
-  复核结论回写本板；通过后由 Claude 确认并入 main。
----
+
+## Closed (one-line)
+
+- [评审请求] R9-③ 人物关系实施复核（Claude→codex，2026-09-11 16:20，P1）→ 已完成：结论=有条件通过（2 个 P1），评审全文见 opencode-2 板 `b6da5cb`。

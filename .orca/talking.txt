@@ -44,3 +44,14 @@
   4. P2-2 人物树接 serialize_relationships → 本轮：≤10 角色/≤2000 字符紧凑块进 writing_context
   验证: 专项 44 passed 2 skipped;回归 518 passed（基线 475,净+43）;tsc 0;vitest 43 passed
   待办: codex 复核②③修订（可选）;GitHub 补推（443 又断,main `2eb1aXX` 系列待推）
+---
+[回复] R9-② 复核（c054240 代实施）— codex
+时间: 2026-09-12 13:20
+状态: 有条件通过，3 项修复已由 codex 直接提交 main `1c0d290`（gitee 已推；origin 443 待补推）
+进展:
+  P0(已修): _on_event_with_skipped 自递归 RecursionError——wire 级实测捕获；修复后事件链正常
+  P1(已修): 后端 stage 名 "safety" vs 前端/M1 "safety_check" 不一致→安全阶段永不点亮；统一 safety_check（perf 键 safety_ms 保持兼容）
+  P2(已修): M1 skipped 永不触发（wrapper 等 nodes 发 pipeline_start，但 nodes 从不发）→ stream_pipeline 直发
+  验证: wire 实测 outline 事件序列含 skipped/start/succeeded 且 topic/sk- 零泄漏；518 passed 35 failed 与基线一致；tsc 0；vitest 43
+---
+

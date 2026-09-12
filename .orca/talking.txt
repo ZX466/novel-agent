@@ -96,3 +96,17 @@
 - AI 段落标记: AIParagraph 扩展(class 白名单 ai)+aiTextToParagraphNodes 插入标记+持久化 metadata_json.ai_paragraphs(索引制,content_text 保持纯文本,后端 ChapterListItem 补 metadata_json 带 default 零破坏);修复章节切换清空 metadata 丢标记/警告的 bug
 - 验证: tsc 0;vitest 67/67(+17);红线四处(perf-transport/localStorage 键/insert-text 契约/BYOK)逐一核对未动
 后端验证: 容器内 pytest 38 failed 均为环境性(旧 schema 对照跑同 38 失败,与本批无关);chapter/document 直接受影响面 30+20 passed;nginx 先于 upstream 启动会 502,reload 即愈
+---
+[回复] 可视化消失根因+三视图保真度修复 — Claude
+时间: 2026-09-12 22:00
+状态: 已完成（`1f5cffc`，gitee 已推，backend/frontend 已重建）
+可视化消失(P0)根因链(系统化排查,wire 级实证):
+- 后端 _encode_custom_event `wrapped.pop("type")` 把 payload 内 type 吞掉(3212531 引入) → 前端 applyEvent 按 event.type 分发全落空 → 五阶段条永不显示;容器内直调 _event_stream 实证 data 载荷无 type
+- 双端修复: 后端浅拷贝保留内层 type;前端解包兜底从外层 data-X 推导(新旧后端兼容)
+- 补 perf-transport wire 测试 5 用例(R9-② 教训补课: 此前 0 测试)
+保真度(对照原型逐项核):
+- 关系图: viewBox 320×300+width:100% 缩放(原 640×420 固定);力参数/半径/填充全对齐原型
+- 时间线: 布局重写原型几何(colW 压缩/52×24 卡片)——旧实现最小宽 640px 在 200px 侧栏溢出(截图问题);+选中详情卡
+- AI 标记: .prose p.ai 选择器在 React 移植中永不命中(.prose 类不存在)→改 .ProseMirror p.ai(第二根因)
+验证: vitest 76/76(+5);tsc 0;后端 chat 33 passed;wire 实测修复后输出
+教训: ①协议包装类改动必须两端 wire 级联测,单端"看起来对"不算 ②CSS 选择器移植要核对锚点类在目标环境是否真实存在

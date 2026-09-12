@@ -1,57 +1,33 @@
-# Talking - opencode-2 (数据/数据库)
+# Talking - Claude (Coordinator)
 
-> 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。任务只认 `[任务]` 标记。
+> 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
 
 ## Current State
 
-🟡 **R9-③ 人物关系模型与 API：已实施（`9eb8d1a`），codex 复核=有条件通过（待修 2 个 P1）**
-- 设计+实施评审通过项：复合 FK 兜底/CASCADE、graph 两查询+排序、owner 门、统一 404、零日志、import ≤200、迁移可回滚单头 `2a3b4c5d6e7f` —— 全部核实 ✅
-- 实测：18 用例 18 passed；全量 35 failed 与基线逐条一致（环境性预存，非引入）
+✅ **仓库状态（2026-09-12）**：main=`0b9f792`（gitee 已推；GitHub 443 间歇，待补推 `1c0d290` 系）。5 工作树拓扑与 junction 共享就绪（kilo→`kiro`、opencode→`opencode-2`）。
 
-**待修 P1（codex 实测复现）**：
-- **[P1-A] import 同批次重复项 → 计数错 + 唯一约束 500**：autoflush=False 下 select 查不到本批已 add 的边 → 重复 add → commit 抛 IntegrityError（api:110-119 无 try）。修法：循环内 pending dict `{(subj,obj): obj}` 内存去重（命中→更新字段计 updated）+ commit 加 IntegrityError 兜底。验收：同请求重复对 → created=1 updated=1 不抛异常。影响面：大纲一键生成（LLM 常产出重复关系）是高频路径
-- **[P1-B] DB 级保证无真实 DB 测试兜底**：18 用例全 mock。照 `test_timeline.py:571` 先例补 2 条 real-DB 用例（skipif 无 DB）：①删有关联边角色→204 且边全消 ②B 作品角色在 A 作品建边→库级拒绝。本机 docker 未启动（实测 ConnectionRefused）
+✅ **R9 批次已归档（2026-09-10 → 09-12，六项全绿）**：
+- ①改名 Project11→novel-agent：cline（`b4b40a8`，tsc 已补清）
+- ②三阶段可视化：codex 协议设计 → Claude 前后端实施（`c054240`/`49f6584`）→ codex 复核抓 3 问题并直修（P0 自递归/P1 阶段名/P2 skipped，`1c0d290`）——wire 级实测事件链正常
+- ③人物关系树：opencode-2 实施（`9eb8d1a`）→ Claude 修订 P1-A/P1-B（`bb797e7`）入 main；前端图组件契约已定
+- ④⑥提示词+字数：kiro 设计 → Claude 实施+3 P1 修复（`48bb1d2`/`b66c9d0`）+ P2-3 前端 transport（`4dd06e4`）+ P2-2 人物树接入（`7f54e5c`）——端到端闭环
+- ⑤分段消失：cline 诊断 → Claude 实施（textToParagraphNodes，`48bb1d2`）
+- 验证总账：后端回归 518 passed（基线 475，净+43）；tsc 0；vitest 43/43；35 failed 为环境性预存
 
-**P2 建议一并**：PUT 响应 updated 恒 0（api:86，测试还固化了该错误）/ upsert 改 `on_conflict_do_update`（先例 creative_kit.py:76，删死代码 IntegrityError import）/ description 上限 100_000→2000（后续进提示词）/ 自环改 422。
+- ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
 
-## Current Queue
+## Action Queue
 
-- [ ] 修 P1-A + P1-B（P2 一并）→ 回写"已修订"摘要到本板 → codex 复核 → Claude 确认并入 main
+- [ ] **origin(GitHub) 补推**：main `0b9f792`（含 `1c0d290`）；443 间歇不通，恢复后 `git push origin main`
+- [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
+- （R9 无遗留实施项；后续新需求另立批次）
 
-## Notes
+## Unassigned Notes
 
-- 与④⑥联动：serialize_graph 单行紧凑格式（≤2000 字符）供章节提示词注入（③合入后 kiro 接）。
-- 历史提交：设计 `2a4ed33`、初版评审 `ebd19f7`、实施复核 `b6da5cb`。
+- **回执统一写本文件**（`[任务]`/`[回复]` 流转，格式见 `.orca/workflow` §2）。
+- **本地 docker 栈**：compose 5 服务（postgres/redis/backend/frontend/nginx）；聊天 key 走前端 BYOK 网页填写。
+- npm EALLOWREMOTE 已解（allow-remote=all）；pytest 环境性失败 = API_KEYS 注入差异 + real-DB 连接拒绝，非代码引入。
 
 ## Update Rule
 
-只保留当前任务、阻塞、最近验证；已关闭任务只留一行结果。
----
-[回复] R9-② 后端实施完成 — codex
-时间: 2026-09-12 12:25
-状态: 已完成（ZX466/codex 分支 41465d6，Gitee 已推；GitHub 443 未通待补推）
-进展: S1/S2 单测 17 条通过；stage 事件闭合白名单+枚举 detail+seq 单写入点+64 上限+M1/M2 落地；全量 503 passed，35 failed 与 main 基线逐条一致(环境性)。已请 cline 评审（见 cline 板），通过后请您确认合入 main。
----
-
----
-[回复] R9 剩余任务收口完成 — Claude（代各 agent 执行）
-时间: 2026-09-12 13:10
-状态: 已完成（用户指令"剩下内容由你完成"）
-进展:
-  1. ③合入 main（merge 46ac602）+ P1-A 修订（pending dict 去重+IntegrityError→409）+ P1-B（2 条 skipif real-DB 用例）+ P2（PUT 计数修正）→ `bb797e7`
-  2. ②后端事件流（原派 codex，代实施）→ `c054240`：_timed 挂 on_event（started/succeeded/failed+summary 白名单）/S1S2 安全枚举/M1 skipped 事件/stream_pipeline 事件与 token 同队列保序/seq 单点+64 上限/M2 注记
-  3. ②前端 stage 消费 → `49f6584`：StageProgress 五阶段骨架+useStageProgress+M2 容忍（无事件隐藏）
-  4. P2-2 人物树接 serialize_relationships → 本轮：≤10 角色/≤2000 字符紧凑块进 writing_context
-  验证: 专项 44 passed 2 skipped;回归 518 passed（基线 475,净+43）;tsc 0;vitest 43 passed
-  待办: codex 复核②③修订（可选）;GitHub 补推（443 又断,main `2eb1aXX` 系列待推）
----
-[回复] R9-② 复核（c054240 代实施）— codex
-时间: 2026-09-12 13:20
-状态: 有条件通过，3 项修复已由 codex 直接提交 main `1c0d290`（gitee 已推；origin 443 待补推）
-进展:
-  P0(已修): _on_event_with_skipped 自递归 RecursionError——wire 级实测捕获；修复后事件链正常
-  P1(已修): 后端 stage 名 "safety" vs 前端/M1 "safety_check" 不一致→安全阶段永不点亮；统一 safety_check（perf 键 safety_ms 保持兼容）
-  P2(已修): M1 skipped 永不触发（wrapper 等 nodes 发 pipeline_start，但 nodes 从不发）→ stream_pipeline 直发
-  验证: wire 实测 outline 事件序列含 skipped/start/succeeded 且 topic/sk- 零泄漏；518 passed 35 failed 与基线一致；tsc 0；vitest 43
----
-
+每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。

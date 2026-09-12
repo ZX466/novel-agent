@@ -37,3 +37,9 @@
 状态: 已完成（`546cbc8`，gitee 已推；origin 443 断待补推）
 进展: localStorage/容器名/包名/scp 全改 novel-agent（POSTGRES_DB 等数据绑定项保留）；README 全面重写（R9 能力+纯源码+Docker 形态）；删过时性能报告；CHANGES 记 R9。tsc 0/专项 31 passed/compose config OK。
 ---
+---
+[回复] 纯源码清理完成 — Claude
+时间: 2026-09-12 14:30
+状态: 已完成（`b83a074`，gitee 已推；origin 443 断，累计 ahead 27 待补推）
+进展: 磁盘清理 640MB 本地构建缓存（backend/.venv 207M + frontend/node_modules 433M + pytest/ruff/pycache）+ 3 个工具空壳目录；仓库 304 文件全为源码/配置/文档，无 secrets 无构建产物；git clean 验证磁盘与 git 完全一致。Docker 栈不受影响（镜像自含依赖）。
+---

@@ -567,8 +567,16 @@ async def chat(
 
     if provider_config is None and not settings.byok_fallback_to_env:
         # BYOK required but no credentials supplied.
+        # Log loudly (deployment diagnosis): a 200-with-error-part is easy to
+        # miss in access logs, and the same banner previously served several
+        # distinct root causes (no header / header dropped by client).
+        logger.error(
+            "chat rejected: no provider credentials (novel=%s task=%s topic_len=%s)",
+            novel_id, task_type, len(topic or ""),
+        )
         async def _no_credentials() -> AsyncIterator[str]:
             yield _encode_start()
+            yield _encode_start_step()
             yield _encode_error("请先配置 API Key")
             yield _encode_finish()
 

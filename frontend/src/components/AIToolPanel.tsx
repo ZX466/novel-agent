@@ -641,7 +641,9 @@ export function AIToolPanel({
         {error && !isBusy && (
           <div className="mb-sp-3 px-sp-3 py-sp-2 rounded-sm text-[11px]"
             style={{ color: "var(--danger)", background: "oklch(0.60 0.16 25 / 0.08)", border: "1px solid oklch(0.60 0.16 25 / 0.15)" }}>
-            AI 服务暂时不可用，请稍后重试
+            {/* Prefer the server-provided reason (SSE error part detail /
+                HTTP status text); the generic line is a last-resort fallback. */}
+            {error.message || "AI 服务暂时不可用，请稍后重试"}
           </div>
         )}
 

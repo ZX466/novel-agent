@@ -354,20 +354,29 @@ def _encode_error(message: str) -> str:
 
 
 def _encode_perf(perf: dict) -> str:
-    """PerfPulse: emit stage timings as a non-text SSE event.
+    """PerfPulse: emit stage timings as a custom data part.
 
-    Sent after the last text-delta and before finish-step so the frontend
-    can render a per-stage latency breakdown (RAG/embed/draft/refine/…)
-    without interfering with the AI SDK text stream.
+    AI SDK v5 strict-validates every SSE chunk (uiMessageChunkSchema) and
+    only accepts unknown types with a `data-` prefix — a bare
+    `{"type":"perf"}` throws "Type validation failed" in the browser and
+    kills the whole stream. Wrapped as a custom data part so both
+    DefaultChatTransport (passes data parts through) and PerfChatTransport
+    (unwraps to onPerf) survive.
     """
-    return _sse({"type": "perf", "data": perf})
+    return _sse({"type": "data-perf", "data": perf})
 
 
 def _encode_custom_event(data: dict) -> str:
-    """R9-② stage-event SSE carrier: same custom-event shape as `perf`
-    (`{"type": <name>, ...}`) — perf-transport.ts's default branch ignores
-    unknown types, so old clients stay compatible (protocol §3)."""
-    return _sse(data)
+    """R9-② stage-event SSE carrier.
+
+    Same reasoning as _encode_perf: AI SDK v5 only tolerates unknown event
+    types behind a `data-` prefix. The wire shape is
+    `{"type": "data-<name>", "data": {original payload}}`; perf-transport.ts
+    strips the prefix and forwards the original payload to the onStage sink.
+    """
+    wrapped = dict(data)
+    wrapped["type"] = f"data-{wrapped.get('type', 'event')}"
+    return _sse({"type": wrapped.pop("type"), "data": wrapped})
 
 
 async def _extract_provider_config(

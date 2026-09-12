@@ -335,6 +335,13 @@ def _encode_perf(perf: dict) -> str:
     return _sse({"type": "perf", "data": perf})
 
 
+def _encode_custom_event(data: dict) -> str:
+    """R9-② stage-event SSE carrier: same custom-event shape as `perf`
+    (`{"type": <name>, ...}`) — perf-transport.ts's default branch ignores
+    unknown types, so old clients stay compatible (protocol §3)."""
+    return _sse(data)
+
+
 async def _extract_provider_config(
     x_provider_config: Annotated[str | None, Header(alias="X-Provider-Config")] = None,
 ) -> ProviderConfig | None:
@@ -395,18 +402,28 @@ async def _event_stream(
         # fails, it raises before any chunk is yielded, so text-start won't be emitted.
         evaluator = _build_evaluator()
         perf: dict = {}
-        async for token in stream_pipeline(
+        # R9-② stage-event emission: seq assigned here (single write point),
+        # 64 events/request hard cap (protocol §3) — overflow drops events,
+        # never text.
+        event_seq = 0
+        async for item in stream_pipeline(
             topic, provider_config,
             session=session, evaluator=evaluator, novel_id=novel_id,
             task_type=task_type, perf=perf,
             persist_key=f"ai-draft:{novel_id}" if novel_id else None,
             chapter_index=chapter_index, total_chapters=total_chapters,
             chapter_title=chapter_title, target_word_count=target_word_count,
+            on_event=True,
         ):
+            if isinstance(item, tuple) and len(item) == 2 and item[0] == "__event__":
+                if event_seq < 64:
+                    event_seq += 1
+                    yield _encode_custom_event({"seq": event_seq, **item[1]})
+                continue
             if not text_started:
                 yield _encode_text_start()
                 text_started = True
-            yield _encode_text_delta(token)
+            yield _encode_text_delta(item)
         if text_started:
             yield _encode_text_end()
         if not text_started:

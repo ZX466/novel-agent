@@ -81,6 +81,15 @@ def _recursion_limit() -> int:
     return settings.pipeline_max_iters * 3 + 8
 
 
+# R9-② M1: which stages are active per task_type (mirrors _should_run_stage).
+# Used to emit skipped events for non-active stages at the pipeline layer.
+_ALL_STAGES = ("retrieval", "draft", "refine", "evaluate", "safety_check")
+
+
+def _active_stages(task_type: str) -> tuple:
+    return tuple(s for s in _ALL_STAGES if _should_run_stage(task_type, s))
+
+
 def _should_run_stage(task_type: str, stage: str) -> bool:
     """Determine if a pipeline stage should run for this task type.
 
@@ -104,6 +113,13 @@ def _should_run_stage(task_type: str, stage: str) -> bool:
         return stage == "draft"
     # "generate" or unknown: full pipeline
     return True
+
+
+# Precomputed map for skip-event emission (R9-② M1).
+_ACTIVE_STAGES: dict[str, tuple] = {
+    tt: _active_stages(tt)
+    for tt in ("generate", "continue", "assistant", "rewrite", "polish", "outline", "extract")
+}
 
 
 def build_pipeline_for_task(task_type: str):
@@ -180,6 +196,7 @@ async def run_pipeline(
     total_chapters: int | None = None,
     chapter_title: str = "",
     target_word_count: int | None = None,
+    on_event=None,
 ) -> PipelineState:
     """Runs the full pipeline non-streaming; returns final state.
 
@@ -194,8 +211,31 @@ async def run_pipeline(
     R9-④⑥ chapter fields (chapter_index/total_chapters/chapter_title/
     target_word_count) are optional — absent = no chapter-writing context
     injected (backward compatible with older callers).
+
+    R9-② `on_event` receives pipeline ``stage`` events (dict payloads) so
+    the caller can surface stage progress; the callback failures are
+    swallowed by the emitters (visibility must never break the pipeline).
     """
     app = _get_pipeline_for_task(task_type)
+
+    async def _on_event_with_skipped(event: dict) -> None:
+        # M1: skipped semantics live at the pipeline layer — non-active
+        # stages are not in the graph, so _timed never fires for them.
+        # Emit one skipped event per inactive stage up front so the UI can
+        # distinguish "not started" from "not part of this task type".
+        if event.get("type") == "pipeline_start":
+            active = _ACTIVE_STAGES.get(task_type, ())
+            for stage in ("retrieval", "draft", "refine", "evaluate", "safety_check"):
+                if stage not in active:
+                    await on_event({
+                        "type": "stage", "stage": stage, "status": "skipped",
+                        "reason": "task_type",
+                    })
+        await on_event(event)
+
+    if on_event is not None:
+        on_event = _on_event_with_skipped
+
     return await app.ainvoke(
         {
             "topic": topic,
@@ -205,6 +245,7 @@ async def run_pipeline(
             "novel_id": novel_id,
             "task_type": task_type,
             "on_token": on_token,
+            "on_event": on_event,
             "perf": perf if perf is not None else {},
             "chapter_index": chapter_index,
             "total_chapters": total_chapters,
@@ -228,7 +269,8 @@ async def stream_pipeline(
     total_chapters: int | None = None,
     chapter_title: str = "",
     target_word_count: int | None = None,
-) -> AsyncIterator[str]:
+    on_event=None,
+) -> AsyncIterator[str | tuple[str, dict]]:
     """True streaming: yields tokens as the LLM generates them.
 
     Uses an on_token callback injected into the pipeline state. The
@@ -246,13 +288,17 @@ async def stream_pipeline(
     disconnected mid-stream. The frontend can then poll `persist_key` to
     recover the full result after navigating away mid-generation.
     """
-    token_queue: asyncio.Queue[str | None] = asyncio.Queue()
+    token_queue: asyncio.Queue = asyncio.Queue()
     pipeline_error: Exception | None = None
     final_text: str = ""
     detached: bool = False
 
     async def on_token(text: str) -> None:
-        await token_queue.put(text)
+        await token_queue.put(("token", text))
+
+    async def _emit_event(event: dict) -> None:
+        """Stage events join the same queue as tokens → order preserved."""
+        await token_queue.put(("event", event))
 
     async def _run_pipeline():
         """Run the pipeline in a background task; puts None when done."""
@@ -271,6 +317,7 @@ async def stream_pipeline(
                 total_chapters=total_chapters,
                 chapter_title=chapter_title,
                 target_word_count=target_word_count,
+                on_event=_emit_event if on_event else None,
             )
             final_text = state.get("refined") or state.get("draft") or ""
             # Expose for _persist_later (detached completion after disconnect).
@@ -279,18 +326,30 @@ async def stream_pipeline(
             logger.error("stream_pipeline: pipeline task failed: %s", _redact_key(str(e)))
             pipeline_error = e
         finally:
-            await token_queue.put(None)  # sentinel: pipeline done
+            await token_queue.put((None, None))  # sentinel: pipeline done
+
+    # Emit pipeline_start up front (before the background task runs) so the
+    # M1 skipped events for non-active stages are the first events on the
+    # stream — the UI can render the full stage skeleton immediately.
+    if on_event is not None:
+        await _emit_event({"type": "pipeline_start", "task_type": task_type})
 
     # Start pipeline in background
     pipeline_task = asyncio.create_task(_run_pipeline())
 
     try:
-        # Yield tokens as they arrive from the pipeline nodes
+        # Yield tokens as they arrive; stage events yield as
+        # "event:{json}\n" strings that _event_stream converts to SSE
+        # custom events (perf-transport-style, default-ignored by old
+        # clients → backward compatible).
         while True:
-            token = await token_queue.get()
-            if token is None:
+            kind, payload = await token_queue.get()
+            if kind is None:
                 break  # pipeline finished
-            yield token
+            if kind == "token":
+                yield payload
+            elif kind == "event":
+                yield ("__event__", payload)  # marker tuple; _event_stream unwraps
         # If the pipeline failed silently, re-raise so _event_stream can send
         # an error event to the frontend instead of an empty response.
         if pipeline_error is not None:
@@ -339,6 +398,10 @@ async def stream_pipeline(
         if final_text:
             for i in range(0, len(final_text), 4):
                 yield final_text[i : i + 4]
+        # M2 (protocol note): this non-streaming fallback has no on_event —
+        # stage events are silently absent on this path. The frontend must
+        # tolerate missing stage events and fall back to the existing
+        # isBusy display (codex protocol §M2).
     finally:
         # Normal completion: persist the full result if requested. On client
         # disconnect we already detached via _persist_later, so this branch

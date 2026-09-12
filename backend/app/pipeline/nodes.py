@@ -23,23 +23,111 @@ T = TypeVar("T")
 
 def _timed(stage: str) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
     """PerfPulse: record a node's wall-clock elapsed time into
-    ``state["perf"][f"{stage}_ms"]`` (rounded to 0.1ms).
+    ``state["perf"][f"{stage}_ms"]`` (rounded to 0.1ms) and, when an
+    ``on_event`` callback is present in state, emit R9-② ``stage`` events
+    (started / succeeded / failed) for the pipeline-visibility UI.
 
     Overhead is two `time.perf_counter()` calls per node (~0.05us) —
     negligible vs. LLM/DB stage cost. `state` is the first positional
     argument (PipelineState TypedDict as dict).
+
+    Event payloads follow the closed summary whitelist from the protocol
+    design (codex `480d802`): per-stage counters/lengths only — never the
+    topic, prompt, draft text, IDs, or credentials (S1/S2).
     """
     def deco(fn: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
         @wraps(fn)
         async def wrapper(state: dict, *args: Any, **kwargs: Any) -> T:
+            on_event = state.get("on_event")
             t0 = time.perf_counter()
+            if on_event:
+                try:
+                    await on_event({
+                        "type": "stage", "stage": stage,
+                        "status": "started", "iteration": state.get("iterations", 0),
+                    })
+                except Exception:
+                    logger.warning("_timed: on_event(started) failed", exc_info=True)
             try:
-                return await fn(state, *args, **kwargs)
+                result = await fn(state, *args, **kwargs)
+            except Exception as exc:
+                if on_event:
+                    try:
+                        await on_event({
+                            "type": "stage", "stage": stage,
+                            "status": "failed",
+                            "iteration": state.get("iterations", 0),
+                            "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1),
+                            # S2: safe enum, never str(exception).
+                            "code": _stage_error_code(exc),
+                        })
+                    except Exception:
+                        logger.warning("_timed: on_event(failed) failed", exc_info=True)
+                raise
             finally:
                 perf = state.setdefault("perf", {})
                 perf[f"{stage}_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+            if on_event:
+                try:
+                    await on_event({
+                        "type": "stage", "stage": stage,
+                        "status": "succeeded",
+                        "iteration": state.get("iterations", 0),
+                        "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1),
+                        # Closed summary whitelist per stage (protocol §3):
+                        # counters/lengths/scores only — no text, no IDs.
+                        "summary": _stage_summary(stage, state),
+                    })
+                except Exception:
+                    logger.warning("_timed: on_event(succeeded) failed", exc_info=True)
+            return result
         return wrapper
     return deco
+
+
+def _stage_summary(stage: str, state: dict) -> dict:
+    """Whitelisted per-stage summary for the succeeded event (protocol §3).
+
+    Explicit allowlist per stage; unknown stages return {} (closed whitelist
+    — the serialization point refuses keys outside what's constructed here).
+    """
+    if stage == "retrieval":
+        ctx = state.get("retrieved_context") or ""
+        return {"chars": len(ctx)}
+    if stage == "draft":
+        draft = state.get("draft") or ""
+        return {"chars": len(draft)}
+    if stage == "refine":
+        refined = state.get("refined") or ""
+        return {"chars": len(refined), "iteration": state.get("iterations", 0)}
+    if stage == "evaluate":
+        summary: dict = {"score": round(state.get("score", 0.0), 3)}
+        if state.get("fallback_mode"):
+            summary["fallback"] = True
+        return summary
+    if stage == "safety_check":
+        report = state.get("safety_report") or {}
+        return {
+            "matched_count": report.get("matched_count", 0),
+            "max_severity": report.get("max_severity", "none"),
+            "should_block": bool(state.get("safety_passed", True)) is False,
+        }
+    return {}
+
+
+def _stage_error_code(exc: Exception) -> str:
+    """Map an exception to the protocol's stable failed-code enum (S2)."""
+    type_name = type(exc).__name__.lower()
+    msg = str(exc).lower()
+    if "auth" in type_name or "auth" in msg or "401" in msg:
+        return "llm_auth"
+    if "rate" in type_name or "rate_limit" in msg or "429" in msg:
+        return "llm_rate_limit"
+    if "timeout" in type_name.lower() or "timed out" in msg:
+        return "llm_timeout"
+    if "context length" in msg or "context_length" in msg or "max_tokens" in msg:
+        return "llm_context_length"
+    return "stage_error"
 
 from app.config import settings
 from app.llm import draft as llm_draft

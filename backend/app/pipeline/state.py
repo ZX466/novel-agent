@@ -49,6 +49,7 @@ class PipelineState(TypedDict, total=False):
     fallback_mode: bool                 # True when a stage was skipped due to failure
     fallback_reason: str                # which stage failed and was skipped
     on_token: Any                       # async callback for real-time streaming: await on_token(text)
+    on_event: Any                       # R9-② async callback for stage events: await on_event(dict)
     # R9-④⑥ chapter-writing context. All optional — absent fields mean the
     # caller (frontend) didn't supply them and the corresponding prompt
     # block is skipped (backward compatible with older clients).

@@ -31,3 +31,9 @@
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
+---
+[回复] 项目更名收尾+README 重写 — Claude
+时间: 2026-09-12 14:00
+状态: 已完成（`546cbc8`，gitee 已推；origin 443 断待补推）
+进展: localStorage/容器名/包名/scp 全改 novel-agent（POSTGRES_DB 等数据绑定项保留）；README 全面重写（R9 能力+纯源码+Docker 形态）；删过时性能报告；CHANGES 记 R9。tsc 0/专项 31 passed/compose config OK。
+---

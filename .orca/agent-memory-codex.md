@@ -85,3 +85,35 @@
 - **测试基线（R9 后）**：main = **518 passed / 2 skipped / 35 failed**；35 个失败与基线逐条一致，均为环境性（real-DB 未起 + API_KEYS 注入差异）。分支版 503 passed 同噪。
 - **perf 键名兼容**：改 `_timed` stage 名时若不想破坏 PerfPulse 前端键，用 `perf_key = "safety_ms" if stage == "safety_check" else f"{stage}_ms"` 映射。
 - **并发写协调板风险**：main 工作树可能有其他 agent 会话的未提交修改（本轮见过 nodes/relationships 脏文件）。提交协调板只 `git add .orca/talking.txt`，绝不 `git add -A`。
+## 9. R9 收尾后仓库事实（2026-09-12，复核后重读代码所得）
+### 命名收敛（546cbc8 "novel-agent 更名收尾"）
+- **已改**：容器名（`novel-agent-postgres/-redis/-backend/-frontend/-nginx`、`-postgres-local`/`-redis-local`）、
+  localStorage 键（`novel-agent:theme` / `:ai-draft:<id>` / `:writing-goal` / `:editor-display`）、
+  后端包名 `novel-agent-backend`（pyproject + uv.lock 已同步）。
+- **故意保留（数据绑定，改则丢卷数据）**：`POSTGRES_DB=project11`、Redis 密码前缀 `project11-redis`、
+  DB 名 `project11`（DATABASE_URL）、bench 脚本里的 DSN。
+- ⚠️ **localStorage 键改名无回退迁移**：`git grep project11:theme` 为空 → 老用户主题/写作目标/未插入草稿会“丢失”（值仍在浏览器里但读不到）。
+  若用户反馈“设置重置了”，根因在此，修法是读新键为空时回退读旧键并回写。
+### 品牌残留（纯文案，非功能，未修）
+- `frontend/src/app/layout.tsx:7` title、`NavBar.tsx:77` 顶栏文字仍是 `Project11`；
+  `backend/app/main.py:62/99/107` 日志与 FastAPI `title="Project11 Backend"`；
+  `backend/pyproject.toml:4` description；`backend/app/__init__.py:1` docstring（带 BOM）；
+  `deploy/nginx/app.conf:2` 注释；`docs/diagrams/architecture.html` 标题。
+- `frontend/package.json` name 仍是 `project11-frontend`（未随 546cbc8 改）。
+### 测试与运行基线（R9 后）
+- 收集 555 tests；全量 **518 passed / 2 skipped / 35 failed**，35 个失败与更早基线逐条一致（环境性：real-DB 未起 + API_KEYS 注入差异），**评审时不要把它们当回归**。
+- 跑测试必须 `cd backend` 再 `uv run pytest`（在仓库根跑会 `Failed to spawn: pytest`）；需要 `DATABASE_URL`/`REDIS_URL`/`API_KEYS` 环境变量（conftest 只对 pytest 打桩）。
+- 前端：`npx tsc --noEmit`、`npm test -- --run`（vitest 43 passed）；dev 端口 **7421**。
+### 部署形态（易混淆，务必区分）
+- `docker-compose.yml`：**腾讯云服务器专用**（文件头明确写 DO NOT RUN LOCALLY），5 服务全栈 + nginx 80/443。
+- `docker-compose.local.yml`：本地只跑 PG + Redis 两容器，端口仅绑 `127.0.0.1`（5432 / 16379），密码强制来自根 `.env`（`:?` 缺失即失败）。
+- ⚠️ `README.md`/`QUICKSTART.md` 现在写的是“本地 Docker Desktop 一键 5 容器”，与 `docker-compose.yml` 头部注释、`deploy/README.md` 的“本地用 uvicorn + next dev”**互相矛盾**——文档口径未统一（未修，待用户决定）。
+### 安全面速查（复核常用）
+- SSRF 门：`backend/app/llm/clients.py` `_validate_api_base` + `APIBaseNotAllowed`（`byok_allow_local_api_base` 默认 False）。
+- 鉴权/限流：`require_api_key` + `enforce_chat_rate_limit`（`backend/app/api/_deps.py`）；`api_keys` 默认空列表 → 缺省态 503（L8）。
+- CSP nonce：`frontend/src/middleware.ts` 生成 → 经 `X-CSP-Nonce` → nginx `app.conf` 拼进 CSP。
+- 迁移单头校验：`backend/scripts/check_migrations.py`。
+### 协作与网络
+- 工作流文件名是 **`.orca/workflow`**（无 `.txt`）；板面只认 `[任务]` 标记。
+- GitHub(origin) 443 仍不通；main 领先 origin 24 提交。按用户规则：**不循环重试**，只记“待补推”。Gitee 正常且已同点。
+- 主工作树可能被其他会话并发写入（本轮见到未提交的 nodes/relationships 改动）→ 提交板面只 `git add .orca/talking.txt`，禁止 `git add -A`。

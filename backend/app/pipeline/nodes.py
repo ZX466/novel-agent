@@ -65,8 +65,9 @@ def _timed(stage: str) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., 
                         logger.warning("_timed: on_event(failed) failed", exc_info=True)
                 raise
             finally:
+                perf_key = "safety_ms" if stage == "safety_check" else f"{stage}_ms"  # PerfPulse 键名保持向后兼容
                 perf = state.setdefault("perf", {})
-                perf[f"{stage}_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+                perf[perf_key] = round((time.perf_counter() - t0) * 1000, 1)
             if on_event:
                 try:
                     await on_event({
@@ -917,7 +918,7 @@ def route_after_evaluate(state: PipelineState) -> str:
     return "refine"
 
 
-@_timed("safety")
+@_timed("safety_check")
 async def safety_check_node(state: PipelineState) -> dict:
     """Rule-engine safety check run on the final output before release.
 

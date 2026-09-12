@@ -218,23 +218,6 @@ async def run_pipeline(
     """
     app = _get_pipeline_for_task(task_type)
 
-    async def _on_event_with_skipped(event: dict) -> None:
-        # M1: skipped semantics live at the pipeline layer — non-active
-        # stages are not in the graph, so _timed never fires for them.
-        # Emit one skipped event per inactive stage up front so the UI can
-        # distinguish "not started" from "not part of this task type".
-        if event.get("type") == "pipeline_start":
-            active = _ACTIVE_STAGES.get(task_type, ())
-            for stage in ("retrieval", "draft", "refine", "evaluate", "safety_check"):
-                if stage not in active:
-                    await on_event({
-                        "type": "stage", "stage": stage, "status": "skipped",
-                        "reason": "task_type",
-                    })
-        await on_event(event)
-
-    if on_event is not None:
-        on_event = _on_event_with_skipped
 
     return await app.ainvoke(
         {
@@ -333,6 +316,10 @@ async def stream_pipeline(
     # stream — the UI can render the full stage skeleton immediately.
     if on_event is not None:
         await _emit_event({"type": "pipeline_start", "task_type": task_type})
+        # M1: skipped events for non-active stages — first events on the wire
+        for stage in _ALL_STAGES:
+            if stage not in _ACTIVE_STAGES.get(task_type, _ACTIVE_STAGES["generate"]):
+                await _emit_event({"type": "stage", "stage": stage, "status": "skipped", "reason": "task_type"})
 
     # Start pipeline in background
     pipeline_task = asyncio.create_task(_run_pipeline())

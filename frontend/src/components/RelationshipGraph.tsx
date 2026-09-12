@@ -28,9 +28,9 @@ import {
   type RelationshipImportItem,
 } from "@/lib/character-relationships";
 
-const W = 640;
-const H = 420;
-const RADIUS = 18;
+const W = 320;
+const H = 300;
+const ITERATIONS = 260;
 
 function roleColor(role: string): string {
   if (role === "主角") return "var(--accent)";
@@ -38,23 +38,29 @@ function roleColor(role: string): string {
   return "var(--fg-tertiary)";
 }
 
+/** Prototype node radius: 20, +4 for 主角. */
+function nodeRadius(role: string): number {
+  return role === "主角" ? 24 : 20;
+}
+
 interface Pt {
   x: number;
   y: number;
 }
 
-/** Deterministic force layout — same constants as the prototype. */
+/** Deterministic force layout — same constants as the prototype
+ *  (W=320 H=300, rep 4200/d², 260 iters, spring (d-78)*0.015). */
 function layoutGraph(nodes: RelationshipGraphNode[], edges: RelationshipGraphEdge[]): Map<number, Pt> {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const pts = new Map<number, Pt>();
   nodes.forEach((n, i) => {
     const angle = (2 * Math.PI * i) / Math.max(1, nodes.length);
     pts.set(n.id, {
-      x: W / 2 + Math.cos(angle) * 150,
-      y: H / 2 + Math.sin(angle) * 120,
+      x: W / 2 + Math.cos(angle) * Math.min(W, H) * 0.32,
+      y: H / 2 + Math.sin(angle) * Math.min(W, H) * 0.32,
     });
   });
-  for (let iter = 0; iter < 120; iter++) {
+  for (let iter = 0; iter < ITERATIONS; iter++) {
     const vel = new Map<number, Pt>([...pts.entries()].map(([id, p]) => [id, { x: 0, y: 0 }]));
     // node-node repulsion
     const arr = [...pts.entries()];
@@ -64,8 +70,9 @@ function layoutGraph(nodes: RelationshipGraphNode[], edges: RelationshipGraphEdg
         const [idb, pb] = arr[b];
         const dx = pb.x - pa.x;
         const dy = pb.y - pa.y;
-        const d = Math.hypot(dx, dy) || 1;
-        const f = 2200 / (d * d);
+        const d2 = dx * dx + dy * dy || 0.01;
+        const d = Math.sqrt(d2);
+        const f = 4200 / d2;
         (vel.get(ida) as Pt).x -= (dx / d) * f;
         (vel.get(ida) as Pt).y -= (dy / d) * f;
         (vel.get(idb) as Pt).x += (dx / d) * f;
@@ -258,8 +265,10 @@ export function RelationshipGraph({ docId }: { docId: number }) {
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
-        className="w-full rounded-sm"
-        style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)" }}
+        className="block w-full h-auto rounded-sm"
+        role="img"
+        aria-label="人物关系图。可拖动节点。"
+        style={{ background: "var(--surface-inset, var(--surface-2))", border: "1px solid var(--border-subtle)", touchAction: "none" }}
       >
         {graph.edges.map((e, i) => {
           const a = positions.get(e.subject_id);
@@ -292,6 +301,7 @@ export function RelationshipGraph({ docId }: { docId: number }) {
         {graph.nodes.map((n) => {
           const p = positions.get(n.id);
           if (!p) return null;
+          const r = nodeRadius(n.role);
           return (
             <g
               key={n.id}
@@ -301,8 +311,8 @@ export function RelationshipGraph({ docId }: { docId: number }) {
               <circle
                 cx={p.x}
                 cy={p.y}
-                r={RADIUS}
-                fill="var(--surface)"
+                r={r}
+                fill="var(--surface-3)"
                 stroke={roleColor(n.role)}
                 strokeWidth={1.5}
               />
@@ -313,15 +323,17 @@ export function RelationshipGraph({ docId }: { docId: number }) {
                 textAnchor="middle"
                 fill="var(--fg)"
                 fontWeight={600}
+                style={{ pointerEvents: "none" }}
               >
                 {n.name.slice(0, 2)}
               </text>
               <text
                 x={p.x}
-                y={p.y + RADIUS + 11}
+                y={p.y + r + 11}
                 fontSize="9"
                 textAnchor="middle"
                 fill="var(--fg-tertiary)"
+                style={{ pointerEvents: "none" }}
               >
                 {n.name}
               </text>

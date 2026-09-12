@@ -373,10 +373,13 @@ def _encode_custom_event(data: dict) -> str:
     types behind a `data-` prefix. The wire shape is
     `{"type": "data-<name>", "data": {original payload}}`; perf-transport.ts
     strips the prefix and forwards the original payload to the onStage sink.
+    The original ``type`` key is preserved inside ``data`` — the sink
+    dispatches on it (``stage`` vs ``pipeline_start``).
     """
     wrapped = dict(data)
-    wrapped["type"] = f"data-{wrapped.get('type', 'event')}"
-    return _sse({"type": wrapped.pop("type"), "data": wrapped})
+    inner_type = str(wrapped.get("type", "event"))
+    outer = {"type": f"data-{inner_type}", "data": wrapped}
+    return _sse(outer)
 
 
 async def _extract_provider_config(

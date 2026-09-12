@@ -426,14 +426,17 @@ ul { list-style: none; }
 /* ===== R10 additions (OpenDesign port) ===== */
 
 /* AI-generated paragraph marker inside the editor (AI 段落区分):
-   accent left border + glow gradient, "AI" tag pinned top-right. */
-.prose p.ai {
+   accent left border + glow gradient, "AI" tag pinned top-right.
+   Selector is .ProseMirror (the Tiptap root class actually present on the
+   editor) — the prototype used .prose, a class the React port never mounts. */
+.ProseMirror p.ai {
+  position: relative;
   border-left: 2px solid var(--accent);
   padding-left: var(--sp-4);
   margin-left: 0;
   background: linear-gradient(90deg, var(--accent-glow), transparent 40%);
 }
-.prose p.ai::after {
+.ProseMirror p.ai::after {
   content: "AI";
   position: absolute;
   right: 4px;

@@ -150,11 +150,20 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
                     break;
                   case "data-stage":
                   case "data-pipeline_start": {
-                    // R9-② stage events: backend wraps `{"type":"stage",…}`
-                    // as `{"type":"data-stage","data":{…}}` — unwrap before
-                    // forwarding to the sink. Unknown/missing sink → ignored
-                    // (M2 tolerance).
-                    if (onStage) onStage((evt.data ?? evt) as unknown as StageEvent);
+                    // R9-② stage events: backend wraps the payload as
+                    // `{"type":"data-stage","data":{…}}` — unwrap before
+                    // forwarding to the sink. The backend's wrapper consumes
+                    // the original `type` key (chat.py _encode_custom_event
+                    // pops it), so restore it from the outer wire type.
+                    // Unknown/missing sink → ignored (M2 tolerance).
+                    if (onStage) {
+                      const inner = (evt.data ?? {}) as Record<string, unknown>;
+                      const restored = {
+                        type: String(evt.type).slice(5), // "data-stage" → "stage"
+                        ...inner,
+                      } as unknown as StageEvent;
+                      onStage(restored);
+                    }
                     break;
                   }
                   case "error":

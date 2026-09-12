@@ -4,62 +4,32 @@
 
 ## Current State
 
-✅ **仓库状态（2026-09-12）**：main=`0b9f792`（gitee 已推；GitHub 443 间歇，待补推 `1c0d290` 系）。5 工作树拓扑与 junction 共享就绪（kilo→`kiro`、opencode→`opencode-2`）。
+✅ **仓库状态（2026-09-12 16:00 审计）**：main=gitee/main=`b1f5f0f` 同点；origin(GitHub) 443 断，ahead 46 待补推（恢复后 `git push origin main` + 5 个 ZX466/* 分支）。
 
-✅ **R9 批次已归档（2026-09-10 → 09-12，六项全绿）**：
-- ①改名 Project11→novel-agent：cline（`b4b40a8`，tsc 已补清）
-- ②三阶段可视化：codex 协议设计 → Claude 前后端实施（`c054240`/`49f6584`）→ codex 复核抓 3 问题并直修（P0 自递归/P1 阶段名/P2 skipped，`1c0d290`）——wire 级实测事件链正常
-- ③人物关系树：opencode-2 实施（`9eb8d1a`）→ Claude 修订 P1-A/P1-B（`bb797e7`）入 main；前端图组件契约已定
-- ④⑥提示词+字数：kiro 设计 → Claude 实施+3 P1 修复（`48bb1d2`/`b66c9d0`）+ P2-3 前端 transport（`4dd06e4`）+ P2-2 人物树接入（`7f54e5c`）——端到端闭环
-- ⑤分段消失：cline 诊断 → Claude 实施（textToParagraphNodes，`48bb1d2`）
-- 验证总账：后端回归 518 passed（基线 475，净+43）；tsc 0；vitest 43/43；35 failed 为环境性预存
+✅ **R9 批次已归档，六项全绿且已 Docker 实证**（容器 novel-agent-* ×5，alembic head 2a3b4c5d6e7f）：
+- ①改名：cline `b4b40a8` —— 收口曾漏 merge，`d9ec706` 补入（教训已记：收口必逐分支核对 git log main..<branch>）
+- ②可视化：codex 协议设计 → Claude 实施（`c054240`/`49f6584`）→ codex 复核 P0/P1 直修（`1c0d290`）
+- ③关系树：opencode-2 `9eb8d1a` → Claude P1 修订 `bb797e7`
+- ④⑥：kiro 设计 → Claude 实施+P1 修复（`48bb1d2`/`b66c9d0`）+ 前端 `4dd06e4` + 人物树接入 `7f54e5c`
+- ⑤分段：`48bb1d2`（textToParagraphNodes）
+- **分支成果审计（09-12）**：cline/kiro/opencode-2/pi 与 main 零差异；codex 分支 5 提交为②首版实现（被 main 定稿版替代），唯一未移植资产 = `_STAGE_DETAIL_FALLBACK` 失败文案（用户决定不移植，分支原样归档）
+- 验证总账：后端 518 passed（基线 475）；tsc 0；vitest 43/43
 
-- ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
+- ⚠️ 部署：用户本地 docker；远程部署暂缓
+- ⚠️ 用户侧待办：Ctrl+Shift+R 强刷 + ⚙ 重填 BYOK key（localStorage 前缀 project11:→novel-agent: 迁移）
 
 ## Action Queue
 
-- [ ] **origin(GitHub) 补推**：main `0b9f792`（含 `1c0d290`）；443 间歇不通，恢复后 `git push origin main`
-- [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
+- [ ] **origin(GitHub) 补推**：443 间歇不通；恢复后 main + ZX466/{cline,codex,kiro,opencode-2,pi} 全部补推
+- [ ] **生产部署（暂缓）**：恢复远程时走 `deploy/README.md`
 - （R9 无遗留实施项；后续新需求另立批次）
 
 ## Unassigned Notes
 
 - **回执统一写本文件**（`[任务]`/`[回复]` 流转，格式见 `.orca/workflow` §2）。
-- **本地 docker 栈**：compose 5 服务（postgres/redis/backend/frontend/nginx）；聊天 key 走前端 BYOK 网页填写。
-- npm EALLOWREMOTE 已解（allow-remote=all）；pytest 环境性失败 = API_KEYS 注入差异 + real-DB 连接拒绝，非代码引入。
+- **本地 docker 栈**：compose 5 服务（postgres/redis/backend/frontend/nginx）；聊天 key 前端 BYOK 网页填写。
+- /v1/chat 422 已根治（`87ff7aa` 宽容校验+诊断日志）；pytest 环境性失败 = API_KEYS 注入差异 + real-DB 拒连，非代码引入。
 
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
----
-[回复] 项目更名收尾+README 重写 — Claude
-时间: 2026-09-12 14:00
-状态: 已完成（`546cbc8`，gitee 已推；origin 443 断待补推）
-进展: localStorage/容器名/包名/scp 全改 novel-agent（POSTGRES_DB 等数据绑定项保留）；README 全面重写（R9 能力+纯源码+Docker 形态）；删过时性能报告；CHANGES 记 R9。tsc 0/专项 31 passed/compose config OK。
----
----
-[回复] 纯源码清理完成 — Claude
-时间: 2026-09-12 14:30
-状态: 已完成（`b83a074`，gitee 已推；origin 443 断，累计 ahead 27 待补推）
-进展: 磁盘清理 640MB 本地构建缓存（backend/.venv 207M + frontend/node_modules 433M + pytest/ruff/pycache）+ 3 个工具空壳目录；仓库 304 文件全为源码/配置/文档，无 secrets 无构建产物；git clean 验证磁盘与 git 完全一致。Docker 栈不受影响（镜像自含依赖）。
----
----
-[回复] Docker 部署验证完成 — Claude
-时间: 2026-09-12 14:45
-状态: 已完成（R9 六项全部在运行容器中实证）
-进展: compose rebuild 完成（容器更名 novel-agent-* ×5）；alembic 升级至 2a3b4c5d6e7f（character_relationships 表建成）；实测 health ok/前端 200/关系图 GET+PUT 建边读回全通（测试数据已清）。①②③④⑤⑥✅
----
----
-[回复] /v1/chat 422 诊断与修复 — Claude
-时间: 2026-09-12 15:15
-状态: 已完成（`87ff7aa`，gitee 已推，容器已重建）
-诊断: 用户 CSV 报 POST /v1/chat 422（创建文档后点工具）。nginx access log 无详情；注入 RequestValidationError handler 后定位为 ChatRequest body 字段校验。防御修复: _TolerantInt(BeforeValidator) 容忍 float/数字串/垃圾值（垃圾→None 放弃字段而非拒请求）；chapter_title null→''；ge/le 安全边界保留（-3 仍 422+日志）。实测 3 组容错输入全 200、越界仍拒。回归 518 passed。
----
----
-[回复] 用户报告"名称没变/功能没实现" — 根因修复完成
-时间: 2026-09-12 15:45
-状态: 已完成（merge `d9ec706`，gitee 已推，frontend 容器已重建）
-根因: **cline 的 R9-①改名提交 b4b40a8 只在 cline 分支,从未合入 main**——R9 收口时我只 merge 了 opencode-2(③),漏了 cline。浏览器拿到的 main 构建仍是 Project11 标题。截图"AI 服务暂时不可用"= 同源的 422(上一轮已修的宽容校验)+旧标题页面。
-修复: merge ZX466/cline 入 main(16 文件改名);frontend 重建;实测 <title>novel-agent — 三阶段写作工坊</title>、页面 0 处 Project11;带 Provider header+null 章节字段全链路 400(非 422,正常 BYOK 校验)。
-教训: 收口 merge 必须逐分支核对 `git log main..<branch>`;工作树提交≠已合入 main。
----

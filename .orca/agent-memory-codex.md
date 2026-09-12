@@ -40,5 +40,48 @@
 ## 5. Round 5 状态（截至 2026-08-19）
 
 - R5-4 安心回溯（自动快照 + 版本历史）：**已合入 main**（`8094a5d`，评审 cline 通过）。
-- R5-3 设定一致性哨兵：P0 跨租户读取修复（`c02846d`）**复审通过**，结论已回 opencode 板；可合入 main。
+- R5-3 设定一致性哨兵：P0 跨租户读取修复（`c02846d`）**复审通过并已合入 main**。
 - 遗留建议（非阻塞）：consistency_checks 无保留策略 / 日期年份数值误报（"2026 年"）/ check 端点无频控。
+
+## 6. 2026-09-09/10 结构、运维与网络纪律（新增）
+
+- **工作树拓扑（2026-09-10 重建）**：主工作树 `E:/zxdevelop/project2/novel-agent` = `main`；agent 工作树
+  `cline`/`codex`/`kiro`/`opencode-2`/`pi` 各挂 `ZX466/<同名>` 分支，均基于 main。kilo→`kiro`、
+  opencode→`opencode-2`（旧 `opencode` 目录为进程占用的空壳）。codex 工作树 HEAD 与 main 同为 `d36d1dd`。
+- **dot 目录策略**：`.agents/`、`.codegraph/` 是指向主工作树的 junction（gitignore，不入库）；
+  `.kiro/`、`.opencode/` 是**已跟踪例外**（`96f99d2` 入库）；`.codex/` 已解除忽略但目录为空。
+- **GitHub(origin) 网络纪律**：443 reset/timeout 时**不要循环重试推送**，只记录“待补推”，
+  等网络恢复后补推；Gitee 正常。汇报里不得把未验证的推送写成完成。
+- **分支收敛踩坑**：曾出现 4 个同内容不同 hash 的重复板面提交
+  （`88d22cc`/`e72f2f8`/`394dba2`/`efc1cfa`，均基于 `981daf3`）；收敛方式
+  `git reset --hard <正确 hash>` + 一次 `git push gitee +<hash>:main`。避免多会话并发改同一板面。
+- **测试基线更新**：R8 之后为 **824 passed / 1 skipped**（本文件旧记 660 已过时）。
+- **文档写入**：`Set-Content -Encoding UTF8` 会加 BOM 且把 LF 变 CRLF；改用
+  `[IO.File]::WriteAllText($p,$t,(New-Object System.Text.UTF8Encoding($false)))` 保持无 BOM。
+- **工具怪癖**：本 shell 偶发把 `git worktree list` / `git branch -l` 输出替换成 `[dedup:ref ...]`；
+  需要完整输出时写文件再读：`git worktree list > $env:TEMP\wt.txt 2>&1; Get-Content $env:TEMP\wt.txt`。
+
+## 7. Round 6–8 与审计二批（安全视角，截至 2026-09-10）
+
+- **R8 安全加固 + 消债轮已归档**：`c8bc383`（L2 依赖精确 pin + L6 CI 安全门禁 + TOCTOU 文档化）、
+  `9c16760`，合入 main 后回归 **824 passed / 1 skipped**。
+- **审计遗留二批（L1/L3/L5/L8）全部完成并通过交叉评审**：
+  - L1 迁移自动化（opencode 实现 → codex 复评通过）：`check_migrations.py` 单头校验 + 未应用检查 + 失败 loud。
+  - L3 `_event_stream` 误报（codex 实现 → cline 通过）：新增 `APIBaseNotAllowed` 专用异常，收敛 SSRF 捕获面。
+  - L5 CSP nonce（codex 实现 → cline 通过）：middleware 每请求生成 nonce，nginx 下发同 nonce CSP。
+  - L8 `API_KEYS` 缺省态（cline 实现 → codex 通过）：缺省时 503 + 引导文案，配 2 个测试。
+- **验证命令参考（评审时实际用过）**：`uv run pytest tests/`（后端全量）；
+  前端 `npx tsc --noEmit`、`npm run lint`、`npm run test`（vitest 39 passed）。
+- **评审纪律**：只读被评审工作树 + 回写结论，不改对方代码、不代提交；非阻塞微瑕单列备注，不阻塞合入。
+
+## 8. R9 轮次记忆（2026-09-12，codex 视角）
+- **R9-② 事件流协议实施——双版本教训**：Claude 在我实施期间直接在 main 代实施了 `c054240`；
+  我的分支版 `41465d6` 设计一致但作废。**评审/实施可能并行撞车，动手前先 `git fetch` + 看协调板最新回执**。
+- **复核 main 版发现的 3 个真实缺陷（已修 `1c0d290`）**：
+  1. **P0 自递归**：`run_pipeline` 中 `on_event = _on_event_with_skipped` 重绑后，wrapper 内 `await on_event(event)` 引用的是重绑后的自己 → RecursionError。教训：包装回调必须先 `original = on_event` 捕获，再定义 wrapper。
+  2. **P1 事件名漂移**：后端 `@_timed("safety")` vs 前端骨架/M1 用 `safety_check` → 安全阶段永不点亮。教训：跨层枚举（stage 名/状态名/code 枚举）要单一定义点，至少加 wire 级测试断言前后端一致。
+  3. **P2 skipped 永不触发**：wrapper 等 `pipeline_start` 事件，但 nodes 从不发该事件。教训：新增钩子时写 wire 级集成测试（mock LLM 全链路），单测全绿 ≠ 链路通。
+- **wire 级验证模式（复用）**：mock `llm_draft/llm_refine/llm_evaluate` + `stream_pipeline(on_event=True)` 收集 `(kind,payload)`，断言事件序列 + TOPIC/sk- 零泄漏。比逐函数单测更能抓 P0/P2 类问题。
+- **测试基线（R9 后）**：main = **518 passed / 2 skipped / 35 failed**；35 个失败与基线逐条一致，均为环境性（real-DB 未起 + API_KEYS 注入差异）。分支版 503 passed 同噪。
+- **perf 键名兼容**：改 `_timed` stage 名时若不想破坏 PerfPulse 前端键，用 `perf_key = "safety_ms" if stage == "safety_check" else f"{stage}_ms"` 映射。
+- **并发写协调板风险**：main 工作树可能有其他 agent 会话的未提交修改（本轮见过 nodes/relationships 脏文件）。提交协调板只 `git add .orca/talking.txt`，绝不 `git add -A`。

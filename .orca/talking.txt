@@ -33,3 +33,11 @@
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
+---
+[回复] 部署 422 P0：prepareSendMessagesRequest 漏传 messages — Claude
+时间: 2026-09-12 16:30
+状态: 已完成（`ab57469`，gitee 已推，frontend 容器已重建）
+根因: AI SDK v5 契约——prepare 回调返回自定义 body 时**完全替换**默认 body，默认 messages 不自动并入；回调参数 body 只是 transport 级附加字段（空 {}）。请求体只剩 chapter_* 四字段 → 后端 missing messages → 422（新诊断日志精确定位）。
+修复: 回调签名解构 messages 并显式转发。实测：无 messages 仍 422；带 messages 200 进 SSE 流（无 key 返回引导性 error 事件）。vitest 43/43、tsc 0。
+教训: AI SDK v5 自定义 prepareSendMessagesRequest 必须显式转发 messages。
+---

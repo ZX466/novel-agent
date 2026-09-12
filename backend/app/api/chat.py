@@ -32,7 +32,25 @@ from typing import Annotated, Any, AsyncIterator, Dict, List, Literal
 import litellm
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, BeforeValidator, Field, ValidationError, model_validator
+from typing import Annotated
+
+
+def _coerce_int_or_none(v: object) -> object:
+    """R9 deployment 422 fix: accept float / numeric-string chapter numbers
+    from client variants; anything unparseable becomes None (absent)."""
+    if v is None or isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return int(v)
+    try:
+        return int(float(str(v)))
+    except (TypeError, ValueError):
+        return None
+
+
+# Tolerant bounded int: float / numeric-string coerce; garbage → None.
+_TolerantInt = Annotated[int | None, BeforeValidator(_coerce_int_or_none)]
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -107,12 +125,22 @@ class ChatRequest(BaseModel):
     # prose can't forge pipeline routing. Bounded (R9 review P1-3): these
     # values are formatted into the system prompt, so unbounded client text
     # or absurd numbers would flow straight in.
-    chapter_index: int | None = Field(None, ge=0, le=100_000)
-    total_chapters: int | None = Field(None, ge=1, le=100_000)
-    chapter_title: str = Field("", max_length=200)
-    target_word_count: int | None = Field(None, ge=1, le=100_000)
+    # Tolerant types (R9 deployment 422 fix): the browser may send null for
+    # every field, or string/float-typed numbers from older builds — coerce
+    # in the validator below instead of rejecting, then clamp via Field.
+    chapter_index: _TolerantInt = Field(None, ge=0, le=100_000)
+    total_chapters: _TolerantInt = Field(None, ge=1, le=100_000)
+    chapter_title: str | None = Field("", max_length=200)
+    target_word_count: _TolerantInt = Field(None, ge=0, le=100_000)
 
     model_config = {"extra": "ignore"}
+
+    @model_validator(mode="after")
+    def _coerce_chapter_fields(self) -> "ChatRequest":
+        """Normalize null title and residual float targets after field validators."""
+        if self.chapter_title is None:
+            self.chapter_title = ""
+        return self
 
     @model_validator(mode="after")
     def _validate_message_lengths(self) -> "ChatRequest":

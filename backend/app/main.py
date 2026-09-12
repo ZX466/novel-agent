@@ -152,6 +152,18 @@ app.include_router(creative_kit_router_module.router)
 app.include_router(timeline_router_module.router)
 
 
+from fastapi.exceptions import RequestValidationError
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Log 422 validation failures with field-level detail (R9 deployment
+    diagnosis) and return the standard FastAPI error body."""
+    logger.error("422 validation on %s %s: %s",
+                 request.method, request.url.path, exc.errors()[:6])
+    return JSONResponse(status_code=422, content={"detail": exc.errors()[:6]})
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch-all exception handler — returns a safe JSON error without

@@ -286,7 +286,12 @@ async def test_post_check_clears_stale_verdict() -> None:
 
 
 def test_chat_request_rejects_out_of_bounds_chapter_fields() -> None:
-    """P1-3: unbounded/absurd client values are rejected with 422."""
+    """P1-3: absurd values are rejected or safely clamped (deployment 422 fix).
+
+    Nulls / float-typed / string-typed numbers are coerced (the browser
+    client legitimately sends null for absent fields); only truly out-of-
+    range values are still rejected by the Field constraints.
+    """
     from pydantic import ValidationError
 
     from app.api.chat import ChatRequest
@@ -294,16 +299,26 @@ def test_chat_request_rejects_out_of_bounds_chapter_fields() -> None:
     def _req(**kwargs):
         return ChatRequest(messages=[{"role": "user", "content": "x"}], **kwargs)
 
-    # absurd / negative numerics
+    # — tolerant coercion (R9 deployment fix) —
+    r = _req(chapter_title=None, target_word_count=None,
+             chapter_index=None, total_chapters=None)
+    assert r.chapter_title == "" and r.target_word_count is None
+    r = _req(target_word_count="1500")            # numeric string (old build)
+    assert r.target_word_count == 1500
+    r = _req(target_word_count=2000.0)            # float from JSON number
+    assert r.target_word_count == 2000
+    r = _req(target_word_count="abc")             # garbage → dropped, not 422
+    assert r.target_word_count is None
+    r = _req(chapter_title=None)                  # null title → ""
+    assert r.chapter_title == ""
+
+    # — still rejected: out-of-range (safety constraint intact) —
     with pytest.raises(ValidationError):
         _req(chapter_index=-3)
     with pytest.raises(ValidationError):
         _req(total_chapters=999999999)
     with pytest.raises(ValidationError):
         _req(target_word_count=-5)
-    with pytest.raises(ValidationError):
-        _req(target_word_count=0)
-    # unbounded title text
     with pytest.raises(ValidationError):
         _req(chapter_title="长" * 500)
     # sane values pass and defaults hold

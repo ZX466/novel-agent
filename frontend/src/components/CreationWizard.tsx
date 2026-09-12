@@ -21,10 +21,10 @@ import { chatEndpoint } from "@/lib/config";
 import { loadProviderConfig, ownerAuthHeaders } from "@/lib/settings";
 import { createDocument } from "@/lib/documents";
 import { createChapter } from "@/lib/chapters";
-import { extractEntitiesFromOutline } from "@/lib/extract-entities";
-import { createCharacter } from "@/lib/characters";
-import { createWorldSetting } from "@/lib/world-settings";
-import { createPlotEvent } from "@/lib/plot-events";
+import {
+  extractAndCreateEntities,
+  formatExtractionSummary,
+} from "@/lib/entity-extraction";
 
 const GENRE_OPTIONS = [
   "玄幻",
@@ -211,37 +211,8 @@ export function CreationWizard({ open, onClose }: CreationWizardProps) {
 
       setApplyStatus("正在提取设定…");
       try {
-        const entities = await extractEntitiesFromOutline(outlineText);
-        await Promise.all([
-          Promise.allSettled(
-            entities.characters.map((c) =>
-              createCharacter(doc.id, {
-                name: c.name,
-                role: c.role || "其他",
-                description: c.description || "",
-                arc_summary: c.arc_summary || "",
-              }),
-            ),
-          ),
-          Promise.allSettled(
-            entities.world_settings.map((w) =>
-              createWorldSetting(doc.id, {
-                category: w.category || "其他",
-                title: w.title,
-                content_text: w.content_text || "",
-              }),
-            ),
-          ),
-          Promise.allSettled(
-            entities.plot_events.map((p) =>
-              createPlotEvent(doc.id, {
-                summary: p.summary,
-                event_type: p.event_type || "其他",
-                chapter_index: p.chapter_index ?? null,
-              }),
-            ),
-          ),
-        ]);
+        const outcome = await extractAndCreateEntities(doc.id, outlineText);
+        setApplyStatus(`✅ 作品已创建，${formatExtractionSummary(outcome)}`);
       } catch {
         // 设定提取失败不阻塞进入编辑器（可稍后在编辑器手动 AI 提取）。
       }

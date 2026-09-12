@@ -56,7 +56,8 @@ class ChapterRead(ChapterBase):
 
 class ChapterListItem(BaseModel):
     """Lighter list shape — omits summary and embedding but includes
-    content_text so the editor can display chapter content on selection."""
+    content_text (editor display on selection) and metadata_json (R10:
+    ai_paragraphs markers + timeline_warnings survive chapter switching)."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -66,6 +67,7 @@ class ChapterListItem(BaseModel):
     content_text: str
     status: str
     word_count: int
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
     updated_at: datetime
 
 

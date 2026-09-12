@@ -52,6 +52,9 @@ export function CharacterPanel({ docId }: CharacterPanelProps) {
   const [editForm, setEditForm] = useState<CharForm>(EMPTY_FORM);
 
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  // Create/edit writes auto-embed server-side (BYOK embedding stage) — can
+  // take seconds, so the save button needs a pending state.
+  const [saving, setSaving] = useState(false);
 
   // ---- Data fetching ----
 
@@ -96,6 +99,7 @@ export function CharacterPanel({ docId }: CharacterPanelProps) {
   // ---- Handlers ----
 
   const handleCreate = useCallback(async () => {
+    setSaving(true);
     try {
       await createCharacter(docId, {
         name: createForm.name,
@@ -109,11 +113,14 @@ export function CharacterPanel({ docId }: CharacterPanelProps) {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
+    } finally {
+      setSaving(false);
     }
   }, [docId, createForm, fetchChars]);
 
   const handleUpdate = useCallback(async () => {
     if (editId == null) return;
+    setSaving(true);
     try {
       const body: CharacterUpdate = {
         name: editForm.name,
@@ -129,6 +136,8 @@ export function CharacterPanel({ docId }: CharacterPanelProps) {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
+    } finally {
+      setSaving(false);
     }
   }, [docId, editId, editForm, fetchChars]);
 
@@ -199,6 +208,7 @@ export function CharacterPanel({ docId }: CharacterPanelProps) {
     <div
       className="flex flex-col gap-sp-2 p-sp-3 border-b"
       style={{ borderColor: "var(--border-hairline)" }}
+      onClick={(e) => e.stopPropagation()}
     >
       <input
         type="text"
@@ -272,7 +282,7 @@ export function CharacterPanel({ docId }: CharacterPanelProps) {
         </button>
         <button
           type="button"
-          disabled={!form.name.trim()}
+          disabled={saving || !form.name.trim()}
           onClick={onSave}
           className="px-2 py-0.5 rounded text-[11px] font-medium transition-opacity disabled:opacity-40"
           style={{
@@ -288,7 +298,7 @@ export function CharacterPanel({ docId }: CharacterPanelProps) {
             e.currentTarget.style.background = "var(--accent)";
           }}
         >
-          保存
+          {saving ? "保存中…" : "保存"}
         </button>
       </div>
     </div>

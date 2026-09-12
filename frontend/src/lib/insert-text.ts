@@ -18,6 +18,22 @@ export function textToParagraphNodes(text: string): JSONContent[] {
 }
 
 /**
+ * Same as `textToParagraphNodes`, but every paragraph is marked with the
+ * AI class (`.prose p.ai` marker — accent border + "AI" corner tag). Used
+ * when inserting AI-generated text so AI output stays visually distinct
+ * from the author's own writing (OpenDesign port, R10).
+ *
+ * The `class: "ai"` attr requires the AIParagraph extension in the editor
+ * (StarterKit's Paragraph drops unknown attributes).
+ */
+export function aiTextToParagraphNodes(text: string): JSONContent[] {
+  return textToParagraphNodes(text).map((node) => ({
+    ...node,
+    attrs: { ...(node.attrs ?? {}), class: "ai" },
+  }));
+}
+
+/**
  * Convert stored plain text (paragraphs separated by `\n`/`\n\n`) into
  * simple HTML for `editor.setContent`.
  *

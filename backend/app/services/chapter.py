@@ -1,12 +1,16 @@
 """Async CRUD + vector embedding service for Chapter.
 
 All mutating functions flush + commit + refresh (matches document.py
-pattern). Embeddings are now auto-generated on create and on
-content_text change so the vector index stays current without callers
-having to invoke update_chapter_embedding explicitly. Auto-embedding is
-best-effort (failures logged, never propagated) and uses .env embedding
-credentials; the tool layer (SaveChapterTool) supplies BYOK stage_config
-when available.
+pattern). Embeddings are auto-generated on create and on content_text
+change so the vector index stays current without callers having to invoke
+update_chapter_embedding explicitly. Auto-embedding is best-effort
+(failures logged, never propagated) and uses .env embedding credentials;
+the tool layer (SaveChapterTool) supplies BYOK stage_config when available.
+
+R10-⑤: embedding runs DETACHED via services.background_embed (independent
+DB session, fire-and-forget task) — never inside the write transaction.
+The 4096-dim full-precision embedding call can take seconds (or time out
+at ~60s on a flaky provider); awaiting it inline stalled every save.
 """
 from __future__ import annotations
 
@@ -18,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.chapter import Chapter
 from app.schemas.chat import StageConfig
 from app.schemas.novel_memory import ChapterCreate, ChapterUpdate
+from app.services.background_embed import schedule_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -28,32 +33,6 @@ class ChapterNotFound(Exception):
     def __init__(self, chapter_id: int) -> None:
         super().__init__(f"Chapter id={chapter_id} not found")
         self.chapter_id = chapter_id
-
-
-async def _maybe_embed_chapter(
-    session: AsyncSession, ch: Chapter, *, stage_config: StageConfig | None = None,
-) -> None:
-    """Best-effort auto-embedding of chapter content. Never raises.
-
-    Embeds content_text (falling back to summary) so the chapter becomes
-    immediately searchable via search_lore. ``stage_config`` overrides .env
-    embedding credentials when provided (BYOK embedding stage).
-    """
-    text = (ch.content_text or "").strip()
-    if not text and ch.summary:
-        text = ch.summary.strip()
-    if not text:
-        return
-    try:
-        from app.llm.embedding import embed_text
-        embedding = await embed_text(text, stage_config=stage_config)
-        await update_chapter_embedding(session, ch.id, embedding)
-    except Exception:
-        logger.warning(
-            "chapter: auto-embedding failed for chapter_id=%s — "
-            "memory/RAG disabled for this row (check EMBEDDING_* in backend/.env)",
-            ch.id, exc_info=True,
-        )
 
 
 async def _attach_timeline_warnings(
@@ -154,9 +133,13 @@ async def create_chapter(
     session.add(ch)
     await session.flush()
     await session.refresh(ch)
-    await _maybe_embed_chapter(session, ch, stage_config=stage_config)
     await session.commit()
-    await session.refresh(ch)  # re-load after embedding flush expires updated_at
+    await session.refresh(ch)
+    # R10-⑤: embedding detached from the create path — same rationale as
+    # update_chapter (a slow embed API must not stall the write response).
+    embed_src = (ch.content_text or "").strip() or (ch.summary or "").strip()
+    if embed_src:
+        schedule_embedding("chapter", ch.id, embed_src, stage_config, update_chapter_embedding)
     await _attach_timeline_warnings(session, ch)
     return ch
 
@@ -177,9 +160,15 @@ async def update_chapter(
     await session.flush()
     await session.refresh(ch)
     if content_changed:
-        await _maybe_embed_chapter(session, ch, stage_config=stage_config)
+        # R10-⑤: embed in the background on an independent session — the
+        # save response returns as soon as the transaction commits. A slow
+        # or hung embedding API (4096-dim full-precision, seconds to ~60s
+        # on timeout) used to stall every chapter save here.
+        embed_src = (ch.content_text or "").strip() or (ch.summary or "").strip()
+        if embed_src:
+            schedule_embedding("chapter", ch.id, embed_src, stage_config, update_chapter_embedding)
     await session.commit()
-    await session.refresh(ch)  # re-load after embedding flush expires updated_at
+    await session.refresh(ch)
     await _attach_timeline_warnings(session, ch)
     return ch
 

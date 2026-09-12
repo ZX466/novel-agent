@@ -56,6 +56,8 @@ interface LeftSidebarProps {
   onRenameChapter: (id: number, title: string) => void;
   onReorder: (ids: Array<{ id: number; chapter_index: number }>) => void;
   onContinueChapter: (id: number) => void;
+  /** Jump to /novels/[id]/graph with the given tab (fullscreen view). */
+  onOpenFullscreen: (tab: "graph" | "timeline") => void;
 }
 
 export function LeftSidebar(props: LeftSidebarProps) {
@@ -65,6 +67,7 @@ export function LeftSidebar(props: LeftSidebarProps) {
     outline, extracting, currentText,
     onSaveOutline, onExtractEntities, onSelectChapter, onAddChapter,
     onDeleteChapter, onRenameChapter, onReorder, onContinueChapter,
+    onOpenFullscreen,
   } = props;
 
   return (
@@ -166,14 +169,21 @@ export function LeftSidebar(props: LeftSidebarProps) {
           </div>
         )}
         {/* R10: relationship graph / timeline DAG / consistency sentinel */}
-        {leftTab === "graph" && (
-          <div className="h-full overflow-y-auto px-sp-2 py-sp-2">
-            <RelationshipGraph docId={docId} />
-          </div>
-        )}
-        {leftTab === "timeline" && (
-          <div className="h-full overflow-y-auto px-sp-2 py-sp-2">
-            <TimelineGraph docId={docId} />
+        {(leftTab === "graph" || leftTab === "timeline") && (
+          <div className="h-full overflow-y-auto px-sp-2 py-sp-2 flex flex-col">
+            {/* Fullscreen jump — the 200px sidebar is preview-sized; the
+                dedicated /novels/[id]/graph page gives the SVG full width. */}
+            <button
+              type="button"
+              onClick={() => onOpenFullscreen(leftTab)}
+              className="self-end mb-sp-1 px-sp-2 py-px rounded-sm text-[10px] border transition-colors shrink-0"
+              style={{ borderColor: "var(--border-hairline)", color: "var(--fg-secondary)" }}
+              title="全屏打开（完整宽度）"
+            >
+              ⤢ 全屏
+            </button>
+            {leftTab === "graph" && <RelationshipGraph docId={docId} />}
+            {leftTab === "timeline" && <TimelineGraph docId={docId} />}
           </div>
         )}
         {leftTab === "consistency" && (

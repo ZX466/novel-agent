@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.character import Character
 from app.schemas.chat import StageConfig
 from app.schemas.novel_memory import CharacterCreate, CharacterUpdate
+from app.services.background_embed import schedule_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -29,30 +30,15 @@ logger = logging.getLogger(__name__)
 _EMBED_TRIGGER_FIELDS = {"name", "role", "description", "attributes", "arc_summary"}
 
 
-async def _maybe_embed_character(
-    session: AsyncSession, c: Character, *, stage_config: StageConfig | None = None,
-) -> None:
-    """Best-effort auto-embedding. Never raises — logs on failure."""
-    # Build a representative text to embed: name + role + description +
-    # arc_summary. attributes (dict) is stringified.
+def _character_embed_text(c: Character) -> str:
+    """Representative text to embed: name + role + description +
+    arc_summary. attributes (dict) is stringified."""
     parts = [c.name or "", c.role or "", c.description or ""]
     if c.arc_summary:
         parts.append(c.arc_summary)
     if c.attributes:
         parts.append(str(c.attributes))
-    text = "\n".join(p for p in parts if p).strip()
-    if not text:
-        return
-    try:
-        from app.llm.embedding import embed_text
-        embedding = await embed_text(text, stage_config=stage_config)
-        await update_character_embedding(session, c.id, embedding)
-    except Exception:
-        logger.warning(
-            "character: auto-embedding failed for character_id=%s — "
-            "memory/RAG disabled for this row (check EMBEDDING_* in backend/.env)",
-            c.id, exc_info=True,
-        )
+    return "\n".join(p for p in parts if p).strip()
 
 
 class CharacterNotFound(Exception):
@@ -106,13 +92,15 @@ async def create_character(
     session.add(c)
     await session.flush()
     await session.refresh(c)
-    await _maybe_embed_character(session, c, stage_config=stage_config)
     await session.commit()
     # Refresh again after commit: the embedding flush above triggers onupdate on
     # `updated_at`, which expires the attribute. Async SQLAlchemy has no lazy
     # loading, so a stale/expired attribute raises DetachedInstanceError when
     # FastAPI serialises the response. A post-commit refresh re-loads all columns.
     await session.refresh(c)
+    # R10-⑤: embedding detached from the write path (a slow/hung embed API
+    # used to stall the create response). Text mirrors the old inline helper.
+    schedule_embedding("character", c.id, _character_embed_text(c), stage_config, update_character_embedding)
     return c
 
 
@@ -126,12 +114,12 @@ async def update_character(
         setattr(c, field, value)
     await session.flush()
     await session.refresh(c)
-    # Re-embed only when an embedding-relevant field changed.
-    if updates.keys() & _EMBED_TRIGGER_FIELDS:
-        await _maybe_embed_character(session, c, stage_config=stage_config)
     await session.commit()
     # Same post-commit refresh as create_character (see comment there).
     await session.refresh(c)
+    # Re-embed only when an embedding-relevant field changed (background).
+    if updates.keys() & _EMBED_TRIGGER_FIELDS:
+        schedule_embedding("character", c.id, _character_embed_text(c), stage_config, update_character_embedding)
     return c
 
 

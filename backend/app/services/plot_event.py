@@ -16,6 +16,7 @@ from app.models.chapter import Chapter
 from app.models.plot_event import PlotEvent
 from app.schemas.chat import StageConfig
 from app.schemas.novel_memory import PlotEventCreate, PlotEventUpdate
+from app.services.background_embed import schedule_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -24,26 +25,11 @@ logger = logging.getLogger(__name__)
 _EMBED_TRIGGER_FIELDS = {"event_type", "summary", "chapter_index"}
 
 
-async def _maybe_embed_plot_event(
-    session: AsyncSession, pe: PlotEvent, *, stage_config: StageConfig | None = None,
-) -> None:
-    """Best-effort auto-embedding. Never raises — logs on failure."""
+def _plot_event_embed_text(pe: PlotEvent) -> str:
     parts = [pe.event_type or "", pe.summary or ""]
     if pe.chapter_index is not None:
         parts.append(f"chapter {pe.chapter_index}")
-    text = "\n".join(p for p in parts if p).strip()
-    if not text:
-        return
-    try:
-        from app.llm.embedding import embed_text
-        embedding = await embed_text(text, stage_config=stage_config)
-        await update_plot_event_embedding(session, pe.id, embedding)
-    except Exception:
-        logger.warning(
-            "plot_event: auto-embedding failed for event_id=%s — "
-            "memory/RAG disabled for this row (check EMBEDDING_* in backend/.env)",
-            pe.id, exc_info=True,
-        )
+    return "\n".join(p for p in parts if p).strip()
 
 
 class PlotEventNotFound(Exception):
@@ -206,9 +192,10 @@ async def create_plot_event(
     session.add(pe)
     await session.flush()
     await session.refresh(pe)
-    await _maybe_embed_plot_event(session, pe, stage_config=stage_config)
     await session.commit()
     await session.refresh(pe)  # re-load after embedding flush expires updated_at
+    # R10-⑤: embedding detached from the write path.
+    schedule_embedding("plot_event", pe.id, _plot_event_embed_text(pe), stage_config, update_plot_event_embedding)
     ids, indexes = _affected_chapter_refs(pe, prev)
     await _refresh_chapter_warnings(
         session, novel_id=payload.novel_id,
@@ -241,10 +228,11 @@ async def update_plot_event(
         setattr(pe, field, value)
     await session.flush()
     await session.refresh(pe)
-    if updates.keys() & _EMBED_TRIGGER_FIELDS:
-        await _maybe_embed_plot_event(session, pe, stage_config=stage_config)
     await session.commit()
     await session.refresh(pe)  # re-load after embedding flush expires updated_at
+    # Re-embed only when an embedding-relevant field changed (background).
+    if updates.keys() & _EMBED_TRIGGER_FIELDS:
+        schedule_embedding("plot_event", pe.id, _plot_event_embed_text(pe), stage_config, update_plot_event_embedding)
     ids, indexes = _affected_chapter_refs(pe, new_prev, old_prev)
     if old_chapter_id is not None:
         ids.add(old_chapter_id)

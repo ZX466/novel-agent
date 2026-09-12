@@ -203,3 +203,48 @@ async def test_reorder_chapters_raises_when_missing(mock_session):
     mock_session.set_execute_results([_FakeResult(scalars=[])])
     with pytest.raises(ChapterNotFound):
         await reorder_chapters(mock_session, novel_id=5, ordered=[(1, 1)])
+
+
+@pytest.mark.asyncio
+async def test_update_chapter_returns_before_embedding_completes(mock_session, monkeypatch):
+    """R10-⑤ 保存慢根因: update_chapter 同步 await 4096 维嵌入,嵌入 API
+    超时(秒级~60s)把保存请求一起拖死。
+
+    契约: update_chapter 必须先提交返回;嵌入走后台任务,不得阻塞保存路径。
+    用一个"永不完成"的嵌入 future 模拟慢 API —— update_chapter 应当正常返回,
+    无需等待嵌入完成。
+    """
+    import asyncio
+    from app.llm import embedding as embedding_mod
+
+    started = asyncio.Event()
+
+    async def _hung_embed(*args, **kwargs):
+        started.set()
+        await asyncio.sleep(3600)  # never completes within the test
+        return [0.0] * 8
+
+    monkeypatch.setattr(embedding_mod, "embed_text", _hung_embed)
+    # _maybe_embed_chapter imports embed_text lazily inside the function:
+    # from app.llm.embedding import embed_text — patch the module attribute.
+    monkeypatch.setattr("app.llm.embedding.embed_text", _hung_embed)
+
+    ch = Chapter(id=1, chapter_index=1, title="x", content_text="abc", word_count=3)
+    mock_session.set_scalar_results([ch])
+
+    updated = await update_chapter(mock_session, 1, ChapterUpdate(content_text="新内容"))
+    # Save path completed (commit happened) without waiting on the hung embed.
+    assert mock_session.commits == 1
+    assert updated.content_text == "新内容"
+
+    # Give the detached background task a chance to start, then clean up.
+    for _ in range(20):
+        if started.is_set():
+            break
+        await asyncio.sleep(0.01)
+    await asyncio.sleep(0.05)
+    # Cancel any pending sleep so the test loop closes cleanly.
+    pending = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    for t in pending:
+        t.cancel()
+    await asyncio.gather(*pending, return_exceptions=True)

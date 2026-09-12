@@ -14,6 +14,7 @@ import type { EditorDoc, ChapterRead } from "@/lib/types";
 import { WriterSettingsBar, type WritingSettings } from "@/components/WriterSettingsBar";
 import { WordCountBar } from "@/components/WordCountBar";
 import { countWords, useEditorSave } from "@/hooks/use-editor-save";
+import { useDebouncedEditorText } from "@/hooks/use-debounced-editor-text";
 import { useEditorData } from "@/hooks/use-editor-data";
 import { useChapterManager } from "@/hooks/use-chapter-manager";
 import { useOutlineWorkflows } from "@/hooks/use-outline-workflows";
@@ -188,7 +189,9 @@ export default function NovelEditorPage() {
 
   // ── Computed values ─────────────────────────────────────────────────
 
-  const currentText = editor?.getText() ?? "";
+  // Debounced full-text extraction: getText() walks the whole document, so
+  // it must not run on every render (typing jank on longer chapters).
+  const { text: currentText } = useDebouncedEditorText(editor, 300);
   const chapterWordCount = useMemo(() => countWords(currentText), [currentText]);
   const totalWordCount = useMemo(
     () => chapters.reduce((sum, c) => sum + c.word_count, 0),
@@ -301,6 +304,7 @@ export default function NovelEditorPage() {
               void handleSelectChapter(id);
               setRightTab("tools");
             }}
+            onOpenFullscreen={(tab) => router.push(`/novels/${docId}/graph?tab=${tab}`)}
           />
         )}
 

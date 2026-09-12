@@ -289,3 +289,54 @@ async def test_list_plot_events_filters(mock_session):
     )
     assert items == []
     assert total == 0
+
+
+# --- R10-⑤: embedding must not block the write path --------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("service,make_payload,update_payload,id_field", [
+    (
+        create_character, lambda: CharacterCreate(name="Alice", role="主角"),
+        CharacterUpdate(description="新描述"), "character",
+    ),
+    (
+        create_world_setting, lambda: WorldSettingCreate(title="设定", category="地理", content_text="内容"),
+        WorldSettingUpdate(content_text="新内容"), "world_setting",
+    ),
+    (
+        create_plot_event, lambda: PlotEventCreate(summary="事件", event_type="起"),
+        PlotEventUpdate(summary="新摘要"), "plot_event",
+    ),
+])
+async def test_lore_writes_return_before_embedding_completes(
+    mock_session, monkeypatch, service, make_payload, update_payload, id_field,
+):
+    """4096 维嵌入曾同步阻塞 create/update（嵌入超时 → 保存卡死）。
+
+    契约: 写路径先提交返回;嵌入走后台独立会话。用 hang 住的 embed 模拟慢 API。
+    """
+    import asyncio
+
+    started = asyncio.Event()
+
+    async def _hung_embed(*args, **kwargs):
+        started.set()
+        await asyncio.sleep(3600)
+        return [0.0] * 8
+
+    monkeypatch.setattr("app.llm.embedding.embed_text", _hung_embed)
+
+    obj = await service(mock_session, make_payload())
+    assert mock_session.commits == 1  # write path committed without the embed
+
+    # Let the detached task start, then cancel it to close the loop cleanly.
+    for _ in range(20):
+        if started.is_set():
+            break
+        await asyncio.sleep(0.01)
+    await asyncio.sleep(0.05)
+    pending = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    for t in pending:
+        t.cancel()
+    await asyncio.gather(*pending, return_exceptions=True)

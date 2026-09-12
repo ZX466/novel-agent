@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.world_setting import WorldSetting
 from app.schemas.chat import StageConfig
+from app.services.background_embed import schedule_embedding
 from app.schemas.novel_memory import (
     WorldSettingCreate,
     WorldSettingUpdate,
@@ -26,24 +27,9 @@ logger = logging.getLogger(__name__)
 _EMBED_TRIGGER_FIELDS = {"category", "title", "content_text"}
 
 
-async def _maybe_embed_world_setting(
-    session: AsyncSession, ws: WorldSetting, *, stage_config: StageConfig | None = None,
-) -> None:
-    """Best-effort auto-embedding. Never raises — logs on failure."""
+def _world_setting_embed_text(ws: WorldSetting) -> str:
     parts = [ws.category or "", ws.title or "", ws.content_text or ""]
-    text = "\n".join(p for p in parts if p).strip()
-    if not text:
-        return
-    try:
-        from app.llm.embedding import embed_text
-        embedding = await embed_text(text, stage_config=stage_config)
-        await update_world_setting_embedding(session, ws.id, embedding)
-    except Exception:
-        logger.warning(
-            "world_setting: auto-embedding failed for setting_id=%s — "
-            "memory/RAG disabled for this row (check EMBEDDING_* in backend/.env)",
-            ws.id, exc_info=True,
-        )
+    return "\n".join(p for p in parts if p).strip()
 
 
 class WorldSettingNotFound(Exception):
@@ -96,9 +82,10 @@ async def create_world_setting(
     session.add(ws)
     await session.flush()
     await session.refresh(ws)
-    await _maybe_embed_world_setting(session, ws, stage_config=stage_config)
     await session.commit()
     await session.refresh(ws)  # re-load after embedding flush expires updated_at
+    # R10-⑤: embedding detached from the write path.
+    schedule_embedding("world_setting", ws.id, _world_setting_embed_text(ws), stage_config, update_world_setting_embedding)
     return ws
 
 
@@ -112,10 +99,11 @@ async def update_world_setting(
         setattr(ws, field, value)
     await session.flush()
     await session.refresh(ws)
-    if updates.keys() & _EMBED_TRIGGER_FIELDS:
-        await _maybe_embed_world_setting(session, ws, stage_config=stage_config)
     await session.commit()
     await session.refresh(ws)  # re-load after embedding flush expires updated_at
+    # Re-embed only when an embedding-relevant field changed (background).
+    if updates.keys() & _EMBED_TRIGGER_FIELDS:
+        schedule_embedding("world_setting", ws.id, _world_setting_embed_text(ws), stage_config, update_world_setting_embedding)
     return ws
 
 

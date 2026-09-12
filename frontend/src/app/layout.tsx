@@ -4,7 +4,7 @@ import "./globals.css";
 import { NavBar } from "@/components/NavBar";
 
 export const metadata: Metadata = {
-  title: "Project11 — 三阶段写作工坊",
+  title: "novel-agent — 三阶段写作工坊",
   description: "三阶段 LLM 流水线：DeepSeek 草稿 → Qwen 精修 → Claude 评估",
 };
 

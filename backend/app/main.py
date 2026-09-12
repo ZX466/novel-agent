@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
     # before any litellm.acompletion call. Override unconditionally so a user
     # setting LITELLM_LOG=DEBUG in .env cannot leak credentials via logs.
     os.environ["LITELLM_LOG"] = "INFO"
-    logger.info("Starting Project11 backend...")
+    logger.info("Starting novel-agent backend...")
     logger.info("CORS origins: %s", settings.cors_origins)
     logger.info(
         "Pipeline: threshold=%.2f max_iters=%d",
@@ -96,7 +96,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    logger.info("Shutting down Project11 backend...")
+    logger.info("Shutting down novel-agent backend...")
     await close_redis()
 
 
@@ -104,7 +104,7 @@ async def lifespan(app: FastAPI):
 _is_production = os.environ.get("ENVIRONMENT", "").lower() == "production"
 
 app = FastAPI(
-    title="Project11 Backend",
+    title="novel-agent Backend",
     version="0.1.0",
     description="Three-stage LLM pipeline: DeepSeek draft -> Qwen refine -> Claude evaluate.",
     lifespan=lifespan,

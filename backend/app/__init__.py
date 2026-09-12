@@ -1,1 +1,1 @@
-﻿"""Project11 backend application package."""
+﻿"""novel-agent backend application package."""

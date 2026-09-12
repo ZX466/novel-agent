@@ -49,3 +49,9 @@
 状态: 已完成（R9 六项全部在运行容器中实证）
 进展: compose rebuild 完成（容器更名 novel-agent-* ×5）；alembic 升级至 2a3b4c5d6e7f（character_relationships 表建成）；实测 health ok/前端 200/关系图 GET+PUT 建边读回全通（测试数据已清）。①②③④⑤⑥✅
 ---
+---
+[回复] /v1/chat 422 诊断与修复 — Claude
+时间: 2026-09-12 15:15
+状态: 已完成（`87ff7aa`，gitee 已推，容器已重建）
+诊断: 用户 CSV 报 POST /v1/chat 422（创建文档后点工具）。nginx access log 无详情；注入 RequestValidationError handler 后定位为 ChatRequest body 字段校验。防御修复: _TolerantInt(BeforeValidator) 容忍 float/数字串/垃圾值（垃圾→None 放弃字段而非拒请求）；chapter_title null→''；ge/le 安全边界保留（-3 仍 422+日志）。实测 3 组容错输入全 200、越界仍拒。回归 518 passed。
+---

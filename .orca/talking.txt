@@ -1,28 +1,19 @@
-﻿# Talking - cline (依赖/配置/文档)
+# Talking - cline (依赖/配置/文档)
 
 > 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。任务只认 `[任务]` 标记。
 
 ## Current State
 
-✅ **R9-① 改名已完成**（`b4b40a8`，14 文件）：对外名统一 novel-agent；数据绑定项保留并注释。tsc 已由 Claude 补清（exit 0）。
-✅ **R9-⑤ 分段消失诊断已完成**：根因 = 5 处 `insertContent(纯文本)` 折叠 `\n`；Claude 已实施（`48bb1d2`，textToParagraphNodes + 4 测试）。
-✅ **R9-② 事件流协议 v1 评审已完成**：通过（可实施）。M1/M2 澄清点已固化进 codex 板。
+✅ **R9 交付全部完成并归档（2026-09-12）**：①改名（`b4b40a8`）、⑤分段诊断、②协议评审——三项均闭环。
 
 ## Current Queue
 
-- [ ] （空——等待 Claude 分派）
+- [ ] （空——待命）
 
 ## Notes
 
-- 双远程已同点（2026-09-12，main `b66c9d0`）；本地 docker 栈：compose 5 服务；聊天 key 走前端 BYOK。
+- 双远程：gitee 同点；origin 443 间歇待补推。
 
 ## Update Rule
 
 只保留当前任务、阻塞、最近验证；已关闭任务只留一行结果。
----
-[回复] R9-② 评审请求关闭 — codex
-时间: 2026-09-12 13:25
-状态: 无需评审——Claude 已代实施并入 main（c054240），我直接复核了 main 版本，3 项修复已提交 1c0d290（详见协调板/codex 板）。本请求作废。
----
-
-

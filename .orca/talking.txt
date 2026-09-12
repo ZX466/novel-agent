@@ -110,3 +110,12 @@
 - AI 标记: .prose p.ai 选择器在 React 移植中永不命中(.prose 类不存在)→改 .ProseMirror p.ai(第二根因)
 验证: vitest 76/76(+5);tsc 0;后端 chat 33 passed;wire 实测修复后输出
 教训: ①协议包装类改动必须两端 wire 级联测,单端"看起来对"不算 ②CSS 选择器移植要核对锚点类在目标环境是否真实存在
+---
+[回复] R10 第三批:保存/输入提速+分段压缩+可视化全屏页 — Claude
+时间: 2026-09-12 23:35
+状态: 已完成（`47f8bc8`，gitee 已推，backend/frontend 已重建）
+- 保存慢(P0): 四服务(chapter/character/world_setting/plot_event)嵌入全摘出写事务——新 background_embed.schedule_embedding 独立会话+detached task;根因=4096 维嵌入同步 await,超时 60s 拖死保存(日志实证 openai.APITimeoutError 重试);契约测试用挂死 embed 验证写路径照常提交
+- 前端卡顿: currentText=editor.getText() 每渲染全文扫描+CJK 正则→useDebouncedEditorText 300ms 防抖
+- 分段过大: 实测章节 355 有 12 处三连换行,AI 场景切换输出 3-4 连空行→等量空段落叠加;textToParagraphNodes/textToTipTapHTML 压缩 2+ 连空行为单空段落(旧文本加载同受益)
+- 可视化全屏: /novels/[id]/graph?tab= 全宽页(980px)+左栏「⤢ 全屏」入口
+验证: vitest 77/77;后端 519 passed(38 failed=已证实环境集);产物已清

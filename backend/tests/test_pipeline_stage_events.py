@@ -155,3 +155,7 @@ async def test_stream_pipeline_no_events_without_on_event() -> None:
 
     assert all(isinstance(i, str) for i in items)
     assert "纯文本" in items
+
+
+# ── P2-2: relationship tree serialization tests live in
+# test_pipeline_writing_context.py (shares its _FakeAsyncSession fixtures).

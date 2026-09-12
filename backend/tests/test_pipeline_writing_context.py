@@ -100,6 +100,8 @@ async def test_writing_context_with_session_renders_prior_chapters_and_median() 
             _FakeChapter(0, "第一章", summary="首章梗概"),
         ]),
         _FakeResult([1500, 2500, 2000]),  # word_count rows for median
+        _FakeResult([]),   # relationship graph: characters (empty → block skipped)
+        _FakeResult([]),   # relationship graph: edges
     ])
     state: dict = {
         "chapter_index": 2,
@@ -109,7 +111,7 @@ async def test_writing_context_with_session_renders_prior_chapters_and_median() 
     }
     ctx = await nodes._build_writing_context(state)
 
-    assert fake_session.executed == 2
+    assert fake_session.executed == 4
     assert "【前文背景】" in ctx
     assert "第1章《第一章》" in ctx and "第2章《第二章》" in ctx
     # P1-2 regression: derived median target is written back into state so
@@ -320,3 +322,95 @@ def _as_async_iter(items):
             yield item
 
     return _gen()
+
+
+# ── P2-2: character relationship tree serialization ─────────────────────
+
+
+class _FakeChar:
+    def __init__(self, pid: int, name: str, role: str = "配角"):
+        self.id = pid
+        self.name = name
+        self.role = role
+
+
+class _FakeEdge:
+    def __init__(self, s: int, o: int, rel: str, strength: int = 5):
+        self.subject_id = s
+        self.object_id = o
+        self.relation_type = rel
+        self.description = ""
+        self.strength = strength
+
+
+@pytest.mark.asyncio
+async def test_serialize_relationships_compact_line() -> None:
+    """P2-2: graph renders to compact per-character lines with relations."""
+    from app.services.character_relationship import serialize_relationships
+
+    session = _FakeAsyncSession([
+        _FakeResult([_FakeChar(1, "甲", "主角"), _FakeChar(2, "乙", "师父")]),
+        _FakeResult([_FakeEdge(1, 2, "师徒", 8)]),
+    ])
+    out = await nodes_serialize(session, novel_id=1)
+    assert "甲（主角）" in out and "乙（师父）" in out
+    assert "师徒" in out
+    assert "\n\n" not in out  # compact single block
+
+
+async def nodes_serialize(session, *, novel_id: int) -> str:
+    from app.services.character_relationship import serialize_relationships
+
+    return await serialize_relationships(session, novel_id=novel_id)
+
+
+@pytest.mark.asyncio
+async def test_serialize_relationships_empty_when_no_chars() -> None:
+    session = _FakeAsyncSession([_FakeResult([]), _FakeResult([])])
+    out = await nodes_serialize(session, novel_id=1)
+    assert out == ""
+
+
+@pytest.mark.asyncio
+async def test_writing_context_includes_relationship_tree() -> None:
+    """P2-2 end-to-end: _build_writing_context pulls the relationship block
+    from serialize_relationships (character_relationships table)."""
+    from unittest.mock import patch
+
+    from app.services import character_relationship as rel_mod
+
+    async def fake_serialize(session, *, novel_id):
+        return "- 甲（主角）：关系 乙（师徒）"
+
+    session = _FakeAsyncSession([
+        _FakeResult([_FakeChapter(0, "第一章", summary="梗概")]),  # prior chapters
+        _FakeResult([2000]),  # median
+    ])
+    state: dict = {"novel_id": 1, "session": session, "chapter_index": 1}
+    with patch.object(rel_mod, "serialize_relationships", fake_serialize):
+        ctx = await nodes._build_writing_context(state)
+    assert "【人物关系树】" in ctx
+    assert "甲（主角）" in ctx
+    # block ordering: relationships before word-count for readability
+    assert ctx.index("【人物关系树】") < ctx.index("【字数要求】")
+
+
+@pytest.mark.asyncio
+async def test_writing_context_tolerates_relationship_failure() -> None:
+    """serialize_relationships failure → block skipped, context still built."""
+    from unittest.mock import patch
+
+    from app.services import character_relationship as rel_mod
+
+    async def boom(session, *, novel_id):
+        raise RuntimeError("db down")
+
+    session = _FakeAsyncSession([
+        _FakeResult([_FakeChapter(0, "第一章", summary="梗概")]),
+        _FakeResult([2000]),
+    ])
+    state: dict = {"novel_id": 1, "session": session, "chapter_index": 1}
+    with patch.object(rel_mod, "serialize_relationships", boom):
+        ctx = await nodes._build_writing_context(state)
+    assert "【人物关系树】" not in ctx
+    assert "【字数要求】" in ctx  # rest of context intact

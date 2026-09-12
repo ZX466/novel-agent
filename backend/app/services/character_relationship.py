@@ -90,6 +90,60 @@ async def get_graph(session: AsyncSession, *, novel_id: int) -> RelationshipGrap
     return RelationshipGraph(nodes=nodes, edges=graph_edges)
 
 
+# R9-④⑥ P2-2: prompt-injection serialization limits (Pi evaluation §2 —
+# keep the injected relationship block light: ≤10 characters, ≤2000 chars).
+_SER_MAX_CHARS = 10
+_SER_MAX_TOTAL = 2000
+
+
+async def serialize_relationships(
+    session: AsyncSession, *, novel_id: int
+) -> str:
+    """Render the relationship graph as a single compact line for the
+    chapter-writing system prompt (R9-④⑥ P2-2).
+
+    Format: "- 甲（主角）：弧线…；关系：乙（师徒）、丙（宿敌）" per character,
+    capped at the 10 most-connected characters and 2000 chars overall.
+    Returns "" when the novel has no characters/edges (caller skips the block).
+    """
+    graph = await get_graph(session, novel_id=novel_id)
+    if not graph.nodes:
+        return ""
+
+    id_to_node = {n.id: n for n in graph.nodes}
+    # adjacency: id -> [(other_name, relation_type)]
+    adj: dict[int, list[tuple[str, str]]] = {}
+    for e in graph.edges:
+        s, o = id_to_node.get(e.subject_id), id_to_node.get(e.object_id)
+        if s is None or o is None:
+            continue
+        adj.setdefault(e.subject_id, []).append((o.name, e.relation_type))
+        adj.setdefault(e.object_id, []).append((s.name, e.relation_type))
+
+    # Prioritize most-connected characters (they matter most to continuity).
+    ranked = sorted(
+        graph.nodes,
+        key=lambda n: (len(adj.get(n.id, [])), n.name),
+        reverse=True,
+    )[:_SER_MAX_CHARS]
+    # Restore stable display order (by name) after ranking.
+    ranked = sorted(ranked, key=lambda n: n.name)
+
+    lines: list[str] = []
+    total = 0
+    for n in ranked:
+        rels = sorted(adj.get(n.id, []))
+        rel_txt = "、".join(f"{other}（{rel}）" for other, rel in rels[:4])
+        line = f"- {n.name}（{n.role}）"
+        if rel_txt:
+            line += f"：关系 {rel_txt}"
+        if total + len(line) > _SER_MAX_TOTAL:
+            break
+        lines.append(line)
+        total += len(line)
+    return "\n".join(lines)
+
+
 async def _ensure_same_novel_characters(
     session: AsyncSession, novel_id: int, subject_id: int, object_id: int
 ) -> None:

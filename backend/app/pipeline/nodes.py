@@ -274,10 +274,20 @@ async def _build_writing_context(state: dict) -> str:
         "必须控制在该区间内，不足或超出过多视为不合格。"
     )
 
-    # ── Block 2 (relationship tree) comes from retrieved lore when present.
-    # retrieval_node already formatted structured lore into
-    # state["retrieved_context"]; draft_node appends it after these blocks,
-    # so we don't duplicate character/world data here.
+    # ── Block 2: character relationship tree (R9-④⑥ P2-2) ──────────────
+    # serialize_relationships renders the character_relationships graph as
+    # compact single-line entries (≤10 chars, ≤2000 chars — Pi budget).
+    # Note: also prepended here so it lands BEFORE the word-count block for
+    # prompt readability; falls back silently when the table is empty.
+    if session is not None and novel_id is not None:
+        try:
+            from app.services.character_relationship import serialize_relationships
+
+            rel_block = await serialize_relationships(session, novel_id=novel_id)
+            if rel_block:
+                blocks.insert(1, "【人物关系树】\n" + rel_block)
+        except Exception:
+            logger.warning("_build_writing_context: relationship serialization failed", exc_info=True)
 
     return "\n\n".join(blocks)
 

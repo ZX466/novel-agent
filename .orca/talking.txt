@@ -41,3 +41,11 @@
 修复: 回调签名解构 messages 并显式转发。实测：无 messages 仍 422；带 messages 200 进 SSE 流（无 key 返回引导性 error 事件）。vitest 43/43、tsc 0。
 教训: AI SDK v5 自定义 prepareSendMessagesRequest 必须显式转发 messages。
 ---
+---
+[回复] 200+秒回 440B 之谜与诊断强化 — Claude
+时间: 2026-09-12 17:05
+状态: 已完成（`5ce140a`，gitee 已推，backend/frontend 已重建）
+诊断: 用户 CSV 三次 /v1/chat 均 200 秒回 440-451B,页面"AI 服务暂时不可用"。字节核算 = pipeline 启动后 error part;复刻定位真因——**设置只填 draft 阶段时,前端把空串 refine/evaluate 一并发送,后端 ProviderConfig 校验 422**（6 validation errors）,SDK 报 error → 通用横幅。
+修复: 后端 _no_credentials 补 logger.error+start-step;前端横幅透传服务端 error.message。
+教训: ①前端保存应过滤空阶段或后端容忍空串阶段 ②"AI 服务暂时不可用"横幅吞掉了具体原因。
+---

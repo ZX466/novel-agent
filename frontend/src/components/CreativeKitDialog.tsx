@@ -1,6 +1,6 @@
 "use client";
 
-import { DefaultChatTransport } from "ai";
+import { PerfChatTransport } from "@/lib/perf-transport";
 import { useChat } from "@ai-sdk/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -49,9 +49,11 @@ export function CreativeKitDialog({
   const [applying, setApplying] = useState(false);
   const [applyStatus, setApplyStatus] = useState("");
 
+  // PerfChatTransport: 后端 SSE 含 data-stage/data-perf 自定义事件，
+  // 自解析 transport 不经 AI SDK v5 严格 chunk 校验（裸未知 type 会炸流）。
   const transport = useMemo(
     () =>
-      new DefaultChatTransport({
+      new PerfChatTransport({
         api: chatEndpoint,
         headers: (): Record<string, string> => {
           const cfg = loadProviderConfig();
@@ -59,6 +61,7 @@ export function CreativeKitDialog({
           if (!cfg) return auth;
           return { "X-Provider-Config": JSON.stringify(cfg), ...auth };
         },
+        onPerf: () => {},
       }),
     [],
   );

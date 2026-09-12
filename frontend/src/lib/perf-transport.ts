@@ -143,14 +143,18 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
                   case "text-end":
                     controller.enqueue({ type: "text-end", id: TEXT_ID });
                     break;
-                  case "perf":
+                  case "data-perf":
+                    // Backend wraps perf as a data- prefixed part (AI SDK v5
+                    // strict chunk schema rejects bare unknown types).
                     onPerf((evt.data ?? {}) as PipelinePerf);
                     break;
-                  case "stage":
-                  case "pipeline_start": {
-                    // R9-② stage events: forward to the optional sink.
-                    // Unknown/missing sink → ignored (M2 tolerance).
-                    if (onStage) onStage(evt as unknown as StageEvent);
+                  case "data-stage":
+                  case "data-pipeline_start": {
+                    // R9-② stage events: backend wraps `{"type":"stage",…}`
+                    // as `{"type":"data-stage","data":{…}}` — unwrap before
+                    // forwarding to the sink. Unknown/missing sink → ignored
+                    // (M2 tolerance).
+                    if (onStage) onStage((evt.data ?? evt) as unknown as StageEvent);
                     break;
                   }
                   case "error":

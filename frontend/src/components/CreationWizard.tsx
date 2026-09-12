@@ -11,7 +11,7 @@
  * 完全复用既有能力：useChat 流式（与 AIToolPanel 同构）、createDocument、
  * createChapter、extractEntitiesFromOutline 等，不新增后端接口。
  */
-import { DefaultChatTransport } from "ai";
+import { PerfChatTransport } from "@/lib/perf-transport";
 import { useChat } from "@ai-sdk/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -78,9 +78,11 @@ export function CreationWizard({ open, onClose }: CreationWizardProps) {
   const [error, setError] = useState<string | null>(null);
 
   // Stream transport — 与 AIToolPanel 同构（BYOK + 本地密钥）。
+  // PerfChatTransport: 后端 SSE 含 data-stage/data-perf 自定义事件，
+  // 自解析 transport 不经 AI SDK v5 严格 chunk 校验（裸未知 type 会炸流）。
   const transport = useMemo(
     () =>
-      new DefaultChatTransport({
+      new PerfChatTransport({
         api: chatEndpoint,
         headers: (): Record<string, string> => {
           const cfg = loadProviderConfig();
@@ -88,6 +90,7 @@ export function CreationWizard({ open, onClose }: CreationWizardProps) {
           if (!cfg) return auth;
           return { "X-Provider-Config": JSON.stringify(cfg), ...auth };
         },
+        onPerf: () => {},
       }),
     [],
   );

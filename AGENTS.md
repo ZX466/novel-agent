@@ -36,7 +36,7 @@ If prompts directory is present, use:
 Operational facts that took time to discover; keep them for future sessions.
 
 ### Environment / credentials
-- Real DB/Redis/API key values live in `E:/zxdevelop/project2/novel-agent/.env` and `backend/.env` (the main worktree). The local PG password is NOT `postgres:postgres` — read the `.env`; DB is `postgresql+asyncpg://postgres@localhost:5432/project11`, Redis on port 16379, container `project11-postgres-local` (pgvector/pgvector:pg16).
+- Real DB/Redis/API key values live in `E:/zxdevelop/project2/novel-agent/.env` and `backend/.env` (the main worktree). The local PG password is NOT `postgres:postgres` — read the `.env`; DB is `postgresql+asyncpg://postgres@localhost:5432/project11`（数据库名保留——数据绑定）, Redis on port 16379, container `novel-agent-postgres-local` (pgvector/pgvector:pg16).
 - Running alembic or any `uv run` that loads `app.config.Settings` requires those env vars in the shell; `tests/conftest.py` stubs them only for pytest. `API_KEYS` is a JSON array (`'["test-key"]'`).
 - Env for interactive python snippets: set `DATABASE_URL`, `REDIS_URL`, `API_KEYS` first, else Settings() fails.
 

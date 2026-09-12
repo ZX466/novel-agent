@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import { SettingsDialog } from "@/components/SettingsDialog";
 
-const THEME_STORAGE_KEY = "project11:theme";
+const THEME_STORAGE_KEY = "novel-agent:theme";
 
 function getStoredDark(): boolean {
   const t = window.localStorage.getItem(THEME_STORAGE_KEY);

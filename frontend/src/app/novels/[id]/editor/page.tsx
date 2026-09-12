@@ -84,7 +84,7 @@ export default function NovelEditorPage() {
   const [mobilePreview, setMobilePreview] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light" | "eye-care">(() => {
     if (typeof window === "undefined") return "dark";
-    return (localStorage.getItem("project11:theme") as "dark" | "light" | "eye-care") || "dark";
+    return (localStorage.getItem("novel-agent:theme") as "dark" | "light" | "eye-care") || "dark";
   });
   // Editor display comfort settings (font size / line height / width).
   // Deterministic default for SSR; the stored value is loaded after mount.
@@ -171,7 +171,7 @@ export default function NovelEditorPage() {
   // Apply theme to <html> and persist to localStorage.
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("project11:theme", theme);
+    localStorage.setItem("novel-agent:theme", theme);
   }, [theme]);
 
   // Load document.

@@ -26,7 +26,7 @@ export default function RootLayout({
         <script
           nonce={nonce ?? undefined}
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("project11:theme");if(t&&t!=="dark")document.documentElement.dataset.theme=t}catch(e){}`,
+            __html: `try{var t=localStorage.getItem("novel-agent:theme");if(t&&t!=="dark")document.documentElement.dataset.theme=t}catch(e){}`,
           }}
         />
       </head>

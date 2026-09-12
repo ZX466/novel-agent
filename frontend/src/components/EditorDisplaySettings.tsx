@@ -18,7 +18,7 @@ export const DEFAULT_DISPLAY: EditorDisplay = {
   width: "normal",
 };
 
-const DISPLAY_KEY = "project11:editor-display";
+const DISPLAY_KEY = "novel-agent:editor-display";
 
 /** Read persisted editor display settings (server-safe: returns default). */
 export function loadDisplay(): EditorDisplay {

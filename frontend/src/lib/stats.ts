@@ -54,7 +54,7 @@ export async function fetchStatsDashboard(): Promise<StatsDashboard> {
 }
 
 /** Daily writing goal (local-only preference). */
-const GOAL_KEY = "project11:writing-goal";
+const GOAL_KEY = "novel-agent:writing-goal";
 
 export function loadDailyGoal(): number {
   if (typeof window === "undefined") return 2000;

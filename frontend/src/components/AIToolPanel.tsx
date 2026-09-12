@@ -266,7 +266,7 @@ export function AIToolPanel({
   // Editable copy of the latest generated text (user can tweak before inserting).
   // Persisted to localStorage so leaving the editor mid-generation doesn't
   // lose the result — restore it on remount.
-  const storageKey = novelId ? `project11:ai-draft:${novelId}` : null;
+  const storageKey = novelId ? `novel-agent:ai-draft:${novelId}` : null;
   const [editedText, setEditedText] = useState(() => {
     if (!storageKey) return "";
     try {

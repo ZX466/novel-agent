@@ -1,5 +1,16 @@
 # 变更说明
 
+## 2026-09-12：R9 批次（六项需求）+ 项目更名 novel-agent + 文档重写
+| 变更 | 说明 | 提交 |
+|------|------|------|
+| ①更名 novel-agent | 展示名/容器名/localStorage key/包名全改；`POSTGRES_DB`、Redis 密码前缀等数据绑定项保留并注释 | `b4b40a8`+本轮 |
+| ②流水线可视化 | stage 事件协议 v1（SSE 通道，closed summary 白名单）+ StageProgress 五阶段进度组件 | `c054240`+`49f6584`+`1c0d290` |
+| ③人物关系图 | character_relationships 表+graph/PUT/DELETE/import 4 端点+前端契约；同批次 import 去重+409 兜底 | `9eb8d1a`+`bb797e7` |
+| ④⑥章节上下文+字数 | system prompt 注入 章节进度/人物树/前文梗概/字数目标；中位数推导±15%；post-check 不足自动续写补足 | `48bb1d2`+`b66c9d0`+`4dd06e4`+`7f54e5c` |
+| ⑤插入分段修复 | textToParagraphNodes 节点数组替换 5 处 insertContent | `48bb1d2` |
+| 文档 | README 全面重写（novel-agent 名+R9 能力）；删除过时性能分析报告 | 本轮 |
+| 验证 | 后端回归 518 passed（基线 475）；tsc 0；vitest 43 | — |
+
 ## 2026-08-19：Round 5 创作工具轮 + 结构收敛
 
 ### Round 5（完善但简化创作流程，6/6 合入 main，tip `61182f7`）

@@ -55,3 +55,11 @@
 状态: 已完成（`87ff7aa`，gitee 已推，容器已重建）
 诊断: 用户 CSV 报 POST /v1/chat 422（创建文档后点工具）。nginx access log 无详情；注入 RequestValidationError handler 后定位为 ChatRequest body 字段校验。防御修复: _TolerantInt(BeforeValidator) 容忍 float/数字串/垃圾值（垃圾→None 放弃字段而非拒请求）；chapter_title null→''；ge/le 安全边界保留（-3 仍 422+日志）。实测 3 组容错输入全 200、越界仍拒。回归 518 passed。
 ---
+---
+[回复] 用户报告"名称没变/功能没实现" — 根因修复完成
+时间: 2026-09-12 15:45
+状态: 已完成（merge `d9ec706`，gitee 已推，frontend 容器已重建）
+根因: **cline 的 R9-①改名提交 b4b40a8 只在 cline 分支,从未合入 main**——R9 收口时我只 merge 了 opencode-2(③),漏了 cline。浏览器拿到的 main 构建仍是 Project11 标题。截图"AI 服务暂时不可用"= 同源的 422(上一轮已修的宽容校验)+旧标题页面。
+修复: merge ZX466/cline 入 main(16 文件改名);frontend 重建;实测 <title>novel-agent — 三阶段写作工坊</title>、页面 0 处 Project11;带 Provider header+null 章节字段全链路 400(非 422,正常 BYOK 校验)。
+教训: 收口 merge 必须逐分支核对 `git log main..<branch>`;工作树提交≠已合入 main。
+---

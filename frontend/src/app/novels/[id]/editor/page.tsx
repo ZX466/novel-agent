@@ -10,6 +10,9 @@ import { EditorContent } from "@tiptap/react";
 
 import { getDocument, updateDocument } from "@/lib/documents";
 import { textToParagraphNodes, textToTipTapHTML } from "@/lib/insert-text";
+import { RelationshipGraph } from "@/components/RelationshipGraph";
+import { TimelineGraph } from "@/components/TimelineGraph";
+import { ConsistencyPanel } from "@/components/ConsistencyPanel";
 import { listChapters, createChapter, updateChapter, deleteChapter, reorderChapters } from "@/lib/chapters";
 import type { EditorDoc, ChapterListItem, ChapterRead, DocumentPartial, DocumentInput } from "@/lib/types";
 import type { SaveState } from "@/hooks/use-documents";
@@ -159,7 +162,7 @@ export default function NovelEditorPage() {
   const [extracting, setExtracting] = useState(false);
 
   // ── Left sidebar tab state ─────────────────────────────────────────
-  const [leftTab, setLeftTab] = useState<"outline"|"characters"|"world"|"events">("outline");
+  const [leftTab, setLeftTab] = useState<"outline"|"characters"|"world"|"events"|"graph"|"timeline"|"consistency">("outline");
   // Incrementing this key forces panel components to remount and re-fetch after extraction.
   const [panelRefreshKey, setPanelRefreshKey] = useState(0);
 
@@ -956,6 +959,9 @@ export default function NovelEditorPage() {
                   { key: "characters" as const, label: "👤", title: "角色" },
                   { key: "world" as const, label: "🌍", title: "世界观" },
                   { key: "events" as const, label: "📋", title: "剧情" },
+                  { key: "graph" as const, label: "🕸", title: "关系图" },
+                  { key: "timeline" as const, label: "⏳", title: "时间线" },
+                  { key: "consistency" as const, label: "🛡", title: "一致性" },
                 ]
               ).map((t) => {
                 const active = leftTab === t.key;
@@ -1052,6 +1058,26 @@ export default function NovelEditorPage() {
                     onSelectChapter={(chapterId: number) =>
                       void handleSelectChapter(chapterId)
                     }
+                  />
+                </div>
+              )}
+              {/* R10: relationship graph / timeline DAG / consistency sentinel */}
+              {leftTab === "graph" && (
+                <div className="h-full overflow-y-auto px-sp-2 py-sp-2">
+                  <RelationshipGraph docId={Number(docId)} />
+                </div>
+              )}
+              {leftTab === "timeline" && (
+                <div className="h-full overflow-y-auto px-sp-2 py-sp-2">
+                  <TimelineGraph docId={Number(docId)} />
+                </div>
+              )}
+              {leftTab === "consistency" && (
+                <div className="h-full overflow-y-auto">
+                  <ConsistencyPanel
+                    docId={Number(docId)}
+                    chapterId={activeChapter?.id ?? null}
+                    chapterText={currentText}
                   />
                 </div>
               )}

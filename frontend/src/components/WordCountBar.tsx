@@ -119,6 +119,14 @@ export function WordCountBar({
       >
         总字数 <span className="font-semibold" style={{ color: "var(--fg-secondary)" }}>{totalWordCount.toLocaleString()}</span> 字
       </span>
+      {/* R10: in-editor entry to the stats dashboard */}
+      <a
+        href="/stats"
+        className="text-[10px] underline-offset-2 hover:underline"
+        style={{ color: "var(--muted)" }}
+      >
+        统计
+      </a>
       <span className="flex-1" />
 
       {/* Save status */}

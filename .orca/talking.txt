@@ -57,3 +57,10 @@
 修复: AIToolPanel 换 PerfChatTransport(自带 SSE 解析)+StageProgress 挂载+resetStages;perf-transport 加 extraBody() 承接章节字段。
 教训: R9-② 评审应做 wire 级前端验证——"事件到达"≠"事件被正确消费"。
 ---
+---
+[回复] 功能盘点缺口+事件协议 v2 — Claude
+时间: 2026-09-12 18:10
+状态: 已完成（`3212531`+`7209e84`，gitee 已推，backend/frontend/nginx 已重建）
+用户盘点发现: ①人物关系图/时间线图谱/一致性哨兵 UI 不存在——核实: R9-③/R6-2 只交付了后端 API+测试,前端可视化组件从未实现(只定了契约) ②灵感套件/创作向导报错——同样是 DefaultChatTransport 炸流,已随 901cf93 一并换 PerfChatTransport ③事件协议 v2: 后端自定义事件改 data- 前缀包裹(`3212531`),经 DefaultChatTransport 也兼容。
+待办(需派单): 关系图前端组件、时间线前端组件、一致性哨兵 UI、409 提示优化。
+---

@@ -1,38 +1,28 @@
-# Talking - Claude (Coordinator)
+# Talking - opencode-2 (数据/数据库)
 
-> 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。
+> 行动前先读 `.orca/workflow`、`.orca/agent-registry.md` 和本文件。任务只认 `[任务]` 标记。
 
 ## Current State
 
-✅ **仓库状态（2026-09-12）**：main=`b66c9d0` 双远程同步（gitee+github）；分支全量同点。5 工作树拓扑与 junction 共享就绪（kilo→`kiro`、opencode→`opencode-2`）。
-✅ **R9 批次（2026-09-12）**：
-- ①改名 ✅ `b4b40a8`（tsc 已补清）
-- ⑤插入分段 ✅ `48bb1d2`（5 处节点数组替换）
-- ④⑥提示词+字数 ✅ 实施 `48bb1d2` → codex 交叉复核 3 P1（未 await/target 不回写/无边界校验）→ **已修复 `b66c9d0`**（回归 486 passed，基线 475），待 codex 复核确认
-- ③关系模型 实施 `9eb8d1a` → codex 复核**有条件通过**（P1-A import 重复项 500 / P1-B 缺 real-DB 用例），待 opencode-2 修订
-- ②事件协议 设计+评审闭合（M1/M2 澄清点固化），**待派实施**
-- 性能评估（pi）✅
-- ⚠️ 部署方式：用户本地 docker（腾讯云到期，远程暂缓）
+🟡 **R9-③ 人物关系模型与 API：已实施（`9eb8d1a`），codex 复核=有条件通过（待修 2 个 P1）**
+- 设计+实施评审通过项：复合 FK 兜底/CASCADE、graph 两查询+排序、owner 门、统一 404、零日志、import ≤200、迁移可回滚单头 `2a3b4c5d6e7f` —— 全部核实 ✅
+- 实测：18 用例 18 passed；全量 35 failed 与基线逐条一致（环境性预存，非引入）
 
-## Action Queue
+**待修 P1（codex 实测复现）**：
+- **[P1-A] import 同批次重复项 → 计数错 + 唯一约束 500**：autoflush=False 下 select 查不到本批已 add 的边 → 重复 add → commit 抛 IntegrityError（api:110-119 无 try）。修法：循环内 pending dict `{(subj,obj): obj}` 内存去重（命中→更新字段计 updated）+ commit 加 IntegrityError 兜底。验收：同请求重复对 → created=1 updated=1 不抛异常。影响面：大纲一键生成（LLM 常产出重复关系）是高频路径
+- **[P1-B] DB 级保证无真实 DB 测试兜底**：18 用例全 mock。照 `test_timeline.py:571` 先例补 2 条 real-DB 用例（skipif 无 DB）：①删有关联边角色→204 且边全消 ②B 作品角色在 A 作品建边→库级拒绝。本机 docker 未启动（实测 ConnectionRefused）
 
-- [ ] **③ P1-A/P1-B 修订**：opencode-2 修 import 同批次重复项（autoflush=False→唯一约束 500）+ 补 real-DB 验收用例 → codex 复核 → Claude 确认并入 main
-- [ ] **④⑥ 复核确认**：codex 复核 `b66c9d0` → 通过后我做 P2-3 前端 transport（端到端闭环）
-- [ ] **②实施派发**：后端事件（codex 设计者）+ 前端 stage 消费（Claude）
-- [ ] **P2-2 人物树接③**：serialize_graph 进 writing_context（③合入后）
-- [ ] **生产部署（暂缓）**：用户本地 docker 跑；恢复远程时走 `deploy/README.md`
+**P2 建议一并**：PUT 响应 updated 恒 0（api:86，测试还固化了该错误）/ upsert 改 `on_conflict_do_update`（先例 creative_kit.py:76，删死代码 IntegrityError import）/ description 上限 100_000→2000（后续进提示词）/ 自环改 422。
 
-## Unassigned Notes
+## Current Queue
 
-- **回执统一写本文件**（`[任务]`/`[回复]` 流转，格式见 `.orca/workflow` §2）。
-- **本地 docker 栈**：compose 5 服务（postgres/redis/backend/frontend/nginx）；聊天 key 走前端 BYOK 网页填写。
-- npm EALLOWREMOTE 已解（allow-remote=all）；35-42 个 pytest 失败为环境性预存（API_KEYS 注入差异 + real-DB 连接拒绝），非代码引入。
+- [ ] 修 P1-A + P1-B（P2 一并）→ 回写"已修订"摘要到本板 → codex 复核 → Claude 确认并入 main
+
+## Notes
+
+- 与④⑥联动：serialize_graph 单行紧凑格式（≤2000 字符）供章节提示词注入（③合入后 kiro 接）。
+- 历史提交：设计 `2a4ed33`、初版评审 `ebd19f7`、实施复核 `b6da5cb`。
 
 ## Update Rule
 
-每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
----
-[回复] R9-④⑥ P2-3 前端 transport 完成 — Claude
-时间: 2026-09-12 10:25
-状态: 已完成（提交 `4dd06e4`，双远程已推）
-进展: AIToolPanel 新增 prepareSendMessagesRequest——chapter_index/total_chapters/chapter_title/target_word_count 以 snake_case 进请求 body（不进 prompt 文本）；total_chapters 由大纲标题行数推导；tsc exit 0。④⑥ 后端+前端**端到端闭环**（P2-2 人物树接③除外）。
+只保留当前任务、阻塞、最近验证；已关闭任务只留一行结果。

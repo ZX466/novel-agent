@@ -9,7 +9,7 @@ import { useEditor } from "@tiptap/react";
 import { EditorContent } from "@tiptap/react";
 
 import { getDocument, updateDocument } from "@/lib/documents";
-import { textToParagraphNodes } from "@/lib/insert-text";
+import { textToParagraphNodes, textToTipTapHTML } from "@/lib/insert-text";
 import { listChapters, createChapter, updateChapter, deleteChapter, reorderChapters } from "@/lib/chapters";
 import type { EditorDoc, ChapterListItem, ChapterRead, DocumentPartial, DocumentInput } from "@/lib/types";
 import type { SaveState } from "@/hooks/use-documents";
@@ -238,7 +238,7 @@ export default function NovelEditorPage() {
   // Sync editor content from active chapter.
   useEffect(() => {
     if (!editor) return;
-    const html = activeChapter?.content_text ?? "";
+    const html = textToTipTapHTML(activeChapter?.content_text ?? "");
     editor.chain().setContent(html, false).setMeta("addToHistory", false).run();
     setDirty(false);
   }, [editor, activeChapter]);
@@ -1322,7 +1322,7 @@ export default function NovelEditorPage() {
         onClose={() => setHistoryOpen(false)}
         onRestore={(text) => {
           if (editor) {
-            editor.chain().setContent(text, false).run();
+            editor.chain().setContent(textToTipTapHTML(text), false).run();
             setDirty(true);
           }
         }}

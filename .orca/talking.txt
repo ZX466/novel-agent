@@ -73,3 +73,16 @@
 - docs/opendesign-prompt.md: 前端重构完整提示词(契约红线/缺失组件清单/验收标准)。R10 派单计划撤销,缺口并入 OpenDesign 重构。
 用户侧待办: 前端 ⚙ embedding 重选模型(4096 维原生),写实体触发重嵌。
 ---
+## Update Rule
+
+每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
+---
+[回复] R10 三视图落地(OpenDesign 原型移植) — Claude
+时间: 2026-09-12 19:30
+状态: 第一批完成（`bbb3b35`，gitee 已推，frontend 已重建）
+- 三 lib 客户端(character-relationships/timeline/consistency,字段对齐后端 schema)
+- RelationshipGraph(力导向+拖拽+强度编辑+按名导入+409 toast)/TimelineGraph(分层 DAG+warnings)/ConsistencyPanel(检查+历史)
+- 编辑器左栏 +3 tab;WordCountBar 统计入口;globals.css 补 .prose p.ai + consistency-row(令牌同源零新增变量)
+- vitest 50/50(新增 5);tsc 0;红线(perf-transport/settings/insert-text/localStorage)未动
+待办(下批): 编辑器 page.tsx 1345 行拆分(<400 行/文件);向导 409 提示;embedding loading 态;AI 段落标记与后端打通
+---

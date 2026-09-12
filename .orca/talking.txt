@@ -49,3 +49,11 @@
 修复: 后端 _no_credentials 补 logger.error+start-step;前端横幅透传服务端 error.message。
 教训: ①前端保存应过滤空阶段或后端容忍空串阶段 ②"AI 服务暂时不可用"横幅吞掉了具体原因。
 ---
+---
+[回复] AI SDK v5 严格校验炸毁 SSE 流(P0) — Claude
+时间: 2026-09-12 17:35
+状态: 已完成（`901cf93`，gitee 已推，frontend 已重建）
+根因: AI SDK v5 uiMessageChunkSchema 严格枚举 chunk type,未知 type 必须 data- 前缀。R9-② 设计假设"default branch 忽略未知类型"是 v4 行为——v5 下后端 stage/pipeline_start/perf 裸 type 事件进 DefaultChatTransport 即抛 Type validation failed,整流死掉。此前事件从未到达前端(422/无key挡住),修通后首次暴露。用户报错 {"seq":1,"type":"pipeline_start","task_type":"outline"} 即此。
+修复: AIToolPanel 换 PerfChatTransport(自带 SSE 解析)+StageProgress 挂载+resetStages;perf-transport 加 extraBody() 承接章节字段。
+教训: R9-② 评审应做 wire 级前端验证——"事件到达"≠"事件被正确消费"。
+---

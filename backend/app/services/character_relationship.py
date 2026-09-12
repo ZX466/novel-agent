@@ -44,6 +44,15 @@ class CharacterRelationshipNotFound(Exception):
         self.message = message
 
 
+class CharacterRelationshipConflict(Exception):
+    """Raised when a DB constraint fails at commit (e.g. concurrent import
+    raced an unique key). API layer maps this to 409."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
 async def get_graph(session: AsyncSession, *, novel_id: int) -> RelationshipGraph:
     """Return the full relationship graph for a novel (one-request render).
 
@@ -183,12 +192,23 @@ async def import_relationships(
 
     Unknown names are skipped (not created) and counted as skipped. Edges
     already present are updated; new ones created.
+
+    Same-batch duplicates are merged in memory via a pending dict: the
+    session uses autoflush=False (db/session.py), so rows added earlier in
+    this request are NOT visible to a subsequent select — without the dict,
+    a repeated (subject, object) pair would be added twice and blow up the
+    unique constraint at commit (R9-③ review P1-A).
     """
     rows = await session.execute(
         select(Character).where(Character.novel_id == novel_id)
     )
     chars = list(rows.scalars().all())
     name_to_id = {c.name: c.id for c in chars}
+
+    # (subject_id, object_id) -> (edge ORM object, is_new). Covers both
+    # DB-backed edges (loaded on first sight) and pending adds within this
+    # batch (subsequent duplicates merge onto the same object).
+    pending: dict[tuple[int, int], tuple[CharacterRelationship, bool]] = {}
 
     result = RelationshipImportResult()
     for item in request.items:
@@ -200,16 +220,19 @@ async def import_relationships(
         if subj == obj:
             result.skipped += 1
             continue
-        existing = await session.scalar(
-            select(CharacterRelationship).where(
-                CharacterRelationship.novel_id == novel_id,
-                CharacterRelationship.subject_id == subj,
-                CharacterRelationship.object_id == obj,
+        key = (subj, obj)
+        if key not in pending:
+            existing = await session.scalar(
+                select(CharacterRelationship).where(
+                    CharacterRelationship.novel_id == novel_id,
+                    CharacterRelationship.subject_id == subj,
+                    CharacterRelationship.object_id == obj,
+                )
             )
-        )
-        if existing is None:
-            session.add(
-                CharacterRelationship(
+            if existing is not None:
+                pending[key] = (existing, False)
+            else:
+                rel = CharacterRelationship(
                     novel_id=novel_id,
                     subject_id=subj,
                     object_id=obj,
@@ -217,13 +240,24 @@ async def import_relationships(
                     description=item.description,
                     strength=item.strength,
                 )
-            )
-            result.created += 1
-        else:
-            existing.relation_type = item.relation_type
-            existing.description = item.description
-            existing.strength = item.strength
+                session.add(rel)
+                pending[key] = (rel, True)
+                result.created += 1
+                continue
+        rel, is_new = pending[key]
+        rel.relation_type = item.relation_type
+        rel.description = item.description
+        rel.strength = item.strength
+        if not is_new:
             result.updated += 1
 
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # DB-level backstop (e.g. a concurrent import raced us to the same
+        # unique key): roll back and surface a mapped 409, not a raw 500.
+        await session.rollback()
+        raise CharacterRelationshipConflict(
+            "concurrent modification detected during import"
+        )
     return result

@@ -29,6 +29,7 @@ from app.schemas.character_relationship import (
     RelationshipImportResult,
 )
 from app.services.character_relationship import (
+    CharacterRelationshipConflict,
     CharacterRelationshipNotFound,
     delete_relationship,
     get_graph,
@@ -83,7 +84,7 @@ async def upsert_relationship_endpoint(
     except IntegrityError:
         await session.rollback()
         raise HTTPException(status_code=409, detail="关系冲突或端点角色非法")
-    return RelationshipImportResult(created=1 if created else 0, updated=0, skipped=0)
+    return RelationshipImportResult(created=1 if created else 0, updated=0 if created else 1, skipped=0)
 
 
 @router.delete(
@@ -116,4 +117,9 @@ async def import_relationships_endpoint(
 ) -> RelationshipImportResult:
     """Batch upsert edges by character name (outline -> graph)."""
     await load_parent(session, doc_id, owner_hash=owner_key_hash(api_key))
-    return await import_relationships(session, novel_id=doc_id, request=payload)
+    try:
+        return await import_relationships(session, novel_id=doc_id, request=payload)
+    except CharacterRelationshipConflict as exc:
+        # DB-level constraint hit at commit (concurrent import race) — 409,
+        # not a raw 500 (R9-③ review P1-A backstop).
+        raise HTTPException(status_code=409, detail=exc.message)

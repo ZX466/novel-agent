@@ -191,3 +191,97 @@ async def test_import_updates_existing(mock_session):
     assert result.updated == 1
     assert existing.relation_type == "恋人"
     assert existing.strength == 9
+
+
+# --- R9-③ review P1-A: same-batch duplicate import merging -------------------
+
+@pytest.mark.asyncio
+async def test_import_same_batch_duplicate_merges_not_double_add(mock_session):
+    """P1-A regression: autoflush=False means pending adds are invisible to
+    select, so a repeated (subject, object) pair in ONE import request must
+    merge onto the pending object (created=1, updated counted on merge for
+    later items) instead of session.add() twice — which would blow up the
+    unique constraint at commit (500)."""
+    from app.schemas.character_relationship import (
+        RelationshipImportItem,
+        RelationshipImportRequest,
+    )
+
+    chars = [_char(1, "甲"), _char(2, "乙")]
+    mock_session.set_execute_results([
+        _FakeResult(scalars=chars),  # name resolution query
+    ])
+    # scalar() returns None for all edge lookups → both first items are "new"
+    mock_session.set_scalar_results([None])
+
+    request = RelationshipImportRequest(items=[
+        RelationshipImportItem(subject_name="甲", object_name="乙",
+                               relation_type="师徒", description="v1", strength=3),
+        RelationshipImportItem(subject_name="甲", object_name="乙",
+                               relation_type="恋人", description="v2", strength=7),
+    ])
+    result = await import_relationships(mock_session, novel_id=1, request=request)
+
+    # Exactly ONE edge object added — the duplicate merged onto it.
+    assert len(mock_session.added) == 1
+    added = mock_session.added[0]
+    assert added.relation_type == "恋人" and added.strength == 7  # last write wins
+    assert result.created == 1
+    assert mock_session.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_import_db_existing_then_same_batch_duplicate(mock_session):
+    """First item hits a DB-backed edge (updated), duplicate later in the
+    same batch must ALSO count as updated (not created) and reuse the same
+    ORM object."""
+    from app.schemas.character_relationship import (
+        RelationshipImportItem,
+        RelationshipImportRequest,
+    )
+
+    chars = [_char(1, "甲"), _char(2, "乙")]
+    existing = _rel(1, 2, "宿敌", 5)
+    mock_session.set_execute_results([_FakeResult(scalars=chars)])
+    mock_session.set_scalar_results([existing])  # edge lookup → found in DB
+
+    request = RelationshipImportRequest(items=[
+        RelationshipImportItem(subject_name="甲", object_name="乙",
+                               relation_type="宿敌", description="x", strength=6),
+        RelationshipImportItem(subject_name="甲", object_name="乙",
+                               relation_type="宿敌", description="y", strength=9),
+    ])
+    result = await import_relationships(mock_session, novel_id=1, request=request)
+
+    assert len(mock_session.added) == 0  # nothing new added
+    assert result.created == 0 and result.updated == 2
+    assert existing.strength == 9 and existing.description == "y"
+
+
+@pytest.mark.asyncio
+async def test_import_commit_integrity_error_maps_to_conflict(mock_session):
+    """P1-A backstop: IntegrityError at commit (concurrent race) →
+    CharacterRelationshipConflict (API maps to 409), session rolled back."""
+    from unittest.mock import AsyncMock
+
+    from sqlalchemy.exc import IntegrityError
+
+    from app.schemas.character_relationship import (
+        RelationshipImportItem,
+        RelationshipImportRequest,
+    )
+    from app.services.character_relationship import CharacterRelationshipConflict
+
+    chars = [_char(1, "甲"), _char(2, "乙")]
+    mock_session.set_execute_results([_FakeResult(scalars=chars)])
+    mock_session.set_scalar_results([None])
+    mock_session.commit = AsyncMock(
+        side_effect=IntegrityError("uq", {}, Exception("dup"))
+    )
+
+    request = RelationshipImportRequest(items=[
+        RelationshipImportItem(subject_name="甲", object_name="乙", relation_type="师徒"),
+    ])
+    with pytest.raises(CharacterRelationshipConflict):
+        await import_relationships(mock_session, novel_id=1, request=request)
+    assert mock_session.rolled_back == 1

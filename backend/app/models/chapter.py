@@ -22,8 +22,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
 # Default embedding dimension. Must stay in sync with the alembic head
-# (b7c8d9e0f1a2, vector(1024)) and settings.embedding_dim.
-EMBEDDING_DIM = 1024
+# (e8f9a0b1c2d3, vector(4096)) and settings.embedding_dim.
+EMBEDDING_DIM = 4096
 
 
 class Chapter(Base):

@@ -31,3 +31,8 @@
 ## Update Rule
 
 每轮结束检查所有工作树留言板，只保留当前任务、阻塞、最近验证和合并结果；已关闭过程记录直接删除。
+---
+[回复] R9-④⑥ P2-3 前端 transport 完成 — Claude
+时间: 2026-09-12 10:25
+状态: 已完成（提交 `4dd06e4`，双远程已推）
+进展: AIToolPanel 新增 prepareSendMessagesRequest——chapter_index/total_chapters/chapter_title/target_word_count 以 snake_case 进请求 body（不进 prompt 文本）；total_chapters 由大纲标题行数推导；tsc exit 0。④⑥ 后端+前端**端到端闭环**（P2-2 人物树接③除外）。

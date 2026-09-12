@@ -38,6 +38,9 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
   private readonly headers: () => Record<string, string>;
   private readonly onPerf: (perf: PipelinePerf) => void;
   private readonly onStage?: (event: StageEvent) => void;
+  /** R9-④⑥: extra structured body fields (chapter_index etc.), resolved
+   *  per send so closures over fresh state are honored. */
+  private readonly extraBody?: () => Record<string, unknown>;
 
   constructor(opts: {
     api: string;
@@ -45,11 +48,14 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
     onPerf: (perf: PipelinePerf) => void;
     /** R9-② optional stage-event sink; absent = events ignored (M2 tolerance). */
     onStage?: (event: StageEvent) => void;
+    /** R9-④⑥ optional extra request-body fields (chapter_* / target_word_count). */
+    extraBody?: () => Record<string, unknown>;
   }) {
     this.base = opts.api;
     this.headers = opts.headers ?? (() => ({}));
     this.onPerf = opts.onPerf;
     this.onStage = opts.onStage;
+    this.extraBody = opts.extraBody;
   }
 
   async sendMessages(opts: {
@@ -69,6 +75,7 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
           .map((p) => (p as { text: string }).text)
           .join("\n"),
       })),
+      ...(this.extraBody?.() ?? {}),
     };
 
     const res = await fetch(this.base, {

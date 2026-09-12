@@ -1,6 +1,7 @@
 "use client";
 
-import { DefaultChatTransport } from "ai";
+import { PerfChatTransport } from "@/lib/perf-transport";
+import { StageProgress, useStageProgress } from "@/components/StageProgress";
 import { useChat } from "@ai-sdk/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -288,9 +289,18 @@ export function AIToolPanel({
     return count && count > 0 ? count : null;
   }, [outlineText]);
 
+  // R9-② fix: the backend emits non-AI-SDK SSE event types (stage /
+  // pipeline_start / perf). DefaultChatTransport runs every event through
+  // the SDK's strict uiMessageChunkSchema, which THROWS on unknown types
+  // ("Type must start with data-") and kills the whole stream. The custom
+  // PerfChatTransport parses the SSE wire directly and forwards stage
+  // events to the StageProgress sink instead.
+  // R9-④⑥ chapter fields ride along via extraBody (snake_case to match
+  // the backend ChatRequest).
+  const { stages: stageStates, visible: stagesVisible, applyEvent: applyStageEvent, reset: resetStages } = useStageProgress();
   const transport = useMemo(
     () =>
-      new DefaultChatTransport({
+      new PerfChatTransport({
         api: chatEndpoint,
         headers: (): Record<string, string> => {
           const cfg = loadProviderConfig();
@@ -298,22 +308,16 @@ export function AIToolPanel({
           if (!cfg) return auth;
           return { "X-Provider-Config": JSON.stringify(cfg), ...auth };
         },
-        prepareSendMessagesRequest: ({ messages, body }) => ({
-          body: {
-            ...body,
-            // AI SDK v5: a custom body REPLACES the default one — `messages`
-            // must be forwarded explicitly (the callback `body` is only the
-            // transport-level extra fields, an empty {} here).
-            messages,
-            // snake_case to match the backend ChatRequest field names.
-            chapter_index: chapterIndex ?? null,
-            total_chapters: totalChapters,
-            chapter_title: chapterTitle ?? "",
-            target_word_count: targetWordCount ?? null,
-          },
+        onPerf: () => {}, // PerfPulse: accepted, not displayed here
+        onStage: applyStageEvent,
+        extraBody: () => ({
+          chapter_index: chapterIndex ?? null,
+          total_chapters: totalChapters,
+          chapter_title: chapterTitle ?? "",
+          target_word_count: targetWordCount ?? null,
         }),
       }),
-    [chatEndpoint, chapterIndex, totalChapters, chapterTitle, targetWordCount],
+    [chatEndpoint, chapterIndex, totalChapters, chapterTitle, targetWordCount, applyStageEvent],
   );
 
   const { messages, sendMessage, status, stop, error, setMessages } = useChat({ transport });
@@ -442,6 +446,7 @@ export function AIToolPanel({
     setActiveTool(tool);
     setEditedText("");
     markPending();
+    resetStages();
     sendMessage({
       text: buildPrompt(tool, editorText, chapterTitle, chapterIndex, novelId, selectedText, novelTitle, outlineText, undefined, customPrompt),
     });
@@ -452,6 +457,7 @@ export function AIToolPanel({
     setActiveTool("outline");
     setEditedText("");
     markPending();
+    resetStages();
     sendMessage({
       text: buildPrompt("outline", editorText, chapterTitle, chapterIndex, novelId, selectedText, novelTitle, outlineText, outlineForm, customPrompt),
     });
@@ -478,6 +484,9 @@ export function AIToolPanel({
           生成总纲 → 生成正文 → 续写/扩写/重写
         </span>
       </div>
+
+      {/* R9-② five-stage pipeline progress (hidden when no stage events) */}
+      <StageProgress stages={stageStates} visible={isBusy && stagesVisible} />
 
       {/* API not configured warning */}
       {loaded && !isConfigured && (

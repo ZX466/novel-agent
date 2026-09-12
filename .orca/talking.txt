@@ -43,3 +43,9 @@
 状态: 已完成（`b83a074`，gitee 已推；origin 443 断，累计 ahead 27 待补推）
 进展: 磁盘清理 640MB 本地构建缓存（backend/.venv 207M + frontend/node_modules 433M + pytest/ruff/pycache）+ 3 个工具空壳目录；仓库 304 文件全为源码/配置/文档，无 secrets 无构建产物；git clean 验证磁盘与 git 完全一致。Docker 栈不受影响（镜像自含依赖）。
 ---
+---
+[回复] Docker 部署验证完成 — Claude
+时间: 2026-09-12 14:45
+状态: 已完成（R9 六项全部在运行容器中实证）
+进展: compose rebuild 完成（容器更名 novel-agent-* ×5）；alembic 升级至 2a3b4c5d6e7f（character_relationships 表建成）；实测 health ok/前端 200/关系图 GET+PUT 建边读回全通（测试数据已清）。①②③④⑤⑥✅
+---

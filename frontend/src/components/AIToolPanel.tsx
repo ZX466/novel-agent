@@ -29,6 +29,11 @@ interface AIToolPanelProps {
   novelTitle?: string;
   /** Outline text to inject as context for generation/continuation tools. */
   outlineText?: string;
+  /**
+   * R9-⑥ explicit per-chapter word target (frontend override). Absent =
+   * backend derives from prior chapters' median (±15% band).
+   */
+  targetWordCount?: number;
 }
 
 type ToolKey = "generate" | "continue" | "expand" | "rewrite" | "deai" | "outline";
@@ -245,6 +250,7 @@ export function AIToolPanel({
   novelId,
   novelTitle = "",
   outlineText = "",
+  targetWordCount,
 }: AIToolPanelProps) {
   const { isConfigured, loaded } = useProviderConfig();
   const [activeTool, setActiveTool] = useState<ToolKey | null>(null);
@@ -271,6 +277,17 @@ export function AIToolPanel({
   });
   const wasBusy = useRef(false);
 
+  // R9-④⑥: chapter-writing fields sent as structured request body fields
+  // (never embedded into the prompt text) so the backend can inject them
+  // into the system prompt without destabilizing the embedding cache key.
+  // total_chapters derives from the outline heading count; absent outline →
+  // null (backend falls back to prior-chapter median for the word target).
+  const totalChapters = useMemo(() => {
+    if (!outlineText) return null;
+    const count = outlineForPrompt(outlineText).match(/第[一二三四五六七八九十百千0-9]+章/g)?.length;
+    return count && count > 0 ? count : null;
+  }, [outlineText]);
+
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -281,8 +298,18 @@ export function AIToolPanel({
           if (!cfg) return auth;
           return { "X-Provider-Config": JSON.stringify(cfg), ...auth };
         },
+        prepareSendMessagesRequest: ({ body }) => ({
+          body: {
+            ...body,
+            // snake_case to match the backend ChatRequest field names.
+            chapter_index: chapterIndex ?? null,
+            total_chapters: totalChapters,
+            chapter_title: chapterTitle ?? "",
+            target_word_count: targetWordCount ?? null,
+          },
+        }),
       }),
-    [],
+    [chatEndpoint, chapterIndex, totalChapters, chapterTitle, targetWordCount],
   );
 
   const { messages, sendMessage, status, stop, error, setMessages } = useChat({ transport });

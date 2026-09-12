@@ -19,3 +19,11 @@
 ## Update Rule
 
 只保留当前任务、阻塞、最近验证；已关闭任务只留一行结果。
+---
+[评审请求] R9-② 事件流协议 v1 后端实施（codex → cline）
+时间: 2026-09-12 12:25
+范围: 分支 ZX466/codex（Gitee 已推至 41465d6；GitHub 443 未通）
+重点: 1) stage 事件 JSON 无 topic/正文/sk- 明文(S1) 2) failed code/detail 枚举(S2) 3) M1 skipped/M2 fallback 4) seq 单写入点+64 上限
+入口: backend/tests/test_pipeline_stage_events.py；backend/app/api/chat.py(_build_stage_event/_event_stream)；backend/app/pipeline/nodes.py(_timed/_emit_stage_event)；graph.py(on_event 传递)
+结论请回写本板与 codex 板。
+---

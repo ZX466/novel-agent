@@ -89,10 +89,10 @@
 ---
 [回复] R10 第二批:page.tsx 拆分+409提示+embedding loading+AI段落标记 — Claude
 时间: 2026-09-12 20:15
-状态: 已完成（`d754867`，gitee 已推；Docker 未起,容器重建待用户启动后）
+状态: 已完成（`d754867`，gitee 已推，backend/frontend 已重建，https://localhost:8443 200）
 - 拆分: page.tsx 1371→362 行;组件 5(components/editor/: LeftSidebar/RightPanel/EditorCenter/ExportMenu/EditorDialogs)+hook 8(use-editor-save/data/chapter-manager/outline-workflows/insertion/sync/find-replace/safety-radar)+lib/entity-extraction(大纲提取去重,编辑器/向导共用)
 - 409: ApiError.status===409 →「N 条已存在,已跳过」;向导提取不再静默,结果进 applyStatus
 - embedding loading: CharacterPanel 创建/编辑 saving 态「保存中…」(服务端自动嵌入秒级延迟)
 - AI 段落标记: AIParagraph 扩展(class 白名单 ai)+aiTextToParagraphNodes 插入标记+持久化 metadata_json.ai_paragraphs(索引制,content_text 保持纯文本,后端 ChapterListItem 补 metadata_json 带 default 零破坏);修复章节切换清空 metadata 丢标记/警告的 bug
 - 验证: tsc 0;vitest 67/67(+17);红线四处(perf-transport/localStorage 键/insert-text 契约/BYOK)逐一核对未动
-遗留: 后端 pytest 因 Docker 未起未跑(schema 改动为加 default 字段,低风险);frontend/backend 容器重建待 Docker 恢复
+后端验证: 容器内 pytest 38 failed 均为环境性(旧 schema 对照跑同 38 失败,与本批无关);chapter/document 直接受影响面 30+20 passed;nginx 先于 upstream 启动会 502,reload 即愈

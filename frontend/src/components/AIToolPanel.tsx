@@ -298,9 +298,13 @@ export function AIToolPanel({
           if (!cfg) return auth;
           return { "X-Provider-Config": JSON.stringify(cfg), ...auth };
         },
-        prepareSendMessagesRequest: ({ body }) => ({
+        prepareSendMessagesRequest: ({ messages, body }) => ({
           body: {
             ...body,
+            // AI SDK v5: a custom body REPLACES the default one — `messages`
+            // must be forwarded explicitly (the callback `body` is only the
+            // transport-level extra fields, an empty {} here).
+            messages,
             // snake_case to match the backend ChatRequest field names.
             chapter_index: chapterIndex ?? null,
             total_chapters: totalChapters,

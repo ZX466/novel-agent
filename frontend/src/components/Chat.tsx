@@ -8,6 +8,7 @@ import { PerfChatTransport, type PipelinePerf } from "@/lib/perf-transport";
 import { useProviderConfig } from "@/hooks/use-provider-config";
 import { chatEndpoint } from "@/lib/config";
 import { loadProviderConfig, ownerAuthHeaders } from "@/lib/settings";
+import { StageProgress, useStageProgress } from "@/components/StageProgress";
 
 interface ChatProps {
   onInsertIntoEditor?: (text: string) => void;
@@ -16,6 +17,7 @@ interface ChatProps {
 export function Chat({ onInsertIntoEditor }: ChatProps) {
   const { isConfigured, loaded } = useProviderConfig();
   const [lastPerf, setLastPerf] = useState<PipelinePerf | null>(null);
+  const { stages: stageStates, visible: stagesVisible, applyEvent: applyStageEvent, reset: resetStages } = useStageProgress();
 
   const transport = useMemo(
     () =>
@@ -28,7 +30,11 @@ export function Chat({ onInsertIntoEditor }: ChatProps) {
           return { "X-Provider-Config": JSON.stringify(cfg), ...auth };
         },
         onPerf: (perf) => setLastPerf(perf),
+        onStage: (event) => applyStageEvent(event),
       }),
+    // applyStageEvent is a stable useCallback — one transport for the
+    // component lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -42,6 +48,7 @@ export function Chat({ onInsertIntoEditor }: ChatProps) {
     e.preventDefault();
     const text = input.trim();
     if (!text || isBusy || !isConfigured) return;
+    resetStages();
     sendMessage({ text });
     setInput("");
   };
@@ -130,6 +137,10 @@ export function Chat({ onInsertIntoEditor }: ChatProps) {
             </p>
           </div>
         )}
+
+        {/* R9-②: pipeline stage progress (hidden entirely when the backend
+            sent no stage events — M2 fallback tolerance). */}
+        <StageProgress stages={stageStates} visible={isBusy && stagesVisible} />
 
         {messages.map((m, i) => {
           const isAssistant = m.role === "assistant";

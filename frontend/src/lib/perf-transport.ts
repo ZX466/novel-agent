@@ -11,6 +11,19 @@ export interface PipelinePerf {
   [stage: string]: number | undefined;
 }
 
+/** R9-② stage event payload (protocol v1, codex 480d802). */
+export interface StageEvent {
+  type: "stage" | "pipeline_start";
+  stage?: string;
+  status?: "started" | "succeeded" | "failed" | "skipped";
+  iteration?: number;
+  elapsed_ms?: number;
+  code?: string;
+  reason?: string;
+  seq?: number;
+  summary?: Record<string, unknown>;
+}
+
 /** PerfPulse: custom ChatTransport that parses the backend SSE stream
  *  directly, so non-AI-SDK custom events (e.g. `{"type":"perf",...}`)
  *  can be captured without being dropped by DefaultChatTransport's
@@ -24,15 +37,19 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
   private readonly base: string;
   private readonly headers: () => Record<string, string>;
   private readonly onPerf: (perf: PipelinePerf) => void;
+  private readonly onStage?: (event: StageEvent) => void;
 
   constructor(opts: {
     api: string;
     headers?: () => Record<string, string>;
     onPerf: (perf: PipelinePerf) => void;
+    /** R9-② optional stage-event sink; absent = events ignored (M2 tolerance). */
+    onStage?: (event: StageEvent) => void;
   }) {
     this.base = opts.api;
     this.headers = opts.headers ?? (() => ({}));
     this.onPerf = opts.onPerf;
+    this.onStage = opts.onStage;
   }
 
   async sendMessages(opts: {
@@ -75,6 +92,7 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
     let textStarted = false;
     const TEXT_ID = "text-0";
     const onPerf = this.onPerf; // capture (avoid `this` inside stream callbacks)
+    const onStage = this.onStage;
 
     const stream = new ReadableStream<UIMessageChunk>({
       async start(controller) {
@@ -121,6 +139,13 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
                   case "perf":
                     onPerf((evt.data ?? {}) as PipelinePerf);
                     break;
+                  case "stage":
+                  case "pipeline_start": {
+                    // R9-② stage events: forward to the optional sink.
+                    // Unknown/missing sink → ignored (M2 tolerance).
+                    if (onStage) onStage(evt as unknown as StageEvent);
+                    break;
+                  }
                   case "error":
                     controller.enqueue({
                       type: "error",

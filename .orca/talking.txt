@@ -64,3 +64,12 @@
 用户盘点发现: ①人物关系图/时间线图谱/一致性哨兵 UI 不存在——核实: R9-③/R6-2 只交付了后端 API+测试,前端可视化组件从未实现(只定了契约) ②灵感套件/创作向导报错——同样是 DefaultChatTransport 炸流,已随 901cf93 一并换 PerfChatTransport ③事件协议 v2: 后端自定义事件改 data- 前缀包裹(`3212531`),经 DefaultChatTransport 也兼容。
 待办(需派单): 关系图前端组件、时间线前端组件、一致性哨兵 UI、409 提示优化。
 ---
+---
+[回复] 分段持久化修复+embedding 方案B(4096)+OpenDesign 提示词 — Claude
+时间: 2026-09-12 18:55
+状态: 已完成（`efbdd6f`+`7fb099a`，gitee 已推，backend/frontend 已重建）
+- ⑤补全: 章节加载 setContent 把纯文本当 HTML 致段落塌陷——textToTipTapHTML 转换(加载+快照恢复两处),6 新测试
+- embedding 方案B: EMBEDDING_DIM 1024→4096 全精度;迁移 e8f9a0b1c2d3 改 5 表列;旧 71 条截断向量置 NULL 懒式重嵌;HNSW 索引删除(pgvector 2000 维上限,个人规模顺序扫描够用)
+- docs/opendesign-prompt.md: 前端重构完整提示词(契约红线/缺失组件清单/验收标准)。R10 派单计划撤销,缺口并入 OpenDesign 重构。
+用户侧待办: 前端 ⚙ embedding 重选模型(4096 维原生),写实体触发重嵌。
+---

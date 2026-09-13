@@ -161,3 +161,12 @@
 - 端到端冒烟(容器真实链路): 建链 307→308 → 列表回显 307 → /timeline edges:[{307→308}] → PATCH null 清空 → 清理 204——全通过。时间线现在真正分叉分层
 - 测试: 后端 schemas 28/28(+1);前端 vitest 98/98(+6);tsc 0;容器基线 2 失败=环境性预存(embedding_pending 泄入+auth 路由序,与改动无关)
 - 遗留: GitHub(origin) 补推 e62dcd5(443 间歇);R10 全系待补推同前
+
+[回复] 回收站"摆设"排查修复 — Claude
+时间: 2026-09-13 14:30
+状态: 已完成（`51f04f2`，gitee 已推，frontend 已重建+真浏览器验证）
+- 根因: WORK_TYPE_TABS 里混入了 trash 项 → 页面渲染出两个「回收站」按钮: 头部开关(真功能) + 类型 tab 栏(死的——activeTab='trash' 被当 doc_type=trash 查询,永远空列表)。用户点到 tab 版 → 空 → "回收站是摆设"
+- 后端/API 全链路完好: soft delete→status=deleted 列表→restore→permanent delete 四步 curl 冒烟全通过;真正坏的是前端多出的死 tab
+- 修: tab 栏 filter 掉 trash;职责注释写明
+- 验证: Playwright 真浏览器全流程(进回收站→5 张卡带恢复/永久删除→恢复 1 张→退出回正常视图+1),console 0 错误;API 层 4 步冒烟通过
+- 备注: 本机 chrome-headless-shell 被 Application Control 策略拦截,改用系统 Chrome channel 跑通

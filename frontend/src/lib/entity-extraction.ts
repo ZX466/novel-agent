@@ -53,6 +53,8 @@ export async function extractAndCreateEntities(
           summary: pe.summary,
           event_type: pe.event_type || "其他",
           chapter_index: pe.chapter_index ?? null,
+          // R10-⑧: optional chain link when the extraction schema carries it
+          prev_event_id: pe.prev_event_id ?? null,
         }),
       ),
     ),

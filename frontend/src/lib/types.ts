@@ -262,6 +262,9 @@ export interface PlotEventListItem {
   chapter_index: number | null;
   event_type: string;
   summary: string;
+  // R10-⑧: echoed by the list endpoint so the panel renders predecessor
+  // dropdowns + causal-chain badges without a per-row detail round-trip.
+  prev_event_id?: number | null;
   involved_character_ids: number[];
   created_at: string;
   updated_at: string;
@@ -434,6 +437,9 @@ export interface ExtractedPlotEvent {
   chapter_index?: number | null;
   event_type?: string;
   summary: string;
+  /** Optional causal link (R10-⑧): id of an already-created event this one
+   *  follows. Only usable when the extractor can reference earlier rows. */
+  prev_event_id?: number | null;
 }
 
 export interface ExtractEntitiesResult {

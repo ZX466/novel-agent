@@ -45,7 +45,33 @@ export interface PlotEventInput {
   chapter_index?: number | null;
   event_type?: string;
   summary: string;
+  prev_event_id?: number | null;
   involved_character_ids?: number[];
+}
+
+/**
+ * R10-⑧ client-side cycle precheck for the predecessor dropdown: choosing
+ * `chosenPrevId` as the predecessor of `editedId` forms a cycle when walking
+ * `chosenPrevId`'s prev_event_id chain (over the WITH-choice snapshot)
+ * reaches `editedId`. Warning-only server-side (R6-2) — this is the UX-layer
+ * guard that keeps the option disabled before it can ever be saved.
+ */
+export function formsCycle(
+  editedId: number,
+  chosenPrevId: number | null,
+  events: ReadonlyArray<{ id: number; prev_event_id?: number | null }>,
+): boolean {
+  if (chosenPrevId == null) return false;
+  if (chosenPrevId === editedId) return true;
+  const byId = new Map(events.map((e) => [e.id, e.prev_event_id]));
+  let cursor: number | null = chosenPrevId;
+  const seen = new Set<number>();
+  while (cursor != null && !seen.has(cursor)) {
+    if (cursor === editedId) return true;
+    seen.add(cursor);
+    cursor = byId.get(cursor) ?? null;
+  }
+  return false;
 }
 
 export async function listPlotEvents(

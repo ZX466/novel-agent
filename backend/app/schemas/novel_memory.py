@@ -215,6 +215,9 @@ class PlotEventListItem(BaseModel):
     chapter_index: int | None
     event_type: str
     summary: str
+    # R10-⑧: echoed so the panel renders predecessor dropdowns + shows the
+    # causal chain without a per-row detail round-trip.
+    prev_event_id: int | None = None
     updated_at: datetime
 
 

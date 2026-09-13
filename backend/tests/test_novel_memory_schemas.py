@@ -228,6 +228,27 @@ def test_plot_event_list_item_omits_character_ids():
     assert not hasattr(item, "involved_character_ids")
 
 
+def test_plot_event_list_item_carries_prev_event_id():
+    """R10-⑧: the list endpoint echoes prev_event_id so the panel can render
+    predecessor dropdowns and the client-side cycle precheck."""
+    orm = SimpleNamespace(
+        id=4, chapter_index=2, event_type="revelation", summary="...",
+        prev_event_id=3,
+        updated_at=datetime(2026, 7, 1, tzinfo=timezone.utc),
+    )
+    item = PlotEventListItem.model_validate(orm, from_attributes=True)
+    assert item.prev_event_id == 3
+
+    bare = PlotEventListItem.model_validate(
+        SimpleNamespace(
+            id=5, chapter_index=None, event_type="beat", summary="...",
+            updated_at=datetime(2026, 7, 1, tzinfo=timezone.utc),
+        ),
+        from_attributes=True,
+    )
+    assert bare.prev_event_id is None
+
+
 # --- RetrievalHit ------------------------------------------------------------
 
 

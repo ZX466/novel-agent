@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
+  formsCycle,
   listPlotEvents,
   getPlotEvent,
   createPlotEvent,
@@ -32,6 +33,7 @@ interface CreateForm {
   chapter_index: string; // "" = unlinked, otherwise numeric string
   event_type: string;
   summary: string;
+  prev_event_id: string; // "" = none, otherwise numeric string (R10-⑧)
   involved_character_ids: string; // comma-separated
 }
 
@@ -41,6 +43,7 @@ const EMPTY_FORM: CreateForm = {
   chapter_index: "",
   event_type: PLOT_EVENT_TYPE_OPTIONS[0],
   summary: "",
+  prev_event_id: "",
   involved_character_ids: "",
 };
 
@@ -49,6 +52,8 @@ function toPayload(form: CreateForm) {
     chapter_index: form.chapter_index === "" ? null : Number(form.chapter_index),
     event_type: form.event_type,
     summary: form.summary,
+    // R10-⑧: "" = clear/none → null (PATCH null clears the stored pointer)
+    prev_event_id: form.prev_event_id === "" ? null : Number(form.prev_event_id),
     involved_character_ids: form.involved_character_ids
       .split(",")
       .map((s) => parseInt(s.trim(), 10))
@@ -144,6 +149,7 @@ export default function PlotEventPanel({
         ev.chapter_index == null ? "" : String(ev.chapter_index),
       event_type: ev.event_type,
       summary: ev.summary,
+      prev_event_id: ev.prev_event_id == null ? "" : String(ev.prev_event_id),
       involved_character_ids: "", // will be filled if we have it from expanded
     });
   };
@@ -155,6 +161,7 @@ export default function PlotEventPanel({
         ev.chapter_index == null ? "" : String(ev.chapter_index),
       event_type: ev.event_type ?? PLOT_EVENT_TYPE_OPTIONS[0],
       summary: ev.summary,
+      prev_event_id: ev.prev_event_id == null ? "" : String(ev.prev_event_id),
       involved_character_ids:
         ev.involved_character_ids?.join(", ") ?? "",
     });
@@ -198,6 +205,35 @@ export default function PlotEventPanel({
         })),
     [chapters],
   );
+
+  /* ---- R10-⑧ predecessor options for one form (create or edit) ----
+   * `editedId` (null = create form) is excluded from the list, and any
+   * candidate that would close a prev-chain cycle is disabled — the
+   * client-side precheck over the CURRENT stored graph. */
+  const predecessorOptions = (
+    editedId: number | null,
+    currentPrev: string,
+  ): Array<{ value: string; label: string; disabled: boolean }> =>
+    [...events]
+      .sort((a, b) => {
+        if (a.chapter_index == null && b.chapter_index == null) return a.id - b.id;
+        if (a.chapter_index == null) return 1;
+        if (b.chapter_index == null) return -1;
+        return a.chapter_index - b.chapter_index || a.id - b.id;
+      })
+      .map((e) => {
+        const value = String(e.id);
+        // Walk the stored chain from this candidate; disable when it would
+        // loop back to the event being edited. Skip the no-op "keep as-is"
+        // choice — re-saving the stored pointer never creates a new cycle.
+        const wouldCycle =
+          value !== currentPrev &&
+          formsCycle(editedId ?? -1, e.id, events);
+        const label = `#${e.id} ${e.summary.slice(0, 18)}${e.summary.length > 18 ? "…" : ""}${
+          e.chapter_index != null ? `（第${e.chapter_index}章）` : ""
+        }`;
+        return { value, label, disabled: wouldCycle || e.id === editedId };
+      });
 
   /* ================================================================ */
   /*  Render                                                           */
@@ -331,6 +367,29 @@ export default function PlotEventPanel({
             {PLOT_EVENT_TYPE_OPTIONS.map((t) => (
               <option key={t} value={t}>
                 {t}
+              </option>
+            ))}
+          </select>
+
+          {/* R10-⑧ predecessor: makes the timeline actually fork/layer */}
+          <select
+            value={createForm.prev_event_id}
+            onChange={(e) =>
+              setCreateForm((f) => ({ ...f, prev_event_id: e.target.value }))
+            }
+            style={{
+              fontSize: 11,
+              padding: "2px 4px",
+              borderRadius: 4,
+              border: "1px solid var(--border-subtle)",
+              background: "var(--bg)",
+              color: "var(--fg)",
+            }}
+          >
+            <option value="">无前驱（时间线起点）</option>
+            {predecessorOptions(null, "").map((o) => (
+              <option key={o.value} value={o.value} disabled={o.disabled}>
+                {o.disabled ? `${o.label}（成环）` : o.label}
               </option>
             ))}
           </select>
@@ -517,6 +576,20 @@ export default function PlotEventPanel({
                   >
                     {ev.event_type}
                   </span>
+                  {ev.prev_event_id != null && (
+                    <span
+                      style={{
+                        fontSize: 9,
+                        padding: "0 4px",
+                        borderRadius: 3,
+                        background: "var(--surface-2)",
+                        color: "var(--accent)",
+                      }}
+                      title="因果链前驱"
+                    >
+                      ↳#{ev.prev_event_id}
+                    </span>
+                  )}
                 </div>
 
                 {/* row 2 — summary */}
@@ -550,22 +623,37 @@ export default function PlotEventPanel({
                         加载详情...
                       </div>
                     ) : (
-                      expandedDetail &&
-                      expandedDetail.involved_character_ids &&
-                      expandedDetail.involved_character_ids.length > 0 && (
-                        <div
-                          style={{
-                            fontSize: 10,
-                            color: "var(--muted)",
-                            marginBottom: 4,
-                          }}
-                        >
-                          涉及角色:{" "}
-                          {expandedDetail.involved_character_ids
-                            .map((id) => `#${id}`)
-                            .join(", ")}
-                        </div>
-                      )
+                      <>
+                        {ev.prev_event_id != null && (
+                          <div
+                            style={{
+                              fontSize: 10,
+                              color: "var(--muted)",
+                              marginBottom: 4,
+                            }}
+                          >
+                            前驱: #{ev.prev_event_id}{" "}
+                            {events.find((x) => x.id === ev.prev_event_id)
+                              ?.summary.slice(0, 14) ?? ""}
+                          </div>
+                        )}
+                        {expandedDetail &&
+                          expandedDetail.involved_character_ids &&
+                          expandedDetail.involved_character_ids.length > 0 && (
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: "var(--muted)",
+                                marginBottom: 4,
+                              }}
+                            >
+                              涉及角色:{" "}
+                              {expandedDetail.involved_character_ids
+                                .map((id) => `#${id}`)
+                                .join(", ")}
+                            </div>
+                          )}
+                      </>
                     )}
 
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -733,6 +821,38 @@ export default function PlotEventPanel({
                       {PLOT_EVENT_TYPE_OPTIONS.map((t) => (
                         <option key={t} value={t}>
                           {t}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* R10-⑧ predecessor — re-pointing PATCHes null-away;
+                        cycle-forming candidates are disabled client-side. */}
+                    <select
+                      value={editForm.prev_event_id}
+                      onChange={(e) =>
+                        setEditForm((f) => ({
+                          ...f,
+                          prev_event_id: e.target.value,
+                        }))
+                      }
+                      style={{
+                        fontSize: 11,
+                        padding: "2px 4px",
+                        borderRadius: 4,
+                        border: "1px solid var(--border-subtle)",
+                        background: "var(--bg)",
+                        color: "var(--fg)",
+                      }}
+                    >
+                      <option value="">无前驱（时间线起点）</option>
+                      {predecessorOptions(
+                        editId,
+                        editForm.prev_event_id,
+                      ).map((o) => (
+                        <option key={o.value} value={o.value} disabled={o.disabled}>
+                          {o.disabled && o.value !== editForm.prev_event_id
+                            ? `${o.label}（成环）`
+                            : o.label}
                         </option>
                       ))}
                     </select>

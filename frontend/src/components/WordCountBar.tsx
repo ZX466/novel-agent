@@ -15,6 +15,8 @@ interface WordCountBarProps {
   /** R10-⑤: true while the background embedding of this chapter is still
    *  in flight (save → "索引中" badge; cleared → brief "已索引" flash). */
   embeddingPending?: boolean;
+  /** Novel id for the 记忆库 entry (R10-⑥). Absent = hide the link. */
+  novelId?: number;
 }
 
 /** Format milliseconds since last save as a relative time string. */
@@ -33,6 +35,7 @@ export function WordCountBar({
   onSave,
   onAutoSave,
   embeddingPending = false,
+  novelId,
 }: WordCountBarProps) {
   // Track when the last successful save happened.
   const [lastSaveTime, setLastSaveTime] = useState<number>(Date.now());
@@ -131,7 +134,7 @@ export function WordCountBar({
       >
         总字数 <span className="font-semibold" style={{ color: "var(--fg-secondary)" }}>{totalWordCount.toLocaleString()}</span> 字
       </span>
-      {/* R10: in-editor entry to the stats dashboard */}
+      {/* R10: in-editor entry to the stats dashboard + memory library */}
       <a
         href="/stats"
         className="text-[10px] underline-offset-2 hover:underline"
@@ -139,6 +142,16 @@ export function WordCountBar({
       >
         统计
       </a>
+      {novelId != null && (
+        <a
+          href={`/novels/${novelId}/memory`}
+          className="text-[10px] underline-offset-2 hover:underline"
+          style={{ color: "var(--muted)" }}
+          title="查看/整理 AI 检索的全部记忆"
+        >
+          🧠 记忆库
+        </a>
+      )}
       <span className="flex-1" />
 
       {/* R10-⑤ embedding indexing indicator */}

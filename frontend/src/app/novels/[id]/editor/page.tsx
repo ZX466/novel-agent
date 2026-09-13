@@ -272,6 +272,7 @@ export default function NovelEditorPage() {
             onSave={handleSave}
             onAutoSave={handleAutoSave}
             embeddingPending={embeddingPending}
+            novelId={docId}
           />
         </>
       )}

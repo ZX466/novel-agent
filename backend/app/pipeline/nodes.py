@@ -503,13 +503,16 @@ async def draft_node(state: PipelineState) -> dict:
 
     if task_type == "extract":
         system_content = (
-            "你是一个结构化数据提取器。用户会给你一段小说大纲，请从中提取角色、世界观设定和剧情事件。\n"
+            "你是一个结构化数据提取器。用户会给你一段小说大纲，请从中提取角色、世界观设定、剧情事件和人物关系。\n"
             "只输出 JSON，不要任何解释、markdown 或多余文字。\n"
             "输出格式：\n"
             '{"characters":[{"name":"姓名","role":"主角/配角/反派/其他","description":"简短描述","arc_summary":"成长弧线"}],'
             '"world_settings":[{"category":"地理/势力/体系/其他","title":"标题","content_text":"内容"}],'
-            '"plot_events":[{"chapter_index":0,"event_type":"起/承/转/合/高潮/结局/其他","summary":"事件概述"}]}\n'
-            "如果某类信息在大纲中不存在，对应数组留空 []。"
+            '"plot_events":[{"chapter_index":0,"event_type":"起/承/转/合/高潮/结局/其他","summary":"事件概述"}],'
+            '"relationships":[{"subject_name":"角色A","object_name":"角色B","relation_type":"师徒/恋人/敌对/搭档/亲属/其他","strength":5,"description":"关系说明"}]}\n'
+            "relationships 为人物关系线：subject_name/object_name 必须是 characters 中出现的姓名，"
+            "人物关系取自大纲中角色间的互动/称谓，若大纲未体现则留空 []。"
+            "其他类别如果在大纲中不存在，对应数组同样留空 []。"
         )
     elif task_type == "outline":
         system_content = (

@@ -42,8 +42,8 @@ export function OutlinePanel({
   onAiPolish,
 }: OutlinePanelProps) {
   const [view, setView] = useState<"list" | "mindmap">("list");
-  // R10-⑨: 全局模式——总纲编辑区展开到面板全高（超长篇大纲 1000+ 行，
-  // 30% 高度的预览框没法编辑）。
+  // R10-⑨: 全局模式——「⤢ 全局」弹出居中弹层（样式对齐 CreativeKitDialog），
+  // 超长篇大纲 1000+ 行获得完整编辑空间；关闭后恢复面板原布局。
   const [outlineFullscreen, setOutlineFullscreen] = useState(false);
   const [polishing, setPolishing] = useState(false);
   const [polishError, setPolishError] = useState<string | null>(null);
@@ -121,6 +121,126 @@ export function OutlinePanel({
       setRenameValue("");
     },
     [renameValue, onRename],
+  );
+
+  // Outline toolbar — shared between the inline section and the fullscreen
+  // modal header (AI 提取 / AI 润色 / 全局 toggle / 编辑-保存).
+  const outlineToolbar = (
+    <div className="flex gap-sp-1">
+      <button
+        type="button"
+        onClick={onExtractEntities}
+        disabled={extracting || !outline}
+        className="text-[10px] px-sp-2 py-px rounded-sm transition-colors disabled:opacity-40"
+        style={{
+          color: "var(--accent)",
+          border: "1px solid var(--accent)",
+        }}
+        title="从大纲提取角色、世界观和剧情事件"
+      >
+        {extracting ? "提取中…" : "AI 提取"}
+      </button>
+      {onAiPolish && (
+        <button
+          type="button"
+          disabled={polishing || !outlineDraft.trim()}
+          onClick={() => {
+            if (!onAiPolish) return;
+            setPolishing(true);
+            setPolishError(null);
+            onAiPolish(
+              (polished) => {
+                setOutlineDraft(polished);
+                onSaveOutline?.(polished);
+                setPolishing(false);
+              },
+              (msg) => {
+                setPolishError(msg);
+                setPolishing(false);
+              },
+            );
+          }}
+          className="text-[10px] px-sp-2 py-px rounded-sm transition-colors disabled:opacity-40"
+          style={{
+            color: "var(--accent)",
+            border: "1px solid var(--accent)",
+          }}
+          title="用 AI 润色当前总纲（保持结构，改进表达）"
+        >
+          {polishing ? "润色中…" : "AI 润色"}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => setOutlineFullscreen((v) => !v)}
+        className="text-[10px] px-sp-2 py-px rounded-sm transition-colors"
+        style={{
+          color: outlineFullscreen ? "var(--accent)" : "var(--muted)",
+          border: outlineFullscreen ? "1px solid var(--accent)" : "1px solid var(--border)",
+        }}
+        title={outlineFullscreen ? "全局模式——弹出居中大窗编辑" : "全局模式——弹出居中大窗编辑，适配超长篇大纲"}
+      >
+        {outlineFullscreen ? "⤡ 退出" : "⤢ 全局"}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (editingOutline) {
+            onSaveOutline?.(outlineDraft);
+            setEditingOutline(false);
+          } else {
+            setEditingOutline(true);
+          }
+        }}
+        className="text-[10px] px-sp-2 py-px rounded-sm transition-colors"
+        style={{
+          color: editingOutline ? "var(--bg)" : "var(--muted)",
+          background: editingOutline ? "var(--accent)" : "transparent",
+          border: editingOutline ? "none" : "1px solid var(--border)",
+        }}
+      >
+        {editingOutline ? "保存" : "编辑"}
+      </button>
+    </div>
+  );
+
+  // Outline editor body (textarea in edit mode / preview `<p>` otherwise) —
+  // shared between inline and modal rendering.
+  const outlineBody = (
+    <>
+      {editingOutline || !outline ? (
+        <textarea
+          value={outlineDraft}
+          onChange={(e) => setOutlineDraft(e.target.value)}
+          placeholder="在此编写或粘贴小说大纲…&#10;&#10;例如：&#10;1. 第一章 张三入宗&#10;   张三在青云宗拜入门下，开启修仙之路。&#10;2. 第二章 修炼突破&#10;   张三苦修三个月，终于突破练气期。"
+          className={`w-full text-[12px] leading-[1.7] bg-transparent border rounded-sm p-sp-2 outline-none resize-y ${outlineFullscreen ? "flex-1 min-h-0" : "min-h-[100px]"}`}
+          style={{
+            color: "var(--fg-secondary)",
+            borderColor: "var(--border)",
+          }}
+          onBlur={() => {
+            // Auto-save on blur if there's content
+            if (outlineDraft.trim() && outlineDraft !== outline) {
+              onSaveOutline?.(outlineDraft);
+            }
+          }}
+        />
+      ) : (
+        <p
+          className={`text-[12px] leading-[1.7] whitespace-pre-wrap cursor-pointer ${outlineFullscreen ? "flex-1 overflow-y-auto min-h-0" : ""}`}
+          style={{ color: "var(--fg-secondary)" }}
+          onClick={() => setEditingOutline(true)}
+          title="点击编辑"
+        >
+          {outline}
+        </p>
+      )}
+      {polishError && (
+        <p className="mt-sp-1 text-[10px]" style={{ color: "var(--danger)" }}>
+          {polishError}
+        </p>
+      )}
+    </>
   );
 
   return (
@@ -205,136 +325,83 @@ export function OutlinePanel({
         </button>
       </div>
 
-      {/* Outline text — always visible. R10-⑨ 全局模式: flex-1 占满整栏
-          并隐藏章节列表，超长篇大纲获得完整编辑空间。 */}
-      <div
-        className={outlineFullscreen ? "flex-1 min-h-0 flex flex-col px-sp-4 py-sp-3 border-b" : "px-sp-4 py-sp-3 border-b shrink-0 overflow-y-auto"}
-        style={{
-          borderColor: "var(--border-subtle)",
-          background: "var(--bg)",
-          ...(outlineFullscreen ? {} : { maxHeight: editingOutline ? "45%" : "30%" }),
-        }}
-      >
-        <div className="flex items-center mb-sp-2">
-          <span
-            className="text-[10px] font-semibold uppercase flex-1"
-            style={{ color: "var(--fg-tertiary)", letterSpacing: "0.08em" }}
-          >
-            总纲
-          </span>
-          <div className="flex gap-sp-1">
-            <button
-              type="button"
-              onClick={onExtractEntities}
-              disabled={extracting || !outline}
-              className="text-[10px] px-sp-2 py-px rounded-sm transition-colors disabled:opacity-40"
-              style={{
-                color: "var(--accent)",
-                border: "1px solid var(--accent)",
-              }}
-              title="从大纲提取角色、世界观和剧情事件"
+      {/* Outline text — always visible in the sidebar; 全局模式 renders the
+          centered modal below instead (弹层覆盖整个页面). */}
+      {!outlineFullscreen && (
+        <div
+          className="px-sp-4 py-sp-3 border-b shrink-0 overflow-y-auto"
+          style={{
+            borderColor: "var(--border-subtle)",
+            background: "var(--bg)",
+            maxHeight: editingOutline ? "45%" : "30%",
+          }}
+        >
+          <div className="flex items-center mb-sp-2">
+            <span
+              className="text-[10px] font-semibold uppercase flex-1"
+              style={{ color: "var(--fg-tertiary)", letterSpacing: "0.08em" }}
             >
-              {extracting ? "提取中…" : "AI 提取"}
-            </button>
-            {onAiPolish && (
+              总纲
+            </span>
+            {outlineToolbar}
+          </div>
+          {outlineBody}
+        </div>
+      )}
+
+      {/* R10-⑨ 全局模式: 居中弹层（样式对齐 CreativeKitDialog）— 遮罩点击
+          退出，面板含工具行 + 完整编辑区。 */}
+      {outlineFullscreen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="全局模式"
+          className="fixed inset-0 z-50 flex items-center justify-center"
+        >
+          <div
+            className="fixed inset-0"
+            style={{ background: "rgba(0,0,0,0.4)" }}
+            onClick={() => setOutlineFullscreen(false)}
+            aria-label="全局模式遮罩"
+          />
+          <div
+            className="relative z-10 w-[92vw] max-w-[1080px] h-[86vh] flex flex-col rounded-lg border shadow-2xl"
+            style={{ background: "var(--surface)", borderColor: "var(--border-hairline)" }}
+          >
+            {/* Header: 总纲 + 工具行 + 关闭 */}
+            <div
+              className="flex items-center gap-sp-2 px-sp-4 py-sp-3 border-b shrink-0"
+              style={{ borderColor: "var(--border-subtle)" }}
+            >
+              <span
+                className="text-[10px] font-semibold uppercase"
+                style={{ color: "var(--fg-tertiary)", letterSpacing: "0.08em" }}
+              >
+                总纲
+              </span>
+              {outlineToolbar}
+              <span className="flex-1" />
               <button
                 type="button"
-                disabled={polishing || !outlineDraft.trim()}
-                onClick={() => {
-                  if (!onAiPolish) return;
-                  setPolishing(true);
-                  setPolishError(null);
-                  onAiPolish(
-                    (polished) => {
-                      setOutlineDraft(polished);
-                      onSaveOutline?.(polished);
-                      setPolishing(false);
-                    },
-                    (msg) => {
-                      setPolishError(msg);
-                      setPolishing(false);
-                    },
-                  );
-                }}
-                className="text-[10px] px-sp-2 py-px rounded-sm transition-colors disabled:opacity-40"
-                style={{
-                  color: "var(--accent)",
-                  border: "1px solid var(--accent)",
-                }}
-                title="用 AI 润色当前总纲（保持结构，改进表达）"
+                onClick={() => setOutlineFullscreen(false)}
+                aria-label="退出全局模式"
+                title="退出全局模式"
+                className="text-[12px] px-sp-2 py-px rounded-sm"
+                style={{ color: "var(--muted)" }}
               >
-                {polishing ? "润色中…" : "AI 润色"}
+                ✕
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setOutlineFullscreen((v) => !v)}
-              className="text-[10px] px-sp-2 py-px rounded-sm transition-colors"
-              style={{
-                color: outlineFullscreen ? "var(--accent)" : "var(--muted)",
-                border: outlineFullscreen ? "1px solid var(--accent)" : "1px solid var(--border)",
-              }}
-              title={outlineFullscreen ? "退出全局模式" : "全局模式——编辑区扩展到整栏，适配超长篇大纲"}
-            >
-              {outlineFullscreen ? "⤡ 退出" : "⤢ 全局"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (editingOutline) {
-                  onSaveOutline?.(outlineDraft);
-                  setEditingOutline(false);
-                } else {
-                  setEditingOutline(true);
-                }
-              }}
-              className="text-[10px] px-sp-2 py-px rounded-sm transition-colors"
-              style={{
-                color: editingOutline ? "var(--bg)" : "var(--muted)",
-                background: editingOutline ? "var(--accent)" : "transparent",
-                border: editingOutline ? "none" : "1px solid var(--border)",
-              }}
-            >
-              {editingOutline ? "保存" : "编辑"}
-            </button>
+            </div>
+            {/* Body: 编辑区填满弹层 */}
+            <div className="flex-1 min-h-0 flex flex-col px-sp-4 py-sp-3">
+              {outlineBody}
+            </div>
           </div>
         </div>
-        {editingOutline || !outline ? (
-          <textarea
-            value={outlineDraft}
-            onChange={(e) => setOutlineDraft(e.target.value)}
-            placeholder="在此编写或粘贴小说大纲…&#10;&#10;例如：&#10;1. 第一章 张三入宗&#10;   张三在青云宗拜入门下，开启修仙之路。&#10;2. 第二章 修炼突破&#10;   张三苦修三个月，终于突破练气期。"
-            className={`w-full text-[12px] leading-[1.7] bg-transparent border rounded-sm p-sp-2 outline-none resize-y ${outlineFullscreen ? "flex-1 min-h-0" : "min-h-[100px]"}`}
-            style={{
-              color: "var(--fg-secondary)",
-              borderColor: "var(--border)",
-            }}
-            onBlur={() => {
-              // Auto-save on blur if there's content
-              if (outlineDraft.trim() && outlineDraft !== outline) {
-                onSaveOutline?.(outlineDraft);
-              }
-            }}
-          />
-        ) : (
-          <p
-            className={`text-[12px] leading-[1.7] whitespace-pre-wrap cursor-pointer ${outlineFullscreen ? "flex-1 overflow-y-auto min-h-0" : ""}`}
-            style={{ color: "var(--fg-secondary)" }}
-            onClick={() => setEditingOutline(true)}
-            title="点击编辑"
-          >
-            {outline}
-          </p>
-        )}
-        {polishError && (
-          <p className="mt-sp-1 text-[10px]" style={{ color: "var(--danger)" }}>
-            {polishError}
-          </p>
-        )}
-      </div>
+      )}
 
-      {/* Chapter list — list view or mind-map view (R6-1); hidden entirely
-          in outline 全局模式 (R10-⑨) */}
+      {/* Chapter list — list view or mind-map view (R6-1); kept unmounted
+          while the 全局 modal is open (弹层覆盖,避免无谓渲染, R10-⑨) */}
       {outlineFullscreen ? null : view === "mindmap" ? (
         <div className="flex-1 overflow-y-auto min-h-0">
           {loading ? (

@@ -1,8 +1,6 @@
 /**
- * OutlinePanel 全局模式 (R10-⑨ fix): entering outline fullscreen must make
- * the textarea fill the panel height — deployed 09-13 the container got
- * flex-1 but the textarea kept its content height, so nothing appeared to
- * change (the chapter list hiding was the only visible effect).
+ * OutlinePanel 全局模式：「⤢ 全局」弹出居中弹层（样式对齐 CreativeKitDialog），
+ * 超长篇大纲获得完整编辑空间；点遮罩或 ✕ 退出，恢复面板原布局。
  */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -39,19 +37,27 @@ describe("OutlinePanel 全局模式", () => {
     expect(screen.queryByText("第一章")).not.toBeInTheDocument();
   });
 
-  it("entering 全局 mode expands the outline editor to fill the panel", () => {
+  it("全局模式 opens a centered modal dialog", () => {
     setup();
     // Enter edit mode first so the textarea is visible.
     fireEvent.click(screen.getByText("编辑"));
-    const textarea = screen.getByPlaceholderText(/在此编写或粘贴小说大纲/);
-    expect(textarea).not.toHaveClass("flex-1");
-
     fireEvent.click(screen.getByTitle(/全局模式/));
-    // THE fix: in fullscreen the textarea stretches to the container.
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).toContain("fixed");
+    expect(dialog.className).toContain("z-50");
+    const textarea = screen.getByPlaceholderText(/在此编写或粘贴小说大纲/);
     expect(textarea).toHaveClass("flex-1");
-    // ...and the wrapping container is flex column (needed for flex-1).
-    const container = textarea.parentElement as HTMLElement;
-    expect(container.className).toContain("flex-col");
-    expect(container.className).toContain("flex-1");
+    // Close via the ✕ button.
+    fireEvent.click(screen.getByLabelText("退出全局模式"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("closes the modal when the overlay is clicked", () => {
+    setup();
+    fireEvent.click(screen.getByText("编辑"));
+    fireEvent.click(screen.getByTitle(/全局模式/));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("全局模式遮罩"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

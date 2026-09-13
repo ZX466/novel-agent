@@ -158,10 +158,23 @@ from fastapi.exceptions import RequestValidationError
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Log 422 validation failures with field-level detail (R9 deployment
-    diagnosis) and return the standard FastAPI error body."""
+    diagnosis) and return the standard FastAPI error body.
+
+    Errors are JSON-sanitized before returning: exc.errors() entries carry
+    the original exception object in ctx["error"] (ValueError /
+    AssertionError from validators), which json.dumps cannot serialize —
+    returning them verbatim crashed the handler itself and turned the
+    client's 422 into a 500 (deployed 09-13, POST /consistency/check).
+    """
+    errors = []
+    for e in exc.errors()[:6]:
+        clean = {k: v for k, v in e.items() if k != "ctx"}
+        if isinstance(e.get("ctx"), dict) and e["ctx"].get("error") is not None:
+            clean["ctx"] = {"error": str(e["ctx"]["error"])}
+        errors.append(clean)
     logger.error("422 validation on %s %s: %s",
-                 request.method, request.url.path, exc.errors()[:6])
-    return JSONResponse(status_code=422, content={"detail": exc.errors()[:6]})
+                 request.method, request.url.path, errors)
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 
 @app.exception_handler(Exception)

@@ -304,7 +304,7 @@ export function OutlinePanel({
             value={outlineDraft}
             onChange={(e) => setOutlineDraft(e.target.value)}
             placeholder="在此编写或粘贴小说大纲…&#10;&#10;例如：&#10;1. 第一章 张三入宗&#10;   张三在青云宗拜入门下，开启修仙之路。&#10;2. 第二章 修炼突破&#10;   张三苦修三个月，终于突破练气期。"
-            className="w-full min-h-[100px] text-[12px] leading-[1.7] bg-transparent border rounded-sm p-sp-2 outline-none resize-y"
+            className={`w-full text-[12px] leading-[1.7] bg-transparent border rounded-sm p-sp-2 outline-none resize-y ${outlineFullscreen ? "flex-1 min-h-0" : "min-h-[100px]"}`}
             style={{
               color: "var(--fg-secondary)",
               borderColor: "var(--border)",
@@ -318,7 +318,7 @@ export function OutlinePanel({
           />
         ) : (
           <p
-            className="text-[12px] leading-[1.7] whitespace-pre-wrap cursor-pointer"
+            className={`text-[12px] leading-[1.7] whitespace-pre-wrap cursor-pointer ${outlineFullscreen ? "flex-1 overflow-y-auto min-h-0" : ""}`}
             style={{ color: "var(--fg-secondary)" }}
             onClick={() => setEditingOutline(true)}
             title="点击编辑"

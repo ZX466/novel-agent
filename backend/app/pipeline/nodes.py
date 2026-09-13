@@ -679,15 +679,76 @@ def _format_retrieval_context(hits: list) -> str:
     return "\n".join(lines)[:8000]
 
 
+async def _refine_from_topic(state: PipelineState, stage) -> dict:
+    """refine_node's first-stage branch for rewrite/polish (no draft yet).
+
+    The topic carries the full task instruction + source text, so it goes
+    through as the user message; the system prompt is a Chinese editor
+    persona (the old English-only one plus empty input produced English
+    output regardless of the source language).
+    """
+    system_content = (
+        "你是一位严谨的小说编辑。按用户要求处理给出的文本：保持情节、"
+        "结构与人物设定不变，只按指令改进表达。直接输出处理后的完整"
+        "文本，不要任何解释或前后缀。"
+    )
+    retrieved_context = state.get("retrieved_context", "")
+    if retrieved_context:
+        system_content += (
+            "\n\n小说相关记忆（保持与既有角色、世界观和前文一致）：\n"
+            f"{retrieved_context}"
+        )
+
+    messages = [
+        _system_msg(system_content),
+        _user_msg(state["topic"]),
+    ]
+
+    content = ""
+    think_filter = _ThinkStreamFilter()
+    stream_resp = await llm_refine(messages, stage_config=stage, stream=True)
+    async for chunk in stream_resp:
+        delta = chunk.choices[0].delta
+        token = getattr(delta, "content", None) or ""
+        if token:
+            safe = think_filter.feed(token)
+            if safe:
+                content += safe
+                on_token = state.get("on_token")
+                if on_token:
+                    await on_token(safe)
+    tail = think_filter.finish()
+    if tail:
+        content += tail
+        on_token = state.get("on_token")
+        if on_token:
+            await on_token(tail)
+    content = think_filter.strip(content)
+    return {"refined": content, "iterations": state.get("iterations", 0) + 1}
+
+
 @_timed("refine")
 async def refine_node(state: PipelineState) -> dict:
     """Qwen-Max (or BYOK refine stage) refines the most recent text using feedback.
 
     Streams tokens in real-time via state["on_token"] callback so the
     frontend sees the refined text appearing character-by-character.
+
+    rewrite/polish first stage: the graph runs retrieval → refine →
+    safety_check with NO draft node, so there is no draft/feedback — the
+    user's instruction + source text IS state["topic"] (chat.py already
+    stripped the [task:…]/[novel:…] tags). Sending it through the
+    Original-draft/feedback template left both blocks empty and the model
+    hallucinated free-form text (deployed 09-13: it overwrote a novel
+    outline with an unrelated English essay).
     """
     cfg = state.get("provider_config")
     stage = cfg.refine if cfg is not None else None
+    task_type = state.get("task_type", "generate")
+    has_prior_output = bool(state.get("refined") or state.get("draft"))
+    if task_type in ("rewrite", "polish") and not has_prior_output:
+        return await _refine_from_topic(state, stage)
+
     current_text = state.get("refined") or state.get("draft") or ""
     feedback = state.get("feedback", "")
     iterations = state.get("iterations", 0)

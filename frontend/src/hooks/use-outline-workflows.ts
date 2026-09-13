@@ -28,17 +28,42 @@ async function updateOutlineMetadata(docId: number, outlineText: string) {
   });
 }
 
+/** Chapter-heading match: optional decoration (markdown bold/heading
+ *  markers, list numbering, 【】brackets, &nbsp;) then 第X章 with chinese
+ *  or arabic numerals. The deployed 09-13 outline generator emits
+ *  decorated headings ("**第一章 X**", "### 第1章", "1. 第一章", "【第一章】")
+ *  — matching bare lines only parsed 0 entries and silently created 0
+ *  chapters while entity extraction still ran. */
+const CHAPTER_LEADING_DECO_RE =
+  /^(?:[\s#*>\-—–\[\]【】〔〕.。:：、,，)）(（\d]|&nbsp;|&#160;)*/;
+
+function isChapterHeadingLine(line: string): boolean {
+  // Strip leading decoration, then the heading must start the line — prose
+  // that merely mentions 「第3章」 mid-sentence must not match.
+  return /^第[一二三四五六七八九十百千零〇两\d]+章/.test(
+    line.replace(CHAPTER_LEADING_DECO_RE, ""),
+  );
+}
+
+/** Strip decoration from a heading line, keeping the 「第X章 题目」 part. */
+function stripHeadingDecoration(line: string): string {
+  return line
+    .replace(CHAPTER_LEADING_DECO_RE, "")
+    .replace(/^(第[一二三四五六七八九十百千零〇两\d]+章)[\]】〕]\s*/, "$1 ")
+    .replace(/[\s*#]+$/, "");
+}
+
 /** Parse outline heading lines → chapter titles (R10-⑨: title-only parsing
  *  is volume-outline friendly — 1000+ chapter outlines carry just
  *  「第X章 题目」 lines under 卷 blocks, no per-chapter synopsis needed). */
-function parseOutlineChapters(outlineText: string): Array<{ idx: number; title: string; summary: string }> {
+export function parseOutlineChapters(outlineText: string): Array<{ idx: number; title: string; summary: string }> {
   const lines = outlineText.split("\n");
   const entries: Array<{ idx: number; title: string; summary: string }> = [];
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
-    if (/^第[一二三四五六七八九十百千零〇两\d]+章/.test(trimmed)) {
+    if (isChapterHeadingLine(trimmed)) {
       const title =
-        trimmed.replace(/^\d+[\.\、]\s*/, "").trim().slice(0, 200) ||
+        stripHeadingDecoration(trimmed).slice(0, 200) ||
         `第${entries.length + 1}章`;
       entries.push({ idx: i, title, summary: "" });
     }
@@ -126,7 +151,11 @@ export function useOutlineWorkflows(opts: UseOutlineWorkflowsOpts) {
         // grows; new 「第X章」 lines top up the chapter list in place.
         // Existing indexes are skipped, so nothing is duplicated or reset.
         const entries = parseOutlineChapters(outlineText);
-        if (entries.length > 0) {
+        if (entries.length === 0) {
+          // Deployed 09-13: decorated headings parsed 0 entries and the
+          // apply silently created no chapters — surface the failure.
+          alert("未在大纲中识别出「第X章」标题行，已只保存大纲、跳过章节创建。\n\n支持格式：第X章 / **第X章** / ### 第X章 / 1. 第一章 / 【第X章】");
+        } else {
           const existingIndexes = new Set(
             chapters.map((c) => c.chapter_index).filter((n): n is number => n != null),
           );

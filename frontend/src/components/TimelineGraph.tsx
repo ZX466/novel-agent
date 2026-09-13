@@ -18,10 +18,63 @@ import {
 
 const VIEW_W = 320;
 const VIEW_H = 300;
+// Minimum vertical room per stacked node — the prototype's fixed H=300
+// assumed ~8 demo events; real novels have dozens. Below this spacing the
+// cards overlap into an unreadable stack (R10 user report: 37 events).
+const MIN_ROW_PX = 40;
 const EDGE_ARROW = 1.4;
 
 function isCausal(t: string): boolean {
   return t === "起" || t === "承" || t === "转" || t === "合" || t === "高潮";
+}
+
+/** Layered DAG layout (prototype geometry, height-stretching).
+ *  Exported for tests — pure, no React. */
+export function computeTimelineLayout(
+  data: Pick<TimelineResponse, "nodes" | "edges" | "topological_order">,
+): { pos: Map<number, { x: number; y: number }>; maxLayer: number; H: number } | null {
+  if (data.nodes.length === 0) return null;
+  const nodeById = new Map(data.nodes.map((n) => [n.event_id, n]));
+  const preds = new Map<number, number[]>();
+  for (const n of data.nodes) preds.set(n.event_id, []);
+  for (const e of data.edges) {
+    if (nodeById.has(e.from_id) && nodeById.has(e.to_id)) {
+      preds.get(e.to_id)?.push(e.from_id);
+    }
+  }
+  // longest-path layering over topological order
+  const layer = new Map<number, number>();
+  for (const id of data.topological_order) {
+    const ps = preds.get(id) ?? [];
+    layer.set(id, ps.length === 0 ? 0 : Math.max(...ps.map((p) => (layer.get(p) ?? 0) + 1)));
+  }
+  let maxLayer = 0;
+  for (const l of layer.values()) maxLayer = Math.max(maxLayer, l);
+  const cols = new Map<number, typeof data.nodes>();
+  for (const n of data.nodes) {
+    const l = layer.get(n.event_id) ?? 0;
+    if (!cols.has(l)) cols.set(l, []);
+    cols.get(l)?.push(n);
+  }
+  // Prototype geometry: W=320, colW=(W-70)/(maxLayer+1), x=40+l*colW,
+  // y=46+(i+1)*((H-80)/(len+1)). H stretches with the tallest column so
+  // every stacked node keeps ≥ MIN_ROW_PX (prototype's H=300 only fits
+  // ~8 nodes per column; demo-scale, not novel-scale).
+  const H = Math.max(
+    VIEW_H,
+    46 + Math.max(...[...cols.values()].map((a) => a.length), 1) * MIN_ROW_PX,
+  );
+  const colW = (VIEW_W - 70) / Math.max(1, maxLayer + 1);
+  const pos = new Map<number, { x: number; y: number }>();
+  for (const [l, arr] of [...cols.entries()].sort((a, b) => a[0] - b[0])) {
+    arr.forEach((n, i) => {
+      pos.set(n.event_id, {
+        x: 40 + l * colW,
+        y: 46 + (i + 1) * ((H - 80) / (arr.length + 1)),
+      });
+    });
+  }
+  return { pos, maxLayer, H };
 }
 
 export function TimelineGraph({ docId }: { docId: number }) {
@@ -45,44 +98,7 @@ export function TimelineGraph({ docId }: { docId: number }) {
     };
   }, [docId]);
 
-  const layout = useMemo(() => {
-    if (!data || data.nodes.length === 0) return null;
-    const nodeById = new Map(data.nodes.map((n) => [n.event_id, n]));
-    const preds = new Map<number, number[]>();
-    for (const n of data.nodes) preds.set(n.event_id, []);
-    for (const e of data.edges) {
-      if (nodeById.has(e.from_id) && nodeById.has(e.to_id)) {
-        preds.get(e.to_id)?.push(e.from_id);
-      }
-    }
-    // longest-path layering over topological order
-    const layer = new Map<number, number>();
-    for (const id of data.topological_order) {
-      const ps = preds.get(id) ?? [];
-      layer.set(id, ps.length === 0 ? 0 : Math.max(...ps.map((p) => (layer.get(p) ?? 0) + 1)));
-    }
-    let maxLayer = 0;
-    for (const l of layer.values()) maxLayer = Math.max(maxLayer, l);
-    const cols = new Map<number, typeof data.nodes>();
-    for (const n of data.nodes) {
-      const l = layer.get(n.event_id) ?? 0;
-      if (!cols.has(l)) cols.set(l, []);
-      cols.get(l)?.push(n);
-    }
-    // Prototype geometry: W=320 H=300, colW=(W-70)/(maxLayer+1), x=40+l*colW,
-    // y=46+(i+1)*((H-80)/(len+1)) — compressed, container-scaled.
-    const colW = (VIEW_W - 70) / Math.max(1, maxLayer + 1);
-    const pos = new Map<number, { x: number; y: number }>();
-    for (const [l, arr] of [...cols.entries()].sort((a, b) => a[0] - b[0])) {
-      arr.forEach((n, i) => {
-        pos.set(n.event_id, {
-          x: 40 + l * colW,
-          y: 46 + (i + 1) * ((VIEW_H - 80) / (arr.length + 1)),
-        });
-      });
-    }
-    return { pos, maxLayer };
-  }, [data]);
+  const layout = useMemo(() => (data ? computeTimelineLayout(data) : null), [data]);
 
   if (error) {
     return (
@@ -146,7 +162,7 @@ export function TimelineGraph({ docId }: { docId: number }) {
           }}
         >
           <svg
-            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+            viewBox={`0 0 ${VIEW_W} ${layout.H}`}
             className="block w-full h-auto"
             role="img"
             aria-label="时间线因果图"

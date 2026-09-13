@@ -127,3 +127,11 @@
 - 前端: useEmbeddingPending(播种一次防 stale/保存响应 markPending/3s×10 轮询清除/超限静默)+WordCountBar「索引中」脉冲徽标→「✓ 已索引」短闪;use-editor-save 暴露 onChapterSavedMeta
 - 范围说明: 用户要的"保存后 RAG 何时可检索"信号=章节场景;实体面板已有 saving 态覆盖
 - 验证: vitest 84/84(+7);tsc 0;后端 47 passed(受影响面);徽标已入 bundle
+---
+[回复] 时间线挤叠修复+续写记忆机制说明 — Claude
+时间: 2026-09-13 11:00
+状态: 已完成（`2cb6817`，gitee 已推，frontend 已重建）
+- 时间线挤叠根因: 用户真实数据 37 事件 0 因果边(prev_event_id 全空→全落 layer 0),原型固定 H=300 给 ~8 示例节点设计,y 均分后每节点 ~6px 全重叠。修: H=max(300, 46+最高列数×40px) 随数据伸展;computeTimelineLayout 抽纯函数+4 测试
+- 遗留观察: 37 事件 0 边=用户没建因果链(前驱)。提示词/面板可引导设置 prev_event_id,否则 DAG 退化为单列——产品层待定
+- 续写记忆三层已向用户说明: 当前文本尾 6000 字(删了就没)+前文背景(近 1-2 章 summary/RAG 检索全库(受嵌入延迟影响)
+- 验证: vitest 88/88(+4);tsc 0

@@ -224,10 +224,11 @@ export default function NovelsPage() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs — trash lives in the header toggle (showTrash), not here:
+          a "回收站" type-tab would be dead (type+status filters don't mix). */}
       {!showTrash && (
         <div className="flex gap-sp-1 mb-sp-5 shrink-0">
-          {WORK_TYPE_TABS.map((tab) => (
+          {WORK_TYPE_TABS.filter((tab) => tab.key !== "trash").map((tab) => (
             <button
               key={tab.key}
               type="button"

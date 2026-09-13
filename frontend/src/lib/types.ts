@@ -39,6 +39,9 @@ export const WORK_TYPE_TABS: Array<{ key: WorkTypeTabKey; label: string }> = [
   { key: "short", label: "短篇" },
   { key: "script", label: "剧本" },
   { key: "video", label: "视频" },
+  // Trash is NOT a work-type tab: it's the standalone header toggle
+  // (page.tsx showTrash), which filters by status=deleted — including it
+  // here rendered a dead second 回收站 button (two controls, one functional).
   { key: "trash", label: "回收站" },
 ];
 

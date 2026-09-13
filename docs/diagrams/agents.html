@@ -1,0 +1,376 @@
+<!doctype html>
+<title>novel-agent 功能部件图</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    --bg: #10141c;
+    --panel: #181f2b;
+    --panel-2: #1e2634;
+    --line: #2a3444;
+    --ink: #e8e4dc;
+    --muted: #8b95a3;
+    --accent: #e8a54b;
+    --accent-dim: rgba(232, 165, 75, 0.14);
+    --flow: #5fb8a5;
+    --flow-dim: rgba(95, 184, 165, 0.12);
+    --danger: #d4707a;
+    --guard: #b08cd4;
+    --guard-dim: rgba(176, 140, 212, 0.12);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f6f4ef;
+      --panel: #ffffff;
+      --panel-2: #f0ede6;
+      --line: #ddd7cb;
+      --ink: #23262c;
+      --muted: #6d7480;
+      --accent: #b06f14;
+      --accent-dim: rgba(176, 111, 20, 0.10);
+      --flow: #2e7d6b;
+      --flow-dim: rgba(46, 125, 107, 0.10);
+      --danger: #b23a46;
+      --guard: #7a4fa8;
+      --guard-dim: rgba(122, 79, 168, 0.10);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f4ef;
+    --panel: #ffffff;
+    --panel-2: #f0ede6;
+    --line: #ddd7cb;
+    --ink: #23262c;
+    --muted: #6d7480;
+    --accent: #b06f14;
+    --accent-dim: rgba(176, 111, 20, 0.10);
+    --flow: #2e7d6b;
+    --flow-dim: rgba(46, 125, 107, 0.10);
+    --danger: #b23a46;
+    --guard: #7a4fa8;
+    --guard-dim: rgba(122, 79, 168, 0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.55;
+    padding: 2.4rem 1.25rem 3.5rem;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  header h1 {
+    font-family: "Noto Serif SC", serif;
+    font-size: 1.7rem; font-weight: 700; letter-spacing: 0.01em;
+  }
+  header .sub { color: var(--muted); font-size: .92rem; margin-top: .3rem; max-width: 46rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: .5rem 1.2rem; margin-top: 1rem; font-size: .78rem; color: var(--muted); }
+  .legend b { display: inline-block; width: .65rem; height: .65rem; border-radius: 2px; margin-right: .35rem; vertical-align: -1px; }
+  section { margin-top: 2.2rem; }
+  section > h2 {
+    font-family: "Noto Serif SC", serif;
+    font-size: 1.08rem; font-weight: 700; margin-bottom: .3rem;
+  }
+  section > p.desc { color: var(--muted); font-size: .86rem; margin-bottom: .9rem; max-width: 52rem; }
+
+  /* ── 主干流水线 ─────────────────────────────── */
+  .spine {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.3rem 1.2rem 1.1rem;
+    overflow-x: auto;
+  }
+  .spine-inner { display: flex; align-items: stretch; gap: .55rem; min-width: 920px; }
+  .spine-node {
+    flex: 1; min-width: 118px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: .6rem .7rem;
+    text-align: center;
+    display: flex; flex-direction: column; justify-content: center; gap: .15rem;
+  }
+  .spine-node .t { font-size: .82rem; font-weight: 600; }
+  .spine-node .d { font-size: .68rem; color: var(--muted); font-family: "JetBrains Mono", monospace; }
+  .spine-node.user { border-color: var(--accent); }
+  .spine-node.user .t { color: var(--accent); }
+  .spine-node.store { border-style: dashed; }
+  .spine-arrow { align-self: center; color: var(--flow); font-size: 1rem; flex: 0 0 auto; font-family: "JetBrains Mono", monospace; }
+  .spine-arrow small { display: block; font-size: .58rem; color: var(--muted); max-width: 5.5rem; }
+
+  /* ── Agent 卡片网格 ─────────────────────────── */
+  .layer { margin-top: 1.4rem; }
+  .layer-title {
+    display: flex; align-items: baseline; gap: .6rem;
+    font-size: .8rem; font-weight: 600; letter-spacing: .14em;
+    color: var(--muted); text-transform: uppercase;
+    margin-bottom: .7rem;
+  }
+  .layer-title::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); gap: .75rem; }
+  .agent {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--line);
+    border-radius: 10px;
+    padding: .8rem .95rem .85rem;
+    display: flex; flex-direction: column; gap: .4rem;
+  }
+  .agent.c-core { border-left-color: var(--accent); }
+  .agent.c-flow { border-left-color: var(--flow); }
+  .agent.c-guard { border-left-color: var(--guard); }
+  .agent.c-risk { border-left-color: var(--danger); }
+  .agent .head { display: flex; align-items: center; gap: .5rem; }
+  .agent .ico {
+    width: 1.5rem; height: 1.5rem; border-radius: 7px; flex: 0 0 auto;
+    display: grid; place-items: center;
+    background: var(--panel-2); border: 1px solid var(--line);
+    font-size: .8rem;
+  }
+  .agent.c-core .ico { background: var(--accent-dim); border-color: transparent; }
+  .agent.c-flow .ico { background: var(--flow-dim); border-color: transparent; }
+  .agent.c-guard .ico { background: var(--guard-dim); border-color: transparent; }
+  .agent .name { font-size: .92rem; font-weight: 650; }
+  .agent .route {
+    margin-left: auto;
+    font-family: "JetBrains Mono", monospace;
+    font-size: .62rem; color: var(--muted);
+    background: var(--panel-2);
+    padding: .1rem .45rem; border-radius: 5px;
+    white-space: nowrap;
+  }
+  .agent .job { font-size: .8rem; color: var(--ink); }
+  .agent .io { font-size: .72rem; color: var(--muted); font-family: "JetBrains Mono", monospace; }
+  .agent .io b { color: var(--flow); font-weight: 600; }
+  .agent .links { font-size: .7rem; color: var(--muted); border-top: 1px dashed var(--line); padding-top: .4rem; margin-top: auto; }
+  .agent .links em { font-style: normal; color: var(--accent); }
+
+  footer { margin-top: 2.6rem; color: var(--muted); font-size: .74rem; border-top: 1px solid var(--line); padding-top: .9rem; }
+  footer code { font-family: "JetBrains Mono", monospace; font-size: .7rem; background: var(--panel-2); padding: .05rem .35rem; border-radius: 4px; }
+  @media (max-width: 560px) {
+    header h1 { font-size: 1.3rem; }
+    .cards { grid-template-columns: 1fr; }
+  }
+</style>
+<div class="wrap">
+  <header>
+    <h1>novel-agent 功能部件图</h1>
+    <p class="sub">每个部件按 agent 形式刻画：职责（做什么）、输入 → 输出（经手什么）、协作（跟谁说话）。琥珀 = 核心创作链，青 = 数据/记忆流，紫 = 守护与审计，红 = 高危操作。</p>
+    <div class="legend">
+      <span><b style="background:var(--accent)"></b>核心创作</span>
+      <span><b style="background:var(--flow)"></b>数据与记忆</span>
+      <span><b style="background:var(--guard)"></b>守护审计</span>
+      <span><b style="background:var(--danger)"></b>高危/外部</span>
+    </div>
+  </header>
+
+  <!-- ── ① 数据主干 ── -->
+  <section>
+    <h2>一次生成的数据主干</h2>
+    <p class="desc">从按键到落库的完整路径。所有流量只经 nginx 暴露，内部服务互不直连。</p>
+    <div class="spine"><div class="spine-inner">
+      <div class="spine-node user"><span class="t">写作者</span><span class="d">浏览器</span></div>
+      <div class="spine-arrow">→<small>HTTPS</small></div>
+      <div class="spine-node"><span class="t">nginx</span><span class="d">:80/443 · TLS/CSP</span></div>
+      <div class="spine-arrow">→<small>SSE / REST</small></div>
+      <div class="spine-node"><span class="t">Next.js 前端</span><span class="d">编辑器 · 面板 · 可视化</span></div>
+      <div class="spine-arrow">→<small>/v1/chat 流</small></div>
+      <div class="spine-node"><span class="t">FastAPI 后端</span><span class="d">编排 · 校验</span></div>
+      <div class="spine-arrow">→<small>BYOK</small></div>
+      <div class="spine-node"><span class="t">LLM 供应商</span><span class="d">DeepSeek 等</span></div>
+      <div class="spine-arrow">→<small>落库</small></div>
+      <div class="spine-node store"><span class="t">PG 16 + pgvector</span><span class="d">正文 · 向量</span></div>
+      <div class="spine-node store"><span class="t">Redis</span><span class="d">限流 · 断线草稿</span></div>
+    </div></div>
+  </section>
+
+  <!-- ── ② 编排层 ── -->
+  <section>
+    <h2>编排层 — 三阶段流水线（LangGraph）</h2>
+    <p class="desc">一次 AI 生成在流水线里流经的五个部件。按任务类型短路：续写只走 检索→初稿→安全，生成正文走全链，重写/降AI 跳过检索。</p>
+    <div class="layer"><div class="layer-title">流水线节点</div><div class="cards">
+      <div class="agent c-flow">
+        <div class="head"><span class="ico">🔎</span><span class="name">检索记忆 Agent</span><span class="route">retrieval</span></div>
+        <p class="job">按当前文本+大纲语义检索五源记忆，拼装写作上下文</p>
+        <p class="io">输入 <b>章节文本·outline</b> → 输出 <b>writing_context</b></p>
+        <p class="links">协作 <em>记忆层五源</em> · 失败降级为无上下文（不阻断）</p>
+      </div>
+      <div class="agent c-core">
+        <div class="head"><span class="ico">✍️</span><span class="name">初稿 Agent</span><span class="route">draft</span></div>
+        <p class="job">按章节进度/人物树/字数目标生成正文；流式吐 token；字数后检（&lt;0.6 重写 / 0.6-0.9 续写）</p>
+        <p class="io">输入 <b>writing_context</b> → 输出 <b>draft 流</b></p>
+        <p class="links">协作 <em>BYOK 草稿阶段模型</em> · thinking 流过滤</p>
+      </div>
+      <div class="agent c-core">
+        <div class="head"><span class="ico">🪄</span><span class="name">精修 Agent</span><span class="route">refine</span></div>
+        <p class="job">对初稿做文笔打磨，最多迭代 5 轮（防震荡硬上限）</p>
+        <p class="io">输入 <b>draft</b> → 输出 <b>refined</b></p>
+        <p class="links">协作 <em>BYOK 精修阶段模型</em></p>
+      </div>
+      <div class="agent c-guard">
+        <div class="head"><span class="ico">⚖️</span><span class="name">评审 Agent</span><span class="route">evaluate</span></div>
+        <p class="job">六维并行评审（连贯/人设/文笔/逻辑/世界观/跨章）；分数低于阈值回炉精修</p>
+        <p class="io">输入 <b>refined</b> → 输出 <b>score·反馈</b></p>
+        <p class="links">协作 <em>精修 Agent</em>（不合格回流）· 单维 30s 超时→0.5 兜底</p>
+      </div>
+      <div class="agent c-guard">
+        <div class="head"><span class="ico">🛡</span><span class="name">安全检查 Agent</span><span class="route">safety_check</span></div>
+        <p class="job">流水线内安全过审；失败转降级模式继续（可见性优先）</p>
+        <p class="io">输入 <b>refined</b> → 输出 <b>安全结果</b></p>
+        <p class="links">协作 <em>交稿雷达 Agent</em>（同引擎不同入口）</p>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- ── ③ 记忆层 ── -->
+  <section>
+    <h2>记忆层 — RAG 五源 + 嵌入</h2>
+    <p class="desc">AI「记得什么」的全部来源。写路径不等待嵌入（后台任务），「索引中」徽标消散后新内容才进检索。</p>
+    <div class="layer"><div class="layer-title">记忆源</div><div class="cards">
+      <div class="agent c-flow">
+        <div class="head"><span class="ico">📖</span><span class="name">章节记忆</span><span class="route">chapters</span></div>
+        <p class="job">正文按章入库；保存即快照可回溯；AI 段落带标记，标记索引持久化在 metadata</p>
+        <p class="io">输入 <b>编辑器保存</b> → 输出 <b>ch1..n 向量</b></p>
+        <p class="links">协作 <em>嵌入 Agent</em>（后台）</p>
+      </div>
+      <div class="agent c-flow">
+        <div class="head"><span class="ico">👤</span><span class="name">人物 + 关系</span><span class="route">characters · relationships</span></div>
+        <p class="job">人物卡（角色/弧线/属性）与关系边（类型/强度）各自成源；关系树序列化进提示词</p>
+        <p class="io">输入 <b>面板 CRUD·大纲提取</b> → 输出 <b>人物向量·关系树</b></p>
+        <p class="links">协作 <em>嵌入 Agent</em> · <em>大纲提取 Agent</em></p>
+      </div>
+      <div class="agent c-flow">
+        <div class="head"><span class="ico">🌍</span><span class="name">世界观记忆</span><span class="route">world_settings</span></div>
+        <p class="job">力量体系/地理/势力等设定条目，按分类管理</p>
+        <p class="io">输入 <b>面板 CRUD·灵感套件</b> → 输出 <b>设定向量</b></p>
+        <p class="links">协作 <em>嵌入 Agent</em></p>
+      </div>
+      <div class="agent c-flow">
+        <div class="head"><span class="ico">📋</span><span class="name">剧情事件 + 因果链</span><span class="route">plot_events · timeline</span></div>
+        <p class="job">事件带前驱（prev_event_id）成 DAG；章节保存时实时校验因果冲突（顺序倒置/前驱缺失）</p>
+        <p class="io">输入 <b>面板 CRUD</b> → 输出 <b>事件向量·warnings</b></p>
+        <p class="links">协作 <em>时间线 DAG Agent</em> · <em>时间线可视化</em></p>
+      </div>
+      <div class="agent c-flow">
+        <div class="head"><span class="ico">📚</span><span class="name">知识文档</span><span class="route">knowledge_docs</span></div>
+        <p class="job">外部资料 txt/md 上传（或粘贴），服务端分块嵌入——喂给 AI 的「设定资料库」</p>
+        <p class="io">输入 <b>记忆库上传</b> → 输出 <b>分块向量</b></p>
+        <p class="links">协作 <em>嵌入 Agent</em> · 限流/大小/二进制防御</p>
+      </div>
+      <div class="agent c-flow">
+        <div class="head"><span class="ico">🧬</span><span class="name">嵌入 Agent</span><span class="route">background_embed</span></div>
+        <p class="job">四类写路径共用的后台索引器：独立会话+脱离任务，写响应绝不等它；成功后清「索引中」标志</p>
+        <p class="io">输入 <b>任意 lore 写入</b> → 输出 <b>4096 维向量</b></p>
+        <p class="links">协作 <em>BYOK embedding 阶段</em> · 失败静默降级（RAG 缺席不报错）</p>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- ── ④ 守护层 ── -->
+  <section>
+    <h2>守护层 — 质量 · 安全 · 一致性</h2>
+    <div class="cards">
+      <div class="agent c-guard">
+        <div class="head"><span class="ico">🛡️</span><span class="name">交稿雷达</span><span class="route">/safety</span></div>
+        <p class="job">导出前全文安全扫描；有发现先弹报告，作者确认后继续导出</p>
+        <p class="io">输入 <b>全文</b> → 输出 <b>findings 报告</b></p>
+        <p class="links">协作 <em>导出 Agent</em>（预检钩子）</p>
+      </div>
+      <div class="agent c-guard">
+        <div class="head"><span class="ico">⚔️</span><span class="name">一致性哨兵</span><span class="route">/consistency</span></div>
+        <p class="job">按章检查设定冲突，给证据片段；历史检查记录可回看</p>
+        <p class="io">输入 <b>章节文本+设定</b> → 输出 <b>冲突清单</b></p>
+        <p class="links">协作 <em>记忆层</em>（取证）</p>
+      </div>
+      <div class="agent c-guard">
+        <div class="head"><span class="ico">🕰</span><span class="name">时间线 DAG 校验器</span><span class="route">timeline.validate</span></div>
+        <p class="job">写入时即校验因果链：悬空前驱/章节倒置/循环；警告随章节 metadata 持久化</p>
+        <p class="io">输入 <b>plot_events 全量</b> → 输出 <b>TimelineWarning[]</b></p>
+        <p class="links">协作 <em>剧情事件面板</em>（警示展示）</p>
+      </div>
+      <div class="agent c-flow">
+        <div class="head"><span class="ico">🚪</span><span class="name">门卫 Agent</span><span class="route">_deps</span></div>
+        <p class="job">两套 key 分离：BYOK 供应商配置（X-Provider-Config，带 SSRF 校验）与站主 X-API-Key（owner 哈希租户隔离）；跨租户一律 404 防探测</p>
+        <p class="io">输入 <b>每个请求</b> → 输出 <b>放行/401/404</b></p>
+        <p class="links">协作 <em>Redis 限流</em>（chat 60s 窗口）</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ⑤ 创作工具层 ── -->
+  <section>
+    <h2>创作工具层 — 前端部件</h2>
+    <p class="desc">作者直接操作的部件。带 ★ 的把任务路由进流水线（[task:TYPE] 标记）。</p>
+    <div class="cards">
+      <div class="agent c-core">
+        <div class="head"><span class="ico">📝</span><span class="name">编辑器核心 ★</span><span class="route">page.tsx + 8 hooks</span></div>
+        <p class="job">TipTap 正文：防抖字数、查找替换、专注模式、快照恢复、自动保存（Ctrl+S 秒回）</p>
+        <p class="io">输出 <b>content_text + ai_paragraphs</b></p>
+        <p class="links">协作 <em>章节记忆</em> · <em>版本历史 Agent</em></p>
+      </div>
+      <div class="agent c-core">
+        <div class="head"><span class="ico">🧰</span><span class="name">AI 工具面板 ★</span><span class="route">AIToolPanel</span></div>
+        <p class="job">六工具：生成正文/续写/扩写/重写/降AI/生成总纲；五阶段进度条实时点亮（SSE wire 级解析）</p>
+        <p class="io">输入 <b>选区·章节·大纲</b> → 输出 <b>插入/替换正文</b></p>
+        <p class="links">协作 <em>流水线全部</em> · <em>PerfChatTransport</em></p>
+      </div>
+      <div class="agent c-core">
+        <div class="head"><span class="ico">🎬</span><span class="name">创作向导 ★</span><span class="route">CreationWizard</span></div>
+        <p class="job">题材→大纲→应用 三步开书：建作品+自动分章+提取人物/设定/事件</p>
+        <p class="io">输入 <b>三步表单</b> → 输出 <b>作品+章节+lore</b></p>
+        <p class="links">协作 <em>大纲提取 Agent</em>（409 重复自动跳过）</p>
+      </div>
+      <div class="agent c-core">
+        <div class="head"><span class="ico">💡</span><span class="name">灵感套件 ★</span><span class="route">CreativeKitDialog</span></div>
+        <p class="job">一键生成世界观+人物+主线包，预览后原子应用到作品（服务端行锁事务）</p>
+        <p class="io">输入 <b>题材/基调/关键词</b> → 输出 <b>kit 应用</b></p>
+        <p class="links">协作 <em>世界观/人物记忆</em></p>
+      </div>
+      <div class="agent c-core">
+        <div class="head"><span class="ico">🧙</span><span class="name">AI 编剧</span><span class="route">AssistantPanel</span></div>
+        <p class="job">对话式创作顾问：带章节/全文上下文，回复可一键插入正文</p>
+        <p class="io">输入 <b>对话+工作上下文</b> → 输出 <b>建议文本</b></p>
+        <p class="links">协作 <em>检索记忆 Agent</em>（assistant 任务型）</p>
+      </div>
+      <div class="agent c-flow">
+        <div class="head"><span class="ico">🕸</span><span class="name">可视化三件套</span><span class="route">graph 页 · memory 页</span></div>
+        <p class="job">关系图（力导向+拖拽+强度编辑）、时间线 DAG（高度自适应）、记忆库（六源统一管理+知识上传）；SVG viewBox 自适应缩放</p>
+        <p class="io">输入 <b>关系边·事件·六源记忆</b> → 输出 <b>图上直接改</b></p>
+        <p class="links">协作 <em>记忆层全部</em></p>
+      </div>
+      <div class="agent c-core">
+        <div class="head"><span class="ico">🧠</span><span class="name">大纲提取 Agent ★</span><span class="route">entity-extraction</span></div>
+        <p class="job">从大纲批量抽取人物/设定/事件入库；allSettled 批量容错，409 重复友好跳过</p>
+        <p class="io">输入 <b>outline 文本</b> → 输出 <b>lore 三源行</b></p>
+        <p class="links">协作 <em>人物/世界观/事件记忆</em></p>
+      </div>
+      <div class="agent c-flow">
+        <div class="head"><span class="ico">📦</span><span class="name">导出 + 快照</span><span class="route">export · snapshots</span></div>
+        <p class="job">MD/TXT/EPUB 三格式导出（自动预快照）；保存/插入/替换前置快照，随时回滚</p>
+        <p class="io">输入 <b>全书/章节</b> → 输出 <b>文件·版本点</b></p>
+        <p class="links">协作 <em>交稿雷达</em>（导出预检）</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ⑥ 任务路由 ── -->
+  <section>
+    <h2>附：任务类型 → 流水线路由</h2>
+    <p class="desc">前端 [task:TYPE] 标记决定流水线走哪些节点——速度与质量的取舍在路由层完成。</p>
+    <div class="spine"><div class="spine-inner" style="min-width:760px">
+      <div class="spine-node user"><span class="t" style="font-size:.75rem">generate 生成</span><span class="d">全链五节点</span></div>
+      <div class="spine-node user"><span class="t" style="font-size:.75rem">continue 续写</span><span class="d">检索→初稿→安全</span></div>
+      <div class="spine-node user"><span class="t" style="font-size:.75rem">rewrite/polish</span><span class="d">精修→安全</span></div>
+      <div class="spine-node user"><span class="t" style="font-size:.75rem">outline 总纲</span><span class="d">检索→初稿→安全</span></div>
+      <div class="spine-node user"><span class="t" style="font-size:.75rem">extract 提取</span><span class="d">仅初稿（JSON）</span></div>
+      <div class="spine-node user"><span class="t" style="font-size:.75rem">assistant 编剧</span><span class="d">检索→初稿→安全</span></div>
+    </div></div>
+  </section>
+
+  <footer>
+    部件清单对齐仓库现状：<code>backend/app/api/*</code>（20 路由模块）· <code>app/pipeline/nodes.py</code>（五节点）· <code>app/services/*</code>（含 background_embed）· <code>frontend/src/components/*</code> + <code>hooks/*</code>。更新代码后同步本图；生成于 2026-09-13。
+  </footer>
+</div>

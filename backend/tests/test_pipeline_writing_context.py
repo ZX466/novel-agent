@@ -429,3 +429,46 @@ async def test_writing_context_tolerates_relationship_failure() -> None:
         ctx = await nodes._build_writing_context(state)
     assert "【人物关系树】" not in ctx
     assert "【字数要求】" in ctx  # rest of context intact
+
+
+# ── R10-⑨: writing settings (篇幅/视角/频道) reach the prompt ──────────────
+
+
+@pytest.mark.asyncio
+async def test_writing_context_injects_settings_block() -> None:
+    """settings dict in state → 【写作设置】 block with all three fields."""
+    state: dict = {
+        "chapter_index": 0,
+        "target_word_count": 1000,
+        "writing_settings": {
+            "writing_type": "长篇",
+            "pov": "第一人称",
+            "genre": "男频",
+        },
+    }
+    ctx = await nodes._build_writing_context(state)
+    assert "【写作设置】" in ctx
+    assert "篇幅：长篇" in ctx
+    assert "叙事视角：第一人称" in ctx
+    assert "频道：男频" in ctx
+
+
+@pytest.mark.asyncio
+async def test_writing_context_partial_settings_only_nonempty_fields() -> None:
+    """Missing/empty settings → no placeholder lines, block skipped if all empty."""
+    ctx_partial = await nodes._build_writing_context({
+        "target_word_count": 1000,
+        "writing_settings": {"pov": "第三人称"},
+    })
+    assert "【写作设置】" in ctx_partial
+    assert "叙事视角：第三人称" in ctx_partial
+    assert "篇幅：" not in ctx_partial
+
+    ctx_empty = await nodes._build_writing_context({
+        "target_word_count": 1000,
+        "writing_settings": {},
+    })
+    assert "【写作设置】" not in ctx_empty
+
+    ctx_absent = await nodes._build_writing_context({"target_word_count": 1000})
+    assert "【写作设置】" not in ctx_absent

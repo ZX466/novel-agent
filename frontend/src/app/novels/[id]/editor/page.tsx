@@ -10,6 +10,8 @@ import { AIParagraph } from "@/components/extensions/AIParagraph";
 
 import { textToParagraphNodes } from "@/lib/insert-text";
 import type { EditorDoc, ChapterRead } from "@/lib/types";
+import { chatEndpoint } from "@/lib/config";
+import { loadProviderConfig, ownerAuthHeaders } from "@/lib/settings";
 
 import { WriterSettingsBar, type WritingSettings } from "@/components/WriterSettingsBar";
 import { WordCountBar } from "@/components/WordCountBar";
@@ -190,10 +192,56 @@ export default function NovelEditorPage() {
       setDoc,
       docId,
       hasChapters: chapters.length > 0,
+      chapters,
       refreshChapters,
       onPanelsMutated: useCallback(() => setPanelRefreshKey((k) => k + 1), []),
       onExtractedCharacters: useCallback(() => setLeftTab("characters"), []),
     });
+
+  // ── R10-⑨ AI 润色总纲：走 rewrite 管线（refine 直达，快且省） ──────
+  const handleOutlinePolish = useCallback(
+    (onDone: (polished: string) => void, onError: (msg: string) => void) => {
+      const current = (doc?.metadata_json as Record<string, unknown> | undefined)?.outline as string | undefined;
+      const text = (current ?? "").trim();
+      if (!text) {
+        onError("请先填写总纲");
+        return;
+      }
+      const cfg = loadProviderConfig();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...ownerAuthHeaders(),
+      };
+      if (cfg) headers["X-Provider-Config"] = JSON.stringify(cfg);
+      // 总纲可能极长（1000+ 行）——只发 rewrite 任务文本本身，100KB 请求上限内裁剪。
+      const prompt = `[task:rewrite] 你是资深小说策划编辑。请润色以下小说总纲：保持卷/章结构、章节题目、情节走向与设定完全不变，只改进表达——条理更清晰、用词更精准、每卷概括更抓人。直接输出润色后的完整总纲，不要解释。\n\n${text.slice(0, 90_000)}`;
+      void (async () => {
+        try {
+          const res = await fetch(chatEndpoint, { method: "POST", headers, body: JSON.stringify({ messages: [{ role: "user", content: prompt }] }) });
+          if (!res.ok) throw new Error(`润色失败 (${res.status})`);
+          const raw = await res.text();
+          const deltas: string[] = [];
+          for (const line of raw.split("\n")) {
+            const t = line.trim();
+            if (!t.startsWith("data:")) continue;
+            const payload = t.slice(5).trim();
+            if (!payload || payload === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(payload);
+              if (parsed.type === "text-delta" && typeof parsed.delta === "string") deltas.push(parsed.delta);
+              else if (Array.isArray(parsed.delta) && typeof parsed.delta[0]?.text === "string") deltas.push(parsed.delta[0].text);
+            } catch { /* non-JSON SSE line */ }
+          }
+          const polished = deltas.join("").trim();
+          if (!polished) throw new Error("润色未返回内容，请检查 API 配置");
+          onDone(polished);
+        } catch (e) {
+          onError(e instanceof Error ? e.message : "润色失败");
+        }
+      })();
+    },
+    [doc],
+  );
 
   // ── AI insertion with snapshots (extracted hook) ────────────────────
   const { handleInsertIntoEditor, handleReplaceInEditor } = useEditorInsertion({
@@ -326,6 +374,7 @@ export default function NovelEditorPage() {
               setRightTab("tools");
             }}
             onOpenFullscreen={(tab) => router.push(`/novels/${docId}/graph?tab=${tab}`)}
+            onOutlinePolish={handleOutlinePolish}
           />
         )}
 
@@ -359,6 +408,7 @@ export default function NovelEditorPage() {
             novelTitle={title}
             outlineText={((doc.metadata_json as Record<string, unknown> | undefined)?.outline as string) ?? ""}
             activeChapterId={activeChapter?.id ?? null}
+            writingSettings={settings}
           />
         )}
       </div>

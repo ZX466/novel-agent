@@ -22,11 +22,15 @@ async def test_stats_service_builds_real_sql(mock_session) -> None:
     exploded at statement-execution time (TypeError: missing argument
     'year'). Building the statement in this test evaluates the cast, so
     the shadowing bug can never ship again.
+
+    R10-⑨ regression: word counts aggregate from ``chapters`` (the
+    editor writes chapter rows; ``documents.word_count`` stays 0 — the
+    old Document-based totals reported 0 words for real writing).
     """
     from app.services import stats
 
     mock_session.set_execute_results([
-        _FakeResult(scalars=[]),  # daily aggregation
+        _FakeResult(scalars=[]),  # daily aggregation (chapter-based)
         _FakeResult(scalars=[SimpleNamespace(docs=1, chapters=2, words=300)]),  # totals
     ])
     result = await stats.get_dashboard_stats(mock_session)
@@ -34,6 +38,32 @@ async def test_stats_service_builds_real_sql(mock_session) -> None:
     assert result["total_documents"] == 1
     assert result["total_chapters"] == 2
     assert result["total_words"] == 300
+    # The totals SQL must aggregate chapters, not documents.
+    totals_sql = str(mock_session._execute_results_used_sql[1])
+    assert "chapters" in totals_sql.lower()
+
+
+@pytest.mark.asyncio
+async def test_stats_daily_words_from_chapters(mock_session) -> None:
+    """R10-⑨: the daily curve must be built from chapter word counts and
+    chapter updated_at — documents.word_count is never updated by the
+    editor save path, so the old curve was all zeros."""
+    from app.services import stats
+    from sqlalchemy.dialects import postgresql
+
+    day = datetime.now(timezone.utc).date()
+    mock_session.set_execute_results([
+        _FakeResult(scalars=[SimpleNamespace(day=day, word_count=800)]),  # daily agg
+        _FakeResult(scalars=[SimpleNamespace(docs=1, chapters=3, words=54_714)]),
+    ])
+    result = await stats.get_dashboard_stats(mock_session)
+    assert result["total_words"] == 54_714
+    today_entry = [d for d in result["daily_words"] if d["date"] == day.isoformat()]
+    assert today_entry and today_entry[0]["words"] == 800
+    assert result["streak_days"] >= 1
+    # Daily SQL aggregates the chapters table.
+    daily_sql = str(mock_session._execute_results_used_sql[0].compile(dialect=postgresql.dialect()))
+    assert "chapters" in daily_sql.lower()
 
 
 class _Row:

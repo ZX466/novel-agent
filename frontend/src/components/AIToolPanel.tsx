@@ -35,6 +35,9 @@ interface AIToolPanelProps {
    * backend derives from prior chapters' median (±15% band).
    */
   targetWordCount?: number;
+  /** R10-⑨ writing settings (篇幅/视角/频道) — backend injects the
+   *  【写作设置】 prompt block. Absent = no settings block. */
+  writingSettings?: { writing_type: string; pov: string; genre: string };
 }
 
 type ToolKey = "generate" | "continue" | "expand" | "rewrite" | "deai" | "outline";
@@ -169,18 +172,28 @@ function buildPrompt(
         ? `\n\n已有正文内容（供参考）：\n${editorText.slice(-3000)}`
         : "";
       const genrePart = outlineForm?.genre ? `体裁：${outlineForm.genre}\n` : "";
-      const tonePart  = outlineForm?.tone  ? `风格基调：${outlineForm.tone}\n`  : "";
-      const descPart  = outlineForm?.description?.trim()
+      const tonePart = outlineForm?.tone ? `风格基调：${outlineForm.tone}\n` : "";
+      const descPart = outlineForm?.description?.trim()
         ? `故事简介：${outlineForm.description.trim()}\n`
         : "";
-      const chapPart  = outlineForm?.targetChapters
+      const chapPart = outlineForm?.targetChapters
         ? `目标章数：${outlineForm.targetChapters}章\n`
         : "";
+      // R10-⑨: 大纲按「卷→章」组织——只给每卷概括 + 每章题目，不写
+      // 每章内容。1000+ 章量级逐章梗概会撑爆输出上限（token/时间），
+      // 逐章展开交给逐章生成时按卷概括引导。
+      const chaptersDirective = (() => {
+        const n = Number(outlineForm?.targetChapters);
+        if (Number.isFinite(n) && n > 40) {
+          return `4. 【分卷大纲】全书按每卷 100-200 章分卷。每卷一小段（3-5 句：本卷主线冲突、关键转折、卷末钩子）。卷内列出全部章节题目，每行一个「第X章 标题」，只写题目、不写内容；\n`;
+        }
+        return `4. 【章节梗概】${chapPart.trim() ? `按${outlineForm?.targetChapters}章逐章列出，` : "逐章列出（8-20章，每章"}每章以"第X章 标题"开头，接 2-3 句该章发生的事、冲突与伏笔。\n`;
+      })();
       return `${novelTag} [task:outline] ${titleContext}${genrePart}${tonePart}${descPart}${chapPart}请为这本小说生成完整的故事大纲，包含以下部分：\n`
         + `1. 【主题与核心冲突】1-2句话点明主题与核心矛盾；\n`
         + `2. 【主要角色】逐个列出：姓名、身份、动机、性格、成长弧线（每角色 2-3 行）；\n`
         + `3. 【世界观设定】地理、势力、力量体系等（分条）；\n`
-        + `4. 【章节梗概】${chapPart.trim() ? `按${outlineForm?.targetChapters}章逐章列出，` : "逐章列出（8-20章，每章"}每章以"第X章 标题"开头，接 2-3 句该章发生的事、冲突与伏笔。\n`
+        + chaptersDirective
         + `只输出大纲本身，不要解释、不要复述要求。${contextPart}${customPart}`;
     }
     case "generate": {
@@ -252,6 +265,7 @@ export function AIToolPanel({
   novelTitle = "",
   outlineText = "",
   targetWordCount,
+  writingSettings,
 }: AIToolPanelProps) {
   const { isConfigured, loaded } = useProviderConfig();
   const [activeTool, setActiveTool] = useState<ToolKey | null>(null);
@@ -315,9 +329,11 @@ export function AIToolPanel({
           total_chapters: totalChapters,
           chapter_title: chapterTitle ?? "",
           target_word_count: targetWordCount ?? null,
+          // R10-⑨: 篇幅/视角/频道 —— 后端注入【写作设置】提示块
+          writing_settings: writingSettings ?? null,
         }),
       }),
-    [chatEndpoint, chapterIndex, totalChapters, chapterTitle, targetWordCount, applyStageEvent],
+    [chatEndpoint, chapterIndex, totalChapters, chapterTitle, targetWordCount, writingSettings, applyStageEvent],
   );
 
   const { messages, sendMessage, status, stop, error, setMessages } = useChat({ transport });

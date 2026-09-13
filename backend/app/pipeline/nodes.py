@@ -173,6 +173,25 @@ async def _build_writing_context(state: dict) -> str:
     novel_id = state.get("novel_id")
     blocks: list[str] = []
 
+    # ── Block 0: writing settings (R10-⑨ 篇幅/视角/频道) ────────────────
+    # The frontend persists these in document metadata and sends them with
+    # every chat request; only non-empty values become lines (no
+    # placeholders), and the whole block is skipped when nothing is set.
+    ws = state.get("writing_settings") or {}
+    setting_lines: list[str] = []
+    if ws.get("writing_type"):
+        setting_lines.append(f"篇幅：{ws['writing_type']}")
+    if ws.get("pov"):
+        setting_lines.append(f"叙事视角：{ws['pov']}")
+    if ws.get("genre"):
+        setting_lines.append(f"频道：{ws['genre']}")
+    if setting_lines:
+        blocks.append(
+            "【写作设置】\n"
+            + "\n".join(setting_lines)
+            + "\n写作时必须严格遵守以上设定（视角与人称全章保持一致）。"
+        )
+
     # ── Block 1: chapter progress ──────────────────────────────────────
     chapter_index = state.get("chapter_index")
     total_chapters = state.get("total_chapters")

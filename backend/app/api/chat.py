@@ -132,6 +132,10 @@ class ChatRequest(BaseModel):
     total_chapters: _TolerantInt = Field(None, ge=1, le=100_000)
     chapter_title: str | None = Field("", max_length=200)
     target_word_count: _TolerantInt = Field(None, ge=0, le=100_000)
+    # R10-⑨ writing settings (篇幅/视角/频道) — injected into the system
+    # prompt as a 【写作设置】 block. Values are constrained below; unknown
+    # keys are dropped rather than flowing raw into the prompt.
+    writing_settings: dict | None = None
 
     model_config = {"extra": "ignore"}
 
@@ -140,6 +144,17 @@ class ChatRequest(BaseModel):
         """Normalize null title and residual float targets after field validators."""
         if self.chapter_title is None:
             self.chapter_title = ""
+        # R10-⑨: whitelist the three known settings keys and bound each
+        # value — this dict is formatted into the system prompt, so arbitrary
+        # client text must not flow in.
+        if self.writing_settings:
+            allowed = ("writing_type", "pov", "genre")
+            cleaned: dict = {}
+            for k in allowed:
+                v = self.writing_settings.get(k)
+                if isinstance(v, str) and v.strip():
+                    cleaned[k] = v.strip()[:32]
+            self.writing_settings = cleaned or None
         return self
 
     @model_validator(mode="after")
@@ -416,6 +431,7 @@ async def _event_stream(
     total_chapters: int | None = None,
     chapter_title: str = "",
     target_word_count: int | None = None,
+    writing_settings: dict | None = None,
 ) -> AsyncIterator[str]:
     """Runs the pipeline and emits AI SDK v5 UI Message Stream SSE events.
 
@@ -453,6 +469,7 @@ async def _event_stream(
             persist_key=f"ai-draft:{novel_id}" if novel_id else None,
             chapter_index=chapter_index, total_chapters=total_chapters,
             chapter_title=chapter_title, target_word_count=target_word_count,
+            writing_settings=writing_settings,
             on_event=True,
         ):
             if isinstance(item, tuple) and len(item) == 2 and item[0] == "__event__":
@@ -604,6 +621,7 @@ async def chat(
             session=session, novel_id=novel_id, task_type=task_type,
             chapter_index=req.chapter_index, total_chapters=req.total_chapters,
             chapter_title=req.chapter_title, target_word_count=req.target_word_count,
+            writing_settings=req.writing_settings,
         ),
         media_type="text/event-stream",
         headers=_sse_headers(),

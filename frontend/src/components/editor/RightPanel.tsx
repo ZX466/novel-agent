@@ -28,6 +28,9 @@ interface RightPanelProps {
   novelTitle: string;
   outlineText: string;
   activeChapterId: number | null;
+  /** R10-⑨ writing settings from the WriterSettingsBar — passed through to
+   *  AIToolPanel so every generation request carries 篇幅/视角/频道. */
+  writingSettings?: { writing_type: string; pov: string; genre: string };
 }
 
 export function RightPanel(props: RightPanelProps) {
@@ -75,6 +78,7 @@ export function RightPanel(props: RightPanelProps) {
             novelId={novelId}
             novelTitle={novelTitle}
             outlineText={outlineText}
+            writingSettings={props.writingSettings}
           />
         ) : (
           <AssistantPanel

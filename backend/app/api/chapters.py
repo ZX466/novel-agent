@@ -80,7 +80,7 @@ async def _load_parent(session: AsyncSession, doc_id: int, api_key: str) -> None
 @router.get("", response_model=ChapterListResponse)
 async def list_chapters_endpoint(
     doc_id: int,
-    limit: int = Query(200, ge=1, le=500),
+    limit: int = Query(200, ge=1, le=2000),
     offset: int = Query(0, ge=0, le=10000),
     session: AsyncSession = Depends(get_db),
     api_key: str = Depends(require_api_key),

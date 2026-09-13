@@ -45,7 +45,8 @@ export interface ListChaptersResponse {
 
 export async function listChapters(
   docId: number,
-  limit = 200,
+  // R10-⑨: 1000+ 章量级超长篇——200 截断会让大纲/统计/前章上下文静默丢章。
+  limit = 2000,
 ): Promise<ListChaptersResponse> {
   return request<ListChaptersResponse>(
     `/v1/documents/${docId}/chapters?limit=${limit}`,

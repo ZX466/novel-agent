@@ -57,5 +57,6 @@ class PipelineState(TypedDict, total=False):
     total_chapters: int | None          # planned chapter count (from outline/frontend)
     chapter_title: str                  # title of the chapter being written ("" = unknown)
     target_word_count: int | None       # explicit per-chapter word target (None = derive)
+    writing_settings: dict              # R10-⑨ {writing_type, pov, genre} — 篇幅/视角/频道
     writing_context: str                # structured blocks built by retrieval_node for draft_node
     word_count_retry: str               # "" | "continue" | "regenerate" (word-count post-check verdict)

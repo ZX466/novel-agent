@@ -148,7 +148,16 @@ export function CreationWizard({ open, onClose }: CreationWizardProps) {
     const chapPart = targetChapters.trim()
       ? `目标章数：${targetChapters.trim()}章\n`
       : "";
-    return `[task:outline] ${genrePart}${tonePart}${descPart}${chapPart}请为这本小说生成完整的故事大纲，包含主题、核心冲突、主要角色、世界观设定、每章梗概。`;
+    // R10-⑨: 超长篇（>40 章）按「卷→章」组织——每卷概括 + 卷内章节只列
+    // 题目。1000+ 章逐章梗概必然撑爆输出上限。
+    const chaptersDirective = (() => {
+      const n = Number(targetChapters.trim());
+      if (Number.isFinite(n) && n > 40) {
+        return "全书按每卷 100-200 章分卷。每卷一小段（3-5 句：本卷主线冲突、关键转折、卷末钩子），卷内列出全部章节题目，每行一个「第X章 标题」，只写题目、不写内容。";
+      }
+      return "每章以「第X章 标题」开头，接 2-3 句该章概况。";
+    })();
+    return `[task:outline] ${genrePart}${tonePart}${descPart}${chapPart}请为这本小说生成完整的故事大纲，包含主题、核心冲突、主要角色、世界观设定、章节规划。${chaptersDirective}`;
   };
 
   const handleGenerate = () => {
@@ -157,28 +166,43 @@ export function CreationWizard({ open, onClose }: CreationWizardProps) {
   };
 
   // 解析大纲标题行 → 批量建章（与编辑器「应用大纲」同一套规则）。
+  // R10-⑨: 并发小批量（10/批）——1000 章串行 await 每章一次 HTTP 往返
+  // 要数分钟；批量并发 ~100x。卷级大纲只有题目无梗概，summary 自然为空。
   const applyOutlineToChapters = async (docId: number, outlineText: string) => {
     const lines = outlineText.split("\n");
     const entries: Array<{ idx: number; title: string }> = [];
     for (let i = 0; i < lines.length; i++) {
       const trimmed = lines[i].trim();
-      if (/^\d+[\.\、]/.test(trimmed) || /^第[一二三四五六七八九十百千\d]+章/.test(trimmed)) {
+      if (/^\d+[\.\、]/.test(trimmed) || /^第[一二三四五六七八九十百千零〇两\d]+章/.test(trimmed)) {
         const t =
-          trimmed.replace(/^\d+[\.\、]\s*/, "").trim().slice(0, 50) ||
+          trimmed.replace(/^\d+[\.\、]\s*/, "").trim().slice(0, 200) ||
           `第${entries.length + 1}章`;
         entries.push({ idx: i, title: t });
       }
     }
-    for (let i = 0; i < entries.length; i++) {
-      const start = entries[i].idx + 1;
-      const end = i + 1 < entries.length ? entries[i + 1].idx : lines.length;
-      const summaryLines = lines.slice(start, end).filter((l) => l.trim());
-      const summary = summaryLines.join("\n").trim().slice(0, 500);
-      await createChapter(docId, {
-        chapter_index: i,
-        title: entries[i].title,
-        ...(summary ? { summary } : {}),
-      });
+    const BATCH = 10;
+    for (let start = 0; start < entries.length; start += BATCH) {
+      const batch = entries.slice(start, start + BATCH).map((e, i) => ({
+        ...e,
+        chapter_index: start + i,
+      }));
+      await Promise.all(
+        batch.map((e) => {
+          const s = e.idx + 1;
+          const end = entries[start + batch.indexOf(e) + 1]?.idx ?? lines.length;
+          const summary = lines
+            .slice(s, end)
+            .filter((l) => l.trim() && !/^第[一二三四五六七八九十百千零〇两\d]+卷/.test(l.trim()))
+            .join("\n")
+            .trim()
+            .slice(0, 500);
+          return createChapter(docId, {
+            chapter_index: e.chapter_index,
+            title: e.title,
+            ...(summary ? { summary } : {}),
+          }).catch(() => undefined);
+        }),
+      );
     }
   };
 
@@ -363,14 +387,14 @@ export function CreationWizard({ open, onClose }: CreationWizardProps) {
                   style={{ borderColor: "var(--border)", color: "var(--fg)" }}
                 />
               </Field>
-              <Field label="目标章数（可选）">
+              <Field label="目标章数（可选，>40 章自动按卷规划）">
                 <input
                   type="number"
                   min={1}
-                  max={500}
+                  max={2000}
                   value={targetChapters}
                   onChange={(e) => setTargetChapters(e.target.value)}
-                  placeholder="如 50"
+                  placeholder="如 50、1000"
                   className="w-full px-sp-3 py-sp-2 rounded-sm text-[13px] bg-transparent border outline-none"
                   style={{ borderColor: "var(--border)", color: "var(--fg)" }}
                 />

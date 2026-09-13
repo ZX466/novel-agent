@@ -159,3 +159,43 @@ async def test_stream_pipeline_no_events_without_on_event() -> None:
 
 # ── P2-2: relationship tree serialization tests live in
 # test_pipeline_writing_context.py (shares its _FakeAsyncSession fixtures).
+
+
+# ── R10-⑨: writing_settings passthrough (ChatRequest → state) ───────────
+
+
+@pytest.mark.asyncio
+async def test_stream_pipeline_passes_writing_settings() -> None:
+    """writing_settings rides through stream_pipeline into the pipeline state."""
+    from unittest.mock import patch
+
+    captured: dict = {}
+
+    async def fake_run_pipeline(topic, provider_config, *, on_token=None,
+                                on_event=None, **kwargs):
+        captured.update(kwargs)
+        if on_token:
+            await on_token("好")
+        return {"draft": "好", "refined": "", "iterations": 0}
+
+    ws = {"writing_type": "长篇", "pov": "第一人称", "genre": "男频"}
+    with patch("app.pipeline.graph.run_pipeline", side_effect=fake_run_pipeline):
+        async for _ in stream_pipeline("t", None, writing_settings=ws):
+            pass
+
+    assert captured.get("writing_settings") == ws
+
+
+def test_chat_request_accepts_writing_settings() -> None:
+    """ChatRequest tolerates the new field (None default, dict passthrough)."""
+    from app.api.chat import ChatRequest
+
+    req = ChatRequest(
+        messages=[{"role": "user", "content": "写一段"}],
+        writing_settings={"writing_type": "短篇", "pov": "第一人称", "genre": "女频"},
+    )
+    assert req.writing_settings is not None
+    assert req.writing_settings["pov"] == "第一人称"
+
+    req_none = ChatRequest(messages=[{"role": "user", "content": "x"}])
+    assert req_none.writing_settings is None

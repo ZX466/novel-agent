@@ -58,6 +58,9 @@ interface LeftSidebarProps {
   onContinueChapter: (id: number) => void;
   /** Jump to /novels/[id]/graph with the given tab (fullscreen view). */
   onOpenFullscreen: (tab: "graph" | "timeline") => void;
+  /** R10-⑨: AI 润色总纲 — sends the current outline through the rewrite
+   *  pipeline and applies the polished text back to the outline editor. */
+  onOutlinePolish?: (onDone: (polished: string) => void, onError: (msg: string) => void) => void;
 }
 
 export function LeftSidebar(props: LeftSidebarProps) {
@@ -67,7 +70,7 @@ export function LeftSidebar(props: LeftSidebarProps) {
     outline, extracting, currentText,
     onSaveOutline, onExtractEntities, onSelectChapter, onAddChapter,
     onDeleteChapter, onRenameChapter, onReorder, onContinueChapter,
-    onOpenFullscreen,
+    onOpenFullscreen, onOutlinePolish,
   } = props;
 
   return (
@@ -142,8 +145,8 @@ export function LeftSidebar(props: LeftSidebarProps) {
               onRename={onRenameChapter}
               onReorder={onReorder}
               onContinueChapter={onContinueChapter}
-            />
-          </div>
+              onAiPolish={onOutlinePolish}
+            />          </div>
         )}
         {leftTab === "characters" && (
           <div key={panelRefreshKey} className="h-full overflow-y-auto">

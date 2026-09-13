@@ -196,6 +196,7 @@ async def run_pipeline(
     total_chapters: int | None = None,
     chapter_title: str = "",
     target_word_count: int | None = None,
+    writing_settings: dict | None = None,
     on_event=None,
 ) -> PipelineState:
     """Runs the full pipeline non-streaming; returns final state.
@@ -234,6 +235,7 @@ async def run_pipeline(
             "total_chapters": total_chapters,
             "chapter_title": chapter_title,
             "target_word_count": target_word_count,
+            "writing_settings": writing_settings or {},
         },
         config={"recursion_limit": _recursion_limit()},
     )
@@ -252,6 +254,7 @@ async def stream_pipeline(
     total_chapters: int | None = None,
     chapter_title: str = "",
     target_word_count: int | None = None,
+    writing_settings: dict | None = None,
     on_event=None,
 ) -> AsyncIterator[str | tuple[str, dict]]:
     """True streaming: yields tokens as the LLM generates them.
@@ -300,6 +303,7 @@ async def stream_pipeline(
                 total_chapters=total_chapters,
                 chapter_title=chapter_title,
                 target_word_count=target_word_count,
+                writing_settings=writing_settings,
                 on_event=_emit_event if on_event else None,
             )
             final_text = state.get("refined") or state.get("draft") or ""
@@ -370,6 +374,7 @@ async def stream_pipeline(
             total_chapters=total_chapters,
             chapter_title=chapter_title,
             target_word_count=target_word_count,
+            writing_settings=writing_settings,
         )
         final_text = final_state.get("refined") or final_state.get("draft") or ""
 

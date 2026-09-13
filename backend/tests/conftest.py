@@ -177,6 +177,11 @@ class MockAsyncSession:
         if self._execute_idx < len(self._execute_results):
             r = self._execute_results[self._execute_idx]
             self._execute_idx += 1
+            # R10-⑨: tests may assert on the SQL text that was actually
+            # served (services.stats aggregates chapters, not documents).
+            if not hasattr(self, "_execute_results_used_sql"):
+                self._execute_results_used_sql = []
+            self._execute_results_used_sql.append(stmt)
             return r
         return _FakeResult()
 

@@ -20,6 +20,9 @@ interface OutlinePanelProps {
   onReorder: (orderedIds: Array<{ id: number; chapter_index: number }>) => void;
   /** R6-1: jump straight from the mind map into continuing this chapter. */
   onContinueChapter?: (chapterId: number) => void;
+  /** R10-⑨: AI 润色总纲。onDone receives the polished text (panel applies
+   *  it to the draft + saves); onError receives a displayable message. */
+  onAiPolish?: (onDone: (polished: string) => void, onError: (msg: string) => void) => void;
 }
 
 export function OutlinePanel({
@@ -36,8 +39,14 @@ export function OutlinePanel({
   onRename,
   onReorder,
   onContinueChapter,
+  onAiPolish,
 }: OutlinePanelProps) {
   const [view, setView] = useState<"list" | "mindmap">("list");
+  // R10-⑨: 全局模式——总纲编辑区展开到面板全高（超长篇大纲 1000+ 行，
+  // 30% 高度的预览框没法编辑）。
+  const [outlineFullscreen, setOutlineFullscreen] = useState(false);
+  const [polishing, setPolishing] = useState(false);
+  const [polishError, setPolishError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     chapterId: number;
     x: number;
@@ -196,13 +205,14 @@ export function OutlinePanel({
         </button>
       </div>
 
-      {/* Outline text — always visible */}
+      {/* Outline text — always visible. R10-⑨ 全局模式: flex-1 占满整栏
+          并隐藏章节列表，超长篇大纲获得完整编辑空间。 */}
       <div
-        className="px-sp-4 py-sp-3 border-b shrink-0 overflow-y-auto"
+        className={outlineFullscreen ? "flex-1 min-h-0 flex flex-col px-sp-4 py-sp-3 border-b" : "px-sp-4 py-sp-3 border-b shrink-0 overflow-y-auto"}
         style={{
           borderColor: "var(--border-subtle)",
           background: "var(--bg)",
-          maxHeight: editingOutline ? "45%" : "30%",
+          ...(outlineFullscreen ? {} : { maxHeight: editingOutline ? "45%" : "30%" }),
         }}
       >
         <div className="flex items-center mb-sp-2">
@@ -225,6 +235,48 @@ export function OutlinePanel({
               title="从大纲提取角色、世界观和剧情事件"
             >
               {extracting ? "提取中…" : "AI 提取"}
+            </button>
+            {onAiPolish && (
+              <button
+                type="button"
+                disabled={polishing || !outlineDraft.trim()}
+                onClick={() => {
+                  if (!onAiPolish) return;
+                  setPolishing(true);
+                  setPolishError(null);
+                  onAiPolish(
+                    (polished) => {
+                      setOutlineDraft(polished);
+                      onSaveOutline?.(polished);
+                      setPolishing(false);
+                    },
+                    (msg) => {
+                      setPolishError(msg);
+                      setPolishing(false);
+                    },
+                  );
+                }}
+                className="text-[10px] px-sp-2 py-px rounded-sm transition-colors disabled:opacity-40"
+                style={{
+                  color: "var(--accent)",
+                  border: "1px solid var(--accent)",
+                }}
+                title="用 AI 润色当前总纲（保持结构，改进表达）"
+              >
+                {polishing ? "润色中…" : "AI 润色"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setOutlineFullscreen((v) => !v)}
+              className="text-[10px] px-sp-2 py-px rounded-sm transition-colors"
+              style={{
+                color: outlineFullscreen ? "var(--accent)" : "var(--muted)",
+                border: outlineFullscreen ? "1px solid var(--accent)" : "1px solid var(--border)",
+              }}
+              title={outlineFullscreen ? "退出全局模式" : "全局模式——编辑区扩展到整栏，适配超长篇大纲"}
+            >
+              {outlineFullscreen ? "⤡ 退出" : "⤢ 全局"}
             </button>
             <button
               type="button"
@@ -274,10 +326,16 @@ export function OutlinePanel({
             {outline}
           </p>
         )}
+        {polishError && (
+          <p className="mt-sp-1 text-[10px]" style={{ color: "var(--danger)" }}>
+            {polishError}
+          </p>
+        )}
       </div>
 
-      {/* Chapter list — list view or mind-map view (R6-1) */}
-      {view === "mindmap" ? (
+      {/* Chapter list — list view or mind-map view (R6-1); hidden entirely
+          in outline 全局模式 (R10-⑨) */}
+      {outlineFullscreen ? null : view === "mindmap" ? (
         <div className="flex-1 overflow-y-auto min-h-0">
           {loading ? (
             <div className="p-sp-3 space-y-sp-2">

@@ -170,3 +170,14 @@
 - 修: tab 栏 filter 掉 trash;职责注释写明
 - 验证: Playwright 真浏览器全流程(进回收站→5 张卡带恢复/永久删除→恢复 1 张→退出回正常视图+1),console 0 错误;API 层 4 步冒烟通过
 - 备注: 本机 chrome-headless-shell 被 Application Control 策略拦截,改用系统 Chrome channel 跑通
+
+[回复] R10-⑨ 卷级总纲/写作设置生效/统计修复/大纲全局模式 — Claude
+时间: 2026-09-13 17:20
+状态: 已完成（`18370c8`，gitee 已推，backend/frontend 已重建+部署验证）
+- ①总纲 1000+ 章: 提示词>40 章自动切「卷→章」模式(每卷概括+只列章题),章数上限 2000
+- ②应用大纲→章节同步: 总是补建缺失章节(幂等),批量并发建章 10/批,列表 limit 200→2000
+- ③写作设置确认原为摆设(设置从未进管线)——已全链打通: ChatRequest 白名单透传→PipelineState→【写作设置】提示块;前端每次生成自动携带
+- ④统计页 2 真 bug: documents.word_count 全库 0(编辑器只写 chapters 表)→总字数/曲线/streak 全 0;改从 chapters 聚合,实测 0→4934 字与 DB 交叉核对一致
+- ⑤总纲编辑: AI 润色按钮(rewrite 管线,回填+自动保存)+⤢全局模式(编辑区占满整栏)
+- ⑥基建: Dockerfile apt/pip 换 USTC/阿里云源(清缓存后官方源 1700s+ 27 包;镜像源 90s 全程)
+- 测试: 后端 +6 全绿,容器对照 40→39(环境性);前端 98/98;tsc 0

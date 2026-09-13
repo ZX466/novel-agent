@@ -96,7 +96,7 @@ async def test_insert_creates_and_reports_skips(mock_session) -> None:
     deduped in-kit, then rowcount reports what the constraint allowed."""
     doc = _doc()
     mock_session.set_scalar_results([doc])
-    mock_session.set_execute_results([_rowcount(1), _rowcount(0)])
+    mock_session.set_execute_results([_rowcount(1), SimpleNamespace(all=lambda: []), _rowcount(0)])
     res = await apply_creative_kit(
         mock_session, 7,
         CreativeKitApplyRequest(
@@ -127,7 +127,8 @@ async def test_outline_merges_only_own_keys(mock_session) -> None:
     Only outline + outline_updated_at are written to metadata_json."""
     doc = _doc({"settings": {"font": 18}, "outline": "旧大纲"})
     mock_session.set_scalar_results([doc])
-    mock_session.set_execute_results([_rowcount(0), _rowcount(0)])
+    # ws/ch 都空 → ①③ 跳过，仅 ② cast-roles SELECT 消耗 execute。
+    mock_session.set_execute_results([SimpleNamespace(all=lambda: [])])
     res = await apply_creative_kit(
         mock_session, 7,
         CreativeKitApplyRequest(outline="全新大纲"),
@@ -148,7 +149,7 @@ async def test_novel_id_forced_from_path(mock_session) -> None:
     """Client-supplied novel_id is ignored; the path doc_id wins."""
     doc = _doc()
     mock_session.set_scalar_results([doc])
-    mock_session.set_execute_results([_rowcount(1), _rowcount(1)])
+    mock_session.set_execute_results([_rowcount(1), SimpleNamespace(all=lambda: []), _rowcount(1)])
     executed: list = []
 
     async def _capture(stmt):
@@ -205,3 +206,148 @@ async def test_missing_document_propagates(mock_session) -> None:
             mock_session, 404,
             CreativeKitApplyRequest(world_settings=[]),
         )
+
+# --- R10-⑦: unique protagonist + relationship web ----------------------------
+
+
+def _insert_params(stmt) -> dict:
+    """Merged bind params of a compiled INSERT (executemany → first row)."""
+    params = stmt.compile(dialect=postgresql.dialect()).params
+    if isinstance(params, list):
+        return params[0]
+    return params
+
+
+def _capturing(mock_session):
+    """Capture executed statements while delegating to the mock queue."""
+    executed: list = []
+
+    async def _capture(stmt):
+        executed.append(stmt)
+        return await mock_session._orig_execute(stmt)
+
+    mock_session._orig_execute = mock_session.execute
+    mock_session.execute = _capture
+    return executed, _capture
+
+
+@pytest.mark.asyncio
+async def test_kit_protagonist_demoted_when_cast_has_one(mock_session) -> None:
+    """小说已有主角时,套件里的主角入库前降级为配角（作者的角色设定优先）。"""
+    doc = _doc()
+    mock_session.set_scalar_results([doc])
+    # execute() order: ws insert → cast-roles SELECT → ch insert
+    mock_session.set_execute_results([
+        _rowcount(1),
+        SimpleNamespace(all=lambda: [("老主角", "主角")]),
+        _rowcount(1),
+    ])
+    executed, _capture = _capturing(mock_session)
+    mock_session.execute = _capture
+    res = await apply_creative_kit(
+        mock_session, 7,
+        CreativeKitApplyRequest(
+            world_settings=[{"title": "设定", "content_text": "x"}],
+            characters=[{"name": "新主角", "role": "主角"}],
+            outline="",
+        ),
+    )
+    assert res.created_characters == 1
+    ch_inserts = [
+        s for s in executed
+        if "INSERT INTO characters" in str(s.compile(dialect=postgresql.dialect()))
+    ]
+    assert ch_inserts
+    assert _insert_params(ch_inserts[0]).get("role_m0", _insert_params(ch_inserts[0]).get("role")) == "配角"
+
+
+@pytest.mark.asyncio
+async def test_kit_protagonist_kept_when_cast_is_empty(mock_session) -> None:
+    """空作品（无既有人物、套件内唯一主角）→ 主角保留。"""
+    doc = _doc()
+    mock_session.set_scalar_results([doc])
+    # ws 空 → ① 跳过。execute 顺序: ② cast-roles SELECT → ③ ch insert
+    mock_session.set_execute_results([
+        SimpleNamespace(all=lambda: []),   # cast-roles SELECT: no existing cast
+        _rowcount(1),                      # ch insert
+    ])
+    executed, _capture = _capturing(mock_session)
+    mock_session.execute = _capture
+    res = await apply_creative_kit(
+        mock_session, 7,
+        CreativeKitApplyRequest(
+            characters=[{"name": "主角", "role": "主角"}],
+            outline="",
+        ),
+    )
+    ch_inserts = [
+        s for s in executed
+        if "INSERT INTO characters" in str(s.compile(dialect=postgresql.dialect()))
+    ]
+    assert ch_inserts
+    assert _insert_params(ch_inserts[0]).get("role_m0", _insert_params(ch_inserts[0]).get("role")) == "主角"
+
+
+@pytest.mark.asyncio
+async def test_kit_relationships_resolve_and_skip_unknown(mock_session) -> None:
+    """关系网解析: 套件内+库内人物可成边;未知名字跳过计数;强度 1-5→2-10。"""
+    doc = _doc()
+    mock_session.set_scalar_results([doc])
+    # ws 空 → ① 跳过。execute 顺序: ② cast-roles → ③ ch insert → ④ cast-ids → ⑤ rel insert
+    mock_session.set_execute_results([
+        SimpleNamespace(all=lambda: [("灰姑", "配角")]),          # ② cast roles
+        _rowcount(1),                                            # ③ ch insert
+        SimpleNamespace(all=lambda: [(1, "夜烬"), (2, "灰姑")]),  # ④ cast ids
+        _rowcount(1),                                            # ⑤ rel insert
+    ])
+    executed, _capture = _capturing(mock_session)
+    mock_session.execute = _capture
+    res = await apply_creative_kit(
+        mock_session, 7,
+        CreativeKitApplyRequest(
+            characters=[{"name": "夜烬", "role": "主角"}],
+            relationships=[
+                {"subject": "夜烬", "object": "灰姑", "relation_type": "救助", "strength": 4},
+                {"subject": "夜烬", "object": "路人甲", "relation_type": "偶遇", "strength": 2},
+            ],
+            outline="",
+        ),
+    )
+    assert res.created_relationships == 1
+    assert res.skipped_relationships == 1  # unknown 路人甲
+    rel_inserts = [
+        s for s in executed
+        if "INSERT INTO character_relationships" in str(s.compile(dialect=postgresql.dialect()))
+    ]
+    assert rel_inserts
+    params = _insert_params(rel_inserts[0])
+    assert params.get("strength_m0", params.get("strength")) == 8  # kit 4 → stored 8
+
+
+@pytest.mark.asyncio
+async def test_kit_internal_double_protagonist_demotes_second(mock_session) -> None:
+    """模型违规输出两个主角 → 首个保留,第二个降级为配角。"""
+    doc = _doc()
+    mock_session.set_scalar_results([doc])
+    mock_session.set_execute_results([
+        SimpleNamespace(all=lambda: []),   # cast-roles: empty novel
+        _rowcount(2),                      # ch insert (2 rows)
+    ])
+    executed, _capture = _capturing(mock_session)
+    mock_session.execute = _capture
+    res = await apply_creative_kit(
+        mock_session, 7,
+        CreativeKitApplyRequest(
+            characters=[
+                {"name": "甲", "role": "主角"},
+                {"name": "乙", "role": "主角"},
+            ],
+            outline="",
+        ),
+    )
+    assert res.created_characters == 2
+    params = _insert_params(
+        next(s for s in executed if "INSERT INTO characters" in str(s))
+    )
+    roles = [v for k, v in params.items() if k.startswith("role")]
+    assert sorted(roles) == ["主角", "配角"]

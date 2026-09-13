@@ -30,40 +30,37 @@ function makeData(
 }
 
 describe("computeTimelineLayout", () => {
-  it("stretches H so 37 edgeless events stay readable (~38px rows, no overlap)", () => {
+  it("stretches H so 37 edgeless events keep dot+label rows readable", () => {
     const nodes = Array.from({ length: 37 }, (_, i) => ({ id: i + 1 }));
     const layout = computeTimelineLayout(makeData(nodes));
     expect(layout).not.toBeNull();
-    // H grows beyond the prototype's 300 to fit the column.
     expect(layout!.H).toBeGreaterThan(300);
-    // Consecutive y positions must be ≥ 35px apart (cards are 24px tall —
-    // 35px spacing leaves an 11px gap; the old fixed H=300 gave ~6px).
+    // Dots are 7-9px; ≥20px spacing keeps labels from colliding (old fixed
+    // H=300 gave ~6px).
     const ys = [...layout!.pos.values()].map((p) => p.y).sort((a, b) => a - b);
     for (let i = 1; i < ys.length; i++) {
-      expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(34.9);
+      expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(19.9);
     }
   });
 
-  it("keeps prototype base geometry for the demo-scale 8-node graph", () => {
-    const nodes = Array.from({ length: 8 }, (_, i) => ({ id: i + 1 }));
-    const layout = computeTimelineLayout(makeData(nodes));
-    // 46 + 8*40 = 366 — MIN_ROW_PX governs even at demo scale (slightly
-    // taller than the prototype's fixed 300, same visual language).
-    expect(layout!.H).toBe(366);
+  it("stretches W when chains create columns so right-side labels fit", () => {
+    // 5-node chain → 5 layers; colW floors at 160 so labels don't clip.
+    const nodes = [1, 2, 3, 4, 5].map((id) => ({ id }));
+    const edges: Array<[number, number]> = [[1, 2], [2, 3], [3, 4], [4, 5]];
+    const layout = computeTimelineLayout(makeData(nodes, edges));
+    expect(layout!.maxLayer).toBe(4);
+    expect(layout!.W).toBeGreaterThan(320);
+    // Ascending x per layer.
+    const xs = [1, 2, 3, 4, 5].map((id) => layout!.pos.get(id)!.x);
+    for (let i = 1; i < xs.length; i++) expect(xs[i]).toBeGreaterThan(xs[i - 1]);
   });
 
-  it("layers chained events by topological depth (edges → columns)", () => {
-    // 1 → 2 → 3: three layers, one node each.
-    const nodes = [{ id: 1, type: "起" }, { id: 2, type: "承" }, { id: 3, type: "转" }];
-    const layout = computeTimelineLayout(makeData(nodes, [[1, 2], [2, 3]]));
-    expect(layout!.maxLayer).toBe(2);
-    const p1 = layout!.pos.get(1)!;
-    const p2 = layout!.pos.get(2)!;
-    const p3 = layout!.pos.get(3)!;
-    expect(p2.x).toBeGreaterThan(p1.x);
-    expect(p3.x).toBeGreaterThan(p2.x);
-    // Single-node columns use the base geometry (H stays 300).
+  it("single-layer small graph stays at base geometry", () => {
+    const nodes = Array.from({ length: 8 }, (_, i) => ({ id: i + 1 }));
+    const layout = computeTimelineLayout(makeData(nodes));
     expect(layout!.H).toBe(300);
+    // One layer: colW = (320-70)/1 = 250 (prototype base), W = 40+250+40.
+    expect(layout!.W).toBe(330);
   });
 
   it("returns null for empty node list", () => {

@@ -101,6 +101,7 @@ describe("applyCreativeKit", () => {
   const kit = {
     world_settings: [{ title: "大陆", category: "地理", content_text: "x" }],
     characters: [{ name: "主角", role: "主角", description: "d" }],
+    relationships: [],
     outline: "第1章 开局",
   };
 
@@ -150,5 +151,32 @@ describe("applyCreativeKit", () => {
     await expect(applyCreativeKit(9, kit)).rejects.toThrow(
       /请求失败 \(409\)|冲突/,
     );
+  });
+});
+
+describe("parseCreativeKit — relationships (R10-⑦)", () => {
+  it("parses the relationships array with clamped strength", () => {
+    const kit = parseCreativeKit(
+      '{"characters":[{"name":"A"},{"name":"B"}],' +
+        '"relationships":[{"subject":"A","object":"B","relation_type":"宿敌","strength":9},' +
+        '{"subject":"缺名字","object":"","strength":3}]}',
+    );
+    expect(kit.relationships).toHaveLength(1);
+    expect(kit.relationships[0]).toEqual({
+      subject: "A",
+      object: "B",
+      relation_type: "宿敌",
+      strength: 5, // clamped from 9
+    });
+  });
+
+  it("defaults relation_type and strength when absent", () => {
+    const kit = parseCreativeKit(
+      '{"relationships":[{"subject":"A","object":"B"}]}',
+    );
+    expect(kit.relationships[0]).toMatchObject({
+      relation_type: "关系",
+      strength: 3,
+    });
   });
 });

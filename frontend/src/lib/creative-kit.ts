@@ -24,21 +24,30 @@ export interface CreativeKitCharacter {
   arc_summary?: string;
 }
 
+export interface CreativeKitRelationship {
+  subject: string;
+  object: string;
+  relation_type: string;
+  strength: number; // 1-5 (kit scale; server maps to stored 2-10)
+}
+
 export interface CreativeKitPackage {
   world_settings: CreativeKitWorldSetting[];
   characters: CreativeKitCharacter[];
+  relationships: CreativeKitRelationship[];
   outline: string;
 }
 
 /**
  * Batch-apply request sent to POST /v1/documents/{id}/creative-kit/apply.
- * The server performs the whole write (world settings + characters + outline)
- * in ONE transaction — no per-item POST loop, no whole-document metadata
- * round-trip.
+ * The server performs the whole write (world settings + characters +
+ * relationships + outline) in ONE transaction — no per-item POST loop, no
+ * whole-document metadata round-trip.
  */
 export interface CreativeKitApplyRequest {
   world_settings: CreativeKitWorldSetting[];
   characters: CreativeKitCharacter[];
+  relationships: CreativeKitRelationship[];
   outline: string;
 }
 
@@ -47,6 +56,8 @@ export interface CreativeKitApplyResponse {
   skipped_world_settings: number;
   created_characters: number;
   skipped_characters: number;
+  created_relationships: number;
+  skipped_relationships: number;
   outline_applied: boolean;
   /** Freshest document after the apply — hand it to the parent so it never
    *  overwrites concurrent changes with a stale metadata_json copy. */
@@ -56,6 +67,7 @@ export interface CreativeKitApplyResponse {
 export const EMPTY_KIT: CreativeKitPackage = {
   world_settings: [],
   characters: [],
+  relationships: [],
   outline: "",
 };
 
@@ -116,6 +128,7 @@ function isKitShape(data: unknown): boolean {
   return (
     Array.isArray(rec.world_settings) ||
     Array.isArray(rec.characters) ||
+    Array.isArray(rec.relationships) ||
     typeof rec.outline === "string"
   );
 }
@@ -183,9 +196,33 @@ export function parseCreativeKit(text: string): CreativeKitPackage {
       })
     : [];
 
+  const relationships: CreativeKitRelationship[] = Array.isArray(rec.relationships)
+    ? rec.relationships.flatMap((r) => {
+        const rec2 = asRecord(r);
+        const subject = typeof rec2.subject === "string" ? rec2.subject.trim() : "";
+        const object = typeof rec2.object === "string" ? rec2.object.trim() : "";
+        if (!subject || !object) return [];
+        const strengthRaw = Number(rec2.strength);
+        return [
+          {
+            subject,
+            object,
+            relation_type:
+              typeof rec2.relation_type === "string" && rec2.relation_type.trim()
+                ? rec2.relation_type.trim()
+                : "关系",
+            strength: Number.isFinite(strengthRaw)
+              ? Math.min(5, Math.max(1, Math.round(strengthRaw)))
+              : 3,
+          },
+        ];
+      })
+    : [];
+
   return {
     world_settings,
     characters,
+    relationships,
     outline: typeof rec.outline === "string" ? rec.outline : "",
   };
 }

@@ -38,9 +38,10 @@ function roleColor(role: string): string {
   return "var(--fg-tertiary)";
 }
 
-/** Prototype node radius: 20, +4 for 主角. */
+/** R10 dot-node scale: small dots + names beside them hold up at any cast
+ *  size (the prototype's 20/24px circles swallowed a dense graph). */
 function nodeRadius(role: string): number {
-  return role === "主角" ? 24 : 20;
+  return role === "主角" ? 7 : 5.5;
 }
 
 interface Pt {
@@ -100,7 +101,7 @@ function layoutGraph(nodes: RelationshipGraphNode[], edges: RelationshipGraphEdg
       v.y += (H / 2 - p.y) * 0.004;
       v.x *= 0.82;
       v.y *= 0.82;
-      p.x = Math.max(30, Math.min(W - 30, p.x + v.x));
+      p.x = Math.max(16, Math.min(W - 90, p.x + v.x)); // right margin reserves label room
       p.y = Math.max(30, Math.min(H - 30, p.y + v.y));
     }
   }
@@ -161,7 +162,7 @@ export function RelationshipGraph({ docId }: { docId: number }) {
     const scaleX = W / rect.width;
     const scaleY = H / rect.height;
     const move = (ev: PointerEvent) => {
-      const x = Math.max(30, Math.min(W - 30, (ev.clientX - rect.left) * scaleX));
+      const x = Math.max(16, Math.min(W - 90, (ev.clientX - rect.left) * scaleX));
       const y = Math.max(30, Math.min(H - 30, (ev.clientY - rect.top) * scaleY));
       setOverrides((prev) => new Map(prev).set(id, { x, y }));
     };
@@ -308,31 +309,23 @@ export function RelationshipGraph({ docId }: { docId: number }) {
               style={{ cursor: "grab" }}
               onPointerDown={(ev) => handleNodeDown(ev, n.id)}
             >
+              {/* Dot node + full name beside it — no two-char truncation,
+                  no giant circles: scales to any cast size (R10). */}
               <circle
                 cx={p.x}
                 cy={p.y}
                 r={r}
-                fill="var(--surface-3)"
+                fill={roleColor(n.role)}
+                fillOpacity={0.25}
                 stroke={roleColor(n.role)}
-                strokeWidth={1.5}
+                strokeWidth={n.role === "主角" ? 2 : 1.3}
               />
               <text
-                x={p.x}
-                y={p.y + 4}
-                fontSize="10"
-                textAnchor="middle"
+                x={p.x + r + 5}
+                y={p.y + 3.5}
+                fontSize="8.5"
                 fill="var(--fg)"
-                fontWeight={600}
-                style={{ pointerEvents: "none" }}
-              >
-                {n.name.slice(0, 2)}
-              </text>
-              <text
-                x={p.x}
-                y={p.y + r + 11}
-                fontSize="9"
-                textAnchor="middle"
-                fill="var(--fg-tertiary)"
+                fontWeight={n.role === "主角" ? 650 : 400}
                 style={{ pointerEvents: "none" }}
               >
                 {n.name}

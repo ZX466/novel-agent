@@ -18,10 +18,10 @@ import {
 
 const VIEW_W = 320;
 const VIEW_H = 300;
-// Minimum vertical room per stacked node — the prototype's fixed H=300
-// assumed ~8 demo events; real novels have dozens. Below this spacing the
-// cards overlap into an unreadable stack (R10 user report: 37 events).
-const MIN_ROW_PX = 40;
+// Vertical room per stacked node — H stretches with the tallest column so
+// rows never collide. Dots + right-side labels need far less room than the
+// old 52×24 cards (R10: dense timelines at novel scale).
+const MIN_ROW_PX = 22;
 const EDGE_ARROW = 1.4;
 
 function isCausal(t: string): boolean {
@@ -32,7 +32,7 @@ function isCausal(t: string): boolean {
  *  Exported for tests — pure, no React. */
 export function computeTimelineLayout(
   data: Pick<TimelineResponse, "nodes" | "edges" | "topological_order">,
-): { pos: Map<number, { x: number; y: number }>; maxLayer: number; H: number } | null {
+): { pos: Map<number, { x: number; y: number }>; maxLayer: number; H: number; W: number } | null {
   if (data.nodes.length === 0) return null;
   const nodeById = new Map(data.nodes.map((n) => [n.event_id, n]));
   const preds = new Map<number, number[]>();
@@ -58,13 +58,13 @@ export function computeTimelineLayout(
   }
   // Prototype geometry: W=320, colW=(W-70)/(maxLayer+1), x=40+l*colW,
   // y=46+(i+1)*((H-80)/(len+1)). H stretches with the tallest column so
-  // every stacked node keeps ≥ MIN_ROW_PX (prototype's H=300 only fits
-  // ~8 nodes per column; demo-scale, not novel-scale).
-  const H = Math.max(
-    VIEW_H,
-    46 + Math.max(...[...cols.values()].map((a) => a.length), 1) * MIN_ROW_PX,
-  );
-  const colW = (VIEW_W - 70) / Math.max(1, maxLayer + 1);
+  // rows never collide (dots + right labels: ≥22px/row). W stretches too —
+  // labels extend ~150px right of each column's dots, so columns space out
+  // accordingly instead of clipping (old fixed W=320 truncated them).
+  const tallest = Math.max(...[...cols.values()].map((a) => a.length), 1);
+  const H = Math.max(VIEW_H, 46 + tallest * MIN_ROW_PX);
+  const colW = Math.max(160, (VIEW_W - 70) / Math.max(1, maxLayer + 1));
+  const W = 40 + (maxLayer + 1) * colW + 40;
   const pos = new Map<number, { x: number; y: number }>();
   for (const [l, arr] of [...cols.entries()].sort((a, b) => a[0] - b[0])) {
     arr.forEach((n, i) => {
@@ -74,7 +74,7 @@ export function computeTimelineLayout(
       });
     });
   }
-  return { pos, maxLayer, H };
+  return { pos, maxLayer, H, W };
 }
 
 export function TimelineGraph({ docId }: { docId: number }) {
@@ -162,7 +162,7 @@ export function TimelineGraph({ docId }: { docId: number }) {
           }}
         >
           <svg
-            viewBox={`0 0 ${VIEW_W} ${layout.H}`}
+            viewBox={`0 0 ${layout.W} ${layout.H}`}
             className="block w-full h-auto"
             role="img"
             aria-label="时间线因果图"
@@ -193,47 +193,38 @@ export function TimelineGraph({ docId }: { docId: number }) {
               if (!p) return null;
               const sel = selected === n.event_id;
               const warn = warnIds.has(n.event_id);
+              const label = n.summary.length > 18 ? `${n.summary.slice(0, 18)}…` : n.summary;
               return (
                 <g
                   key={n.event_id}
                   style={{ cursor: "pointer" }}
                   onClick={() => setSelected(sel ? null : n.event_id)}
                 >
-                  <rect
-                    x={p.x - 26}
-                    y={p.y - 12}
-                    width={52}
-                    height={24}
-                    rx={4}
+                  {/* Small dot node — scales to any event count */}
+                  <circle
+                    cx={p.x}
+                    cy={p.y}
+                    r={sel || warn ? 4.5 : 3.5}
                     fill={
-                      sel
-                        ? "var(--accent-bg)"
-                        : warn
-                          ? "color-mix(in oklch, var(--warn) 14%, transparent)"
-                          : "var(--surface-2)"
+                      sel ? "var(--accent)" : warn ? "var(--warn)" : "var(--fg-tertiary)"
                     }
-                    stroke={
-                      sel ? "var(--accent)" : warn ? "var(--warn)" : "var(--border)"
-                    }
+                    stroke={sel || warn ? "none" : "var(--border)"}
+                    strokeWidth={1}
                   />
+                  {/* Label right of the dot: summary + type + date (date moved
+                      here — bottom-of-card text was clipped at real scales) */}
                   <text
-                    x={p.x}
-                    y={p.y + 4}
-                    fontSize="9"
-                    textAnchor="middle"
-                    fill="var(--fg)"
-                    fontWeight={600}
+                    x={p.x + 9}
+                    y={p.y + 3.5}
+                    fontSize="8.5"
+                    fill={sel ? "var(--accent)" : "var(--fg)"}
+                    fontWeight={sel ? 600 : 400}
                   >
-                    {n.event_type}
-                  </text>
-                  <text
-                    x={p.x}
-                    y={p.y + 24}
-                    fontSize="8"
-                    textAnchor="middle"
-                    fill="var(--muted)"
-                  >
-                    {n.in_world_date || ""}
+                    {label}
+                    <tspan fill="var(--muted)" fontSize="7.5">
+                      {" "}· {n.event_type}
+                      {n.in_world_date ? ` · ${n.in_world_date}` : ""}
+                    </tspan>
                   </text>
                 </g>
               );

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { chatEndpoint } from "@/lib/config";
 import { loadProviderConfig, ownerAuthHeaders } from "@/lib/settings";
+import { listCharacters } from "@/lib/characters";
 import {
   applyCreativeKit,
   parseCreativeKit,
@@ -25,13 +26,28 @@ interface CreativeKitDialogProps {
 const GENRES = ["玄幻", "修仙", "都市", "历史", "科幻", "悬疑", "言情", "武侠", "末世", "系统", "其他"];
 const TONES = ["热血爽文", "轻松治愈", "黑暗压抑", "烧脑悬疑", "甜宠", "虐心", "成长励志", "其他"];
 
-function buildKitPrompt(genre: string, tone: string, keywords: string): string {
+/**
+ * R10-⑦: kit prompt v2 — 唯一主角约束、6-10 张多样化角色卡、关系网输出、
+ * 库内已有人物名注入（生成时避开重复）。`existingNames` = 当前作品已有
+ * 人物（空数组 = 新作品）。
+ */
+function buildKitPrompt(genre: string, tone: string, keywords: string, existingNames: string[]): string {
   const kw = keywords.trim() ? `，题材关键词：${keywords.trim()}` : "";
+  const avoid = existingNames.length
+    ? `\n以下人物已存在于作品中，严禁再生成同名或明显同人的角色：${existingNames.join("、")}。新角色必须与他们互补（如导师、宿敌、盟友、竞争者），不要重复已有定位。`
+    : "";
   return (
     `[task:generate] 你是资深小说设定师。请为一部「${genre} · ${tone}」小说${kw}生成一套创作灵感套件，` +
-    "包含世界观（3-5 条）、主要人物（3-5 个）和主线大纲。只输出一个 JSON 对象，不要任何其他文字，格式：\n" +
+    "包含世界观（3-5 条）、人物（6-10 个）和主线大纲。\n" +
+    "人物要求：\n" +
+    "- 「主角」恰好 1 名（全书唯一核心，不设双主角）\n" +
+    "- 其余为配角/反派/导师/其他，卡型尽量多样：宿敌、导师、挚友、红颜/蓝颜、家族长辈、神秘人等\n" +
+    "- 每个角色写清 name/role/description（含性格+动机）/attributes/arc_summary\n" +
+    "- 另生成 relationships 人物关系网（6-12 条），覆盖主角与主要角色的联结" + avoid + "\n" +
+    "只输出一个 JSON 对象，不要任何其他文字，格式：\n" +
     '{"world_settings":[{"title":"条目名","category":"地理/势力/文化/力量体系/历史/其他","content_text":"设定内容"}],' +
-    '"characters":[{"name":"角色名","role":"主角/配角/反派/其他","description":"人设","attributes":{"性格":"…"},"arc_summary":"成长弧线"}],' +
+    '"characters":[{"name":"角色名","role":"主角/配角/反派/导师/其他","description":"人设","attributes":{"性格":"…"},"arc_summary":"成长弧线"}],' +
+    '"relationships":[{"subject":"角色A","object":"角色B","relation_type":"宿敌/师徒/挚友/亲属/暗恋等","strength":1-5}],' +
     '"outline":"用编号列表描述整部主线大纲"}'
   );
 }
@@ -144,7 +160,11 @@ export function CreativeKitDialog({
   const handleGenerate = () => {
     setKit(null);
     setApplyStatus("");
-    void sendMessage({ text: buildKitPrompt(genre, tone, keywords) });
+    // R10-⑦: inject the existing cast so the model avoids duplicates.
+    void listCharacters(docId, 500)
+      .then((r) => r.items.map((c) => c.name))
+      .catch(() => [] as string[])
+      .then((names) => sendMessage({ text: buildKitPrompt(genre, tone, keywords, names) }));
   };
 
   const handleApply = async () => {
@@ -153,7 +173,8 @@ export function CreativeKitDialog({
     setApplyStatus("");
     try {
       // Single atomic server-side apply: the backend locks the document row,
-      // inserts world settings + characters (unique per title/name) and
+      // inserts world settings + characters (unique per title/name) + the
+      // relationship web (resolved against existing + kit cast) and
       // PATCH-merges ONLY the outline keys into metadata_json — so an editor
       // save that races us never gets clobbered by a stale full metadata copy.
       const res = await applyCreativeKit(docId, {
@@ -174,12 +195,16 @@ export function CreativeKitDialog({
               : undefined,
           arc_summary: c.arc_summary?.slice(0, 20000),
         })),
+        relationships: kit.relationships,
         outline: kit.outline,
       });
       const parts = [
         `世界观 ${res.created_world_settings}${res.skipped_world_settings ? `（跳过 ${res.skipped_world_settings}）` : ""}`,
         `人物 ${res.created_characters}${res.skipped_characters ? `（跳过 ${res.skipped_characters}）` : ""}`,
-      ];
+        res.created_relationships || res.skipped_relationships
+          ? `关系 ${res.created_relationships}${res.skipped_relationships ? `（跳过 ${res.skipped_relationships}）` : ""}`
+          : "",
+      ].filter(Boolean);
       if (res.outline_applied) parts.push("主线大纲");
       setApplyStatus(`已应用：${parts.join(" · ")}`);
       // Hand the freshest document back so the parent never overwrites this
@@ -306,6 +331,23 @@ export function CreativeKitDialog({
                         {c.role ? <span className="ml-sp-2 text-[10px]" style={{ color: "var(--muted)" }}>[{c.role}]</span> : null}
                         {c.description ? <div className="mt-px">{c.description}</div> : null}
                       </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {kit.relationships.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase mb-sp-1" style={{ color: "var(--fg-tertiary)" }}>关系网 · {kit.relationships.length}</div>
+                  <div className="flex flex-wrap gap-sp-1">
+                    {kit.relationships.map((r, i) => (
+                      <span
+                        key={i}
+                        className="text-[11px] px-sp-2 py-px rounded-full"
+                        style={{ background: "var(--surface-2)", color: "var(--fg-secondary)", border: "1px solid var(--border-hairline)" }}
+                      >
+                        {r.subject} —{r.relation_type}— {r.object}
+                        <span className="ml-1" style={{ color: "var(--accent)" }}>{r.strength}★</span>
+                      </span>
                     ))}
                   </div>
                 </div>

@@ -40,6 +40,7 @@ vi.mock("@/lib/creative-kit", async (importOriginal) => {
 const KIT: CreativeKitPackage = {
   world_settings: [{ title: "大陆", category: "地理", content_text: "九州" }],
   characters: [{ name: "主角", role: "主角", description: "d", attributes: { 性格: "冷静" }, arc_summary: "成长" }],
+  relationships: [],
   outline: "第一章：开局。",
 };
 const DOC = { id: 9, metadata_json: { outline: "第一章：开局。" } } as unknown as EditorDoc;
@@ -80,6 +81,8 @@ describe("CreativeKitDialog", () => {
       created_world_settings: 1,
       skipped_world_settings: 0,
       created_characters: 1,
+      created_relationships: 0,
+      skipped_relationships: 0,
       skipped_characters: 0,
       outline_applied: true,
       document: DOC as never,

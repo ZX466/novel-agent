@@ -240,9 +240,9 @@ export function CreativeKitDialog({
     try {
       // Single atomic server-side apply: the backend locks the document row,
       // inserts world settings + characters (unique per title/name) + the
-      // relationship web (resolved against existing + kit cast) and
-      // PATCH-merges ONLY the outline keys into metadata_json — so an editor
-      // save that races us never gets clobbered by a stale full metadata copy.
+      // relationship web (resolved against existing + kit cast). The outline
+      // is NEVER sent — the author's outline is their property; the kit's
+      // generated outline is preview-only reference material.
       const res = await applyCreativeKit(docId, {
         world_settings: kit.world_settings.map((w) => ({
           title: w.title.slice(0, 200),
@@ -262,7 +262,6 @@ export function CreativeKitDialog({
           arc_summary: c.arc_summary?.slice(0, 20000),
         })),
         relationships: kit.relationships,
-        outline: kit.outline,
       });
       const parts = [
         `世界观 ${res.created_world_settings}${res.skipped_world_settings ? `（跳过 ${res.skipped_world_settings}）` : ""}`,
@@ -271,10 +270,9 @@ export function CreativeKitDialog({
           ? `关系 ${res.created_relationships}${res.skipped_relationships ? `（跳过 ${res.skipped_relationships}）` : ""}`
           : "",
       ].filter(Boolean);
-      if (res.outline_applied) parts.push("主线大纲");
       setApplyStatus(`已应用：${parts.join(" · ")}`);
-      // Hand the freshest document back so the parent never overwrites this
-      // outline with a stale metadata_json later.
+      // Hand the freshest document back so the parent refreshes its copy —
+      // never overwriting concurrent changes with a stale metadata_json later.
       onApplied?.(res.document);
     } catch (err) {
       setApplyStatus(
@@ -420,7 +418,9 @@ export function CreativeKitDialog({
               )}
               {kit.outline && (
                 <div>
-                  <div className="text-[10px] uppercase mb-sp-1" style={{ color: "var(--fg-tertiary)" }}>主线大纲</div>
+                  <div className="text-[10px] uppercase mb-sp-1" style={{ color: "var(--fg-tertiary)" }}>
+                    主线大纲 <span className="ml-1 normal-case">仅供参考，不会写入作品</span>
+                  </div>
                   <div className="text-[12px] px-sp-3 py-sp-2 rounded-sm whitespace-pre-wrap" style={{ background: "var(--surface-2)", color: "var(--fg-secondary)" }}>
                     {kit.outline}
                   </div>

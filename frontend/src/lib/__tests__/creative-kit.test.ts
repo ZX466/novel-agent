@@ -118,7 +118,9 @@ describe("applyCreativeKit", () => {
         skipped_world_settings: 0,
         created_characters: 1,
         skipped_characters: 0,
-        outline_applied: true,
+        created_relationships: 0,
+        skipped_relationships: 0,
+        outline_applied: false,
         document: doc,
       }),
     });
@@ -133,9 +135,10 @@ describe("applyCreativeKit", () => {
     const body = JSON.parse(String(init.body));
     expect(body.world_settings[0].title).toBe("大陆");
     expect(body.characters[0].name).toBe("主角");
-    expect(body.outline).toContain("第1章");
+    // Kits never write the outline (preview-only) — the request body omits it.
+    expect("outline" in body).toBe(false);
     expect(res.created_characters).toBe(1);
-    expect(res.outline_applied).toBe(true);
+    expect(res.outline_applied).toBe(false);
     expect(res.document).toEqual(doc);
   });
 

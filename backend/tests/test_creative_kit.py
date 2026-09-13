@@ -2,8 +2,9 @@
 
 Uses the shared mock_session — no database required. Covers: single-
 transaction semantics (one commit, rollback on failure), in-kit dedup,
-conflict-skips reported via rowcount, outline PATCH-merge touching only
-its own keys, document row locking, and version bumping.
+conflict-skips reported via rowcount, the outline NEVER written (the
+author's outline is their property — the kit outline is preview-only),
+document row locking, and version bumping.
 """
 from __future__ import annotations
 
@@ -118,13 +119,17 @@ async def test_insert_creates_and_reports_skips(mock_session) -> None:
     # characters: 2 rows attempted, DB accepted 0 → 0 created, 2 skipped.
     assert res.created_characters == 0
     assert res.skipped_characters == 2
-    assert res.outline_applied is True
+    # Outline is never written by a kit apply (preview-only) — even when the
+    # request still carries one (old-client compat).
+    assert res.outline_applied is False
 
 
 @pytest.mark.asyncio
-async def test_outline_merges_only_own_keys(mock_session) -> None:
-    """P0: merging the outline must not clobber concurrent keys (settings).
-    Only outline + outline_updated_at are written to metadata_json."""
+async def test_outline_never_written(mock_session) -> None:
+    """P0: 灵感套件应用绝不写大纲 — 大纲是作者的财产（大纲编辑器/AI 润色
+    维护），套件里生成的主线大纲仅作弹层预览参考。请求仍带 outline
+    （旧客户端兼容）时同样忽略：metadata_json 的 outline 键与 version
+    原样保留，response 恒 outline_applied=False。"""
     doc = _doc({"settings": {"font": 18}, "outline": "旧大纲"})
     mock_session.set_scalar_results([doc])
     # ws/ch 都空 → ①③ 跳过，仅 ② cast-roles SELECT 消耗 execute。
@@ -133,14 +138,13 @@ async def test_outline_merges_only_own_keys(mock_session) -> None:
         mock_session, 7,
         CreativeKitApplyRequest(outline="全新大纲"),
     )
-    merged = doc.metadata_json
-    assert merged["settings"] == {"font": 18}  # untouched
-    assert merged["outline"] == "全新大纲"
-    assert "outline_updated_at" in merged  # server-stamped fresh timestamp
-    assert doc.version == 4  # document changed → version bumped
-    assert res.outline_applied is True
-    # response carries the same merged document (validated into DocumentRead)
-    assert res.document.metadata_json["outline"] == "全新大纲"
+    assert doc.metadata_json["outline"] == "旧大纲"  # untouched
+    assert doc.metadata_json["settings"] == {"font": 18}  # untouched
+    assert "outline_updated_at" not in doc.metadata_json
+    assert doc.version == 3  # unchanged — the outline write never happens
+    assert res.outline_applied is False
+    # response carries the same untouched document
+    assert res.document.metadata_json["outline"] == "旧大纲"
     assert res.document.metadata_json["settings"] == {"font": 18}
 
 

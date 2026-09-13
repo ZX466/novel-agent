@@ -29,19 +29,22 @@ class CreativeKitApplyRequest(BaseModel):
     """Body of POST /v1/documents/{id}/creative-kit/apply.
 
     ``novel_id`` on nested items is ignored server-side and forced to the
-    path's doc_id; the outline PATCH-merges into document metadata_json.
+    path's doc_id. ``outline`` is DEPRECATED and ignored server-side — kits
+    never write the author's outline (preview-only in the dialog); the field
+    is kept (default "") so old clients that still send it keep working.
     """
 
     world_settings: list[WorldSettingCreate] = Field(default_factory=list, max_length=20)
     characters: list[CharacterCreate] = Field(default_factory=list, max_length=20)
     relationships: list[KitRelationship] = Field(default_factory=list, max_length=60)
-    outline: str = Field(default="", max_length=200_000)
+    outline: str = Field(default="", max_length=200_000)  # deprecated; ignored
 
 
 class CreativeKitApplyResponse(BaseModel):
     """Outcome of one apply: created/skipped counts, whether the outline was
-    applied, and the freshest document (for the caller to refresh its copy —
-    prevents stale-metadata overwrites downstream)."""
+    applied (always False — kits never touch the outline), and the freshest
+    document (for the caller to refresh its copy — prevents stale-metadata
+    overwrites downstream). The field is kept for schema compat."""
 
     created_world_settings: int
     skipped_world_settings: int

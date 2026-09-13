@@ -128,7 +128,7 @@ describe("CreativeKitDialog", () => {
       created_relationships: 0,
       skipped_relationships: 0,
       skipped_characters: 0,
-      outline_applied: true,
+      outline_applied: false,
       document: DOC as never,
     });
     mockFullContext();
@@ -196,11 +196,23 @@ describe("CreativeKitDialog", () => {
     // Batch body is the structured kit — no whole-document metadata round-trip.
     expect(body.world_settings[0].title).toBe("大陆");
     expect(body.characters[0].name).toBe("主角");
-    expect(body.outline).toContain("第一章");
+    // Kits never write the outline (preview-only) — the apply call omits it.
+    expect("outline" in body).toBe(false);
 
     expect(await screen.findByText(/已应用：世界观 1/)).toBeInTheDocument();
     // Parent is handed the freshest document (no stale metadata overwrite).
     expect(onApplied).toHaveBeenCalledWith(DOC);
+  });
+
+  it("marks the outline preview as reference-only", async () => {
+    const onClose = vi.fn();
+    const { rerender } = render(dialogTree(true, onClose));
+    finishGeneration(rerender, onClose);
+
+    expect(await screen.findByText("主线大纲")).toBeInTheDocument();
+    expect(screen.getByText("仅供参考，不会写入作品")).toBeInTheDocument();
+    // The preview itself is still shown, never removed.
+    expect(screen.getByText("第一章：开局。")).toBeInTheDocument();
   });
 
   it("shows an empty-kit hint when nothing could be parsed", async () => {

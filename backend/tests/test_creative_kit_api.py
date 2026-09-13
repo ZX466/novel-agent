@@ -44,7 +44,7 @@ def _apply_result(doc_id: int = 5) -> CreativeKitApplyResponse:
         skipped_world_settings=1,
         created_characters=2,
         skipped_characters=0,
-        outline_applied=True,
+        outline_applied=False,  # kits never write the outline (preview-only)
         document=_fake_doc(doc_id),
     )
 
@@ -93,12 +93,13 @@ def test_apply_routes_payload_to_service(app_client: TestClient) -> None:
     assert body["skipped_world_settings"] == 1
     assert body["created_characters"] == 2
     assert body["skipped_characters"] == 0
-    assert body["outline_applied"] is True
+    assert body["outline_applied"] is False  # outline is never written by kits
     assert body["document"]["id"] == 5
     assert body["document"]["metadata_json"]["outline"] == "1. x"
     mocked_apply.assert_awaited_once()
     sent = mocked_apply.await_args.args[2]
     assert sent.world_settings[0].title == "大陆"
+    # Old clients may still send outline — schema accepts it, service ignores it.
     assert sent.outline == "1. 开局"
 
 

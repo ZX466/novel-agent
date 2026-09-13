@@ -41,14 +41,19 @@ export interface CreativeKitPackage {
 /**
  * Batch-apply request sent to POST /v1/documents/{id}/creative-kit/apply.
  * The server performs the whole write (world settings + characters +
- * relationships + outline) in ONE transaction — no per-item POST loop, no
+ * relationships) in ONE transaction — no per-item POST loop, no
  * whole-document metadata round-trip.
+ *
+ * The outline is deliberately NOT part of the request: kits never write the
+ * author's outline (it is preview-only in the dialog). ``outline`` remains as
+ * an optional, deprecated field for old-client type compat.
  */
 export interface CreativeKitApplyRequest {
   world_settings: CreativeKitWorldSetting[];
   characters: CreativeKitCharacter[];
   relationships: CreativeKitRelationship[];
-  outline: string;
+  /** @deprecated Kits never write the outline; servers ignore this field. */
+  outline?: string;
 }
 
 export interface CreativeKitApplyResponse {
@@ -230,18 +235,22 @@ export function parseCreativeKit(text: string): CreativeKitPackage {
 /**
  * Apply a generated kit in one server-side transaction. Returns created /
  * skipped counts plus the freshest document (see CreativeKitApplyResponse).
+ *
+ * The outline is stripped from the payload: it is preview-only material and
+ * must never overwrite the author's outline.
  */
 export async function applyCreativeKit(
   docId: number,
   kit: CreativeKitApplyRequest,
 ): Promise<CreativeKitApplyResponse> {
+  const { outline: _outline, ...payload } = kit;
   const res = await fetch(`${backendUrl}/v1/documents/${docId}/creative-kit/apply`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...ownerAuthHeaders(),
     },
-    body: JSON.stringify(kit),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     let detail: unknown;

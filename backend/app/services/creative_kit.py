@@ -1,12 +1,11 @@
 """Creative Kit batch-apply service (R7-2; R10-⑦ unique-protagonist + web).
 
-Applies a generated kit (world settings + characters + relationships +
-outline) to a novel in ONE transaction:
+Applies a generated kit (world settings + characters + relationships) to
+a novel in ONE transaction:
 
 - the document row is locked SELECT ... FOR UPDATE, serializing this apply
   against concurrent document writers that also lock (editor-save metadata
-  merge, other applies) so the outline merge can never clobber a concurrent
-  ``settings`` write and vice versa;
+  merge, other applies);
 - world settings / characters are inserted with INSERT ... ON CONFLICT DO
   NOTHING under the (novel_id, title|name) unique constraints, so re-applies
   and concurrent applies are idempotent — no duplicate rows ever;
@@ -15,8 +14,9 @@ outline) to a novel in ONE transaction:
   proposed relationship web is resolved against the kit's own characters
   plus the novel's existing cast — unknown pairs are skipped, never
   fabricated; strength maps kit 1-5 → stored 2-10;
-- the outline is PATCH-merged into ``metadata_json`` touching only the
-  ``outline`` / ``outline_updated_at`` keys;
+- the outline is NEVER touched: the outline belongs to the author (outline
+  editor / AI polish / apply-outline flows) and the kit's generated outline
+  is preview-only reference material;
 - any failure rolls the whole batch back (no partial applies).
 
 Embeddings are deliberately NOT generated for batch-inserted rows — mirroring
@@ -24,8 +24,6 @@ the portable import path — so a large apply never blocks on embedding calls;
 such rows simply aren't in the vector index until a later edit re-embeds them.
 """
 from __future__ import annotations
-
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -51,7 +49,7 @@ async def apply_creative_kit(
     """Apply a creative kit atomically. Raises DocumentNotFound if missing."""
     # Lock the document row for the whole transaction: any other locked
     # writer (metadata merge under merge_metadata) waits for us, and we wait
-    # for it, so the outline merge below always merges onto the freshest value.
+    # for it, so the batch reads the freshest cast/roles before resolving.
     doc = await get_document(
         session, doc_id, owner_key_hash=owner_key_hash, lock=True,
     )
@@ -184,16 +182,12 @@ async def apply_creative_kit(
                 or id_by_name.get(rel.object.strip()) is None
             )
 
-        # ── Outline: PATCH-merge ONLY the changed keys onto the locked row,
-        #    so concurrent writes to unrelated keys (settings, ...) survive.
+        # ── Outline: NEVER written by a kit apply. The outline is the
+        #    author's property (outline editor / AI polish / apply-outline
+        #    flows); the kit's generated outline stays preview-only in the
+        #    dialog. ``outline_applied`` stays in the response for schema
+        #    compat and is always False now.
         outline_applied = False
-        if payload.outline.strip():
-            merged = dict(doc.metadata_json or {})
-            merged["outline"] = payload.outline
-            merged["outline_updated_at"] = datetime.now(timezone.utc).isoformat()
-            doc.metadata_json = merged
-            doc.version = doc.version + 1
-            outline_applied = True
 
         await session.commit()
     except Exception:

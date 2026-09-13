@@ -8,12 +8,15 @@ import { extractEntitiesFromOutline } from "@/lib/extract-entities";
 import { createCharacter } from "@/lib/characters";
 import { createWorldSetting } from "@/lib/world-settings";
 import { createPlotEvent } from "@/lib/plot-events";
+import { importRelationships } from "@/lib/character-relationships";
 import { ApiError } from "@/lib/types";
 
 export interface ExtractionOutcome {
   characters: number;
   worldSettings: number;
   plotEvents: number;
+  /** Relationship lines imported via the name-based batch endpoint. */
+  relationships: number;
   /** Rows rejected by server-side validation (e.g. duplicate name → 409). */
   failed: number;
   /** 409 conflicts specifically — duplicates already exist, skipped. */
@@ -69,10 +72,32 @@ export async function extractAndCreateEntities(
   const duplicates = rejected.filter((r) => (r.reason as ApiError).status === 409).length;
   const failed = all.length - ok;
 
+  // 人物关系线：走名字解析的批量导入端点（outline -> graph），服务端按
+  // 姓名匹配已有角色、跳过未知端点。导入失败不得拖垮整次提取（计数 0）。
+  let relationships = 0;
+  if (entities.relationships && entities.relationships.length > 0) {
+    try {
+      const result = await importRelationships(
+        docId,
+        entities.relationships.map((r) => ({
+          subject_name: r.subject_name,
+          object_name: r.object_name,
+          relation_type: r.relation_type || "关系",
+          description: r.description || undefined,
+          strength: r.strength,
+        })),
+      );
+      relationships = result.created + result.updated;
+    } catch {
+      relationships = 0;
+    }
+  }
+
   return {
     characters: charResults.filter((r) => r.status === "fulfilled").length,
     worldSettings: wsResults.filter((r) => r.status === "fulfilled").length,
     plotEvents: peResults.filter((r) => r.status === "fulfilled").length,
+    relationships,
     failed,
     duplicates,
   };
@@ -82,12 +107,14 @@ export async function extractAndCreateEntities(
  *  friendly "已存在，已跳过" note instead of a bare failure count. */
 export function formatExtractionSummary(o: ExtractionOutcome): string {
   const base = `已提取 ${o.characters} 个角色、${o.worldSettings} 个世界观设定、${o.plotEvents} 个剧情事件`;
+  const withRels =
+    o.relationships > 0 ? `${base}、${o.relationships} 条关系` : base;
   const nonDuplicate = o.failed - o.duplicates;
   if (o.duplicates > 0 && nonDuplicate <= 0) {
-    return `${base}（${o.duplicates} 条已存在，已跳过）`;
+    return `${withRels}（${o.duplicates} 条已存在，已跳过）`;
   }
   if (o.failed > 0) {
-    return `${base}（${o.duplicates} 条已存在跳过，${nonDuplicate} 条校验失败）`;
+    return `${withRels}（${o.duplicates} 条已存在跳过，${nonDuplicate} 条校验失败）`;
   }
-  return base;
+  return withRels;
 }

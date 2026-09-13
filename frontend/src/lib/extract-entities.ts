@@ -65,6 +65,7 @@ function parseExtractJson(text: string): ExtractEntitiesResult {
     characters: Array.isArray(data.characters) ? data.characters : [],
     world_settings: Array.isArray(data.world_settings) ? data.world_settings : [],
     plot_events: Array.isArray(data.plot_events) ? data.plot_events : [],
+    relationships: Array.isArray(data.relationships) ? data.relationships : [],
   };
 }
 

@@ -445,8 +445,17 @@ export interface ExtractedPlotEvent {
   prev_event_id?: number | null;
 }
 
+export interface ExtractedRelationship {
+  subject_name: string;
+  object_name: string;
+  relation_type?: string;
+  description?: string;
+  strength?: number;
+}
+
 export interface ExtractEntitiesResult {
   characters: ExtractedCharacter[];
   world_settings: ExtractedWorldSetting[];
   plot_events: ExtractedPlotEvent[];
+  relationships?: ExtractedRelationship[];
 }

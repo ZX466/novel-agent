@@ -119,3 +119,11 @@
 - 分段过大: 实测章节 355 有 12 处三连换行,AI 场景切换输出 3-4 连空行→等量空段落叠加;textToParagraphNodes/textToTipTapHTML 压缩 2+ 连空行为单空段落(旧文本加载同受益)
 - 可视化全屏: /novels/[id]/graph?tab= 全宽页(980px)+左栏「⤢ 全屏」入口
 验证: vitest 77/77;后端 519 passed(38 failed=已证实环境集);产物已清
+---
+[回复] 嵌入完成提醒(「索引中」徽标) — Claude
+时间: 2026-09-13 10:30
+状态: 已完成（`7cea39a`，gitee 已推，backend/frontend 已重建）
+- 后端: 写事务内同置 metadata_json.embedding_pending(chapter/world_setting 两表;character/plot_event 无该列不加)+嵌入成功后 jsonb_set 原子清除;契约测试 3 个
+- 前端: useEmbeddingPending(播种一次防 stale/保存响应 markPending/3s×10 轮询清除/超限静默)+WordCountBar「索引中」脉冲徽标→「✓ 已索引」短闪;use-editor-save 暴露 onChapterSavedMeta
+- 范围说明: 用户要的"保存后 RAG 何时可检索"信号=章节场景;实体面板已有 saving 态覆盖
+- 验证: vitest 84/84(+7);tsc 0;后端 47 passed(受影响面);徽标已入 bundle

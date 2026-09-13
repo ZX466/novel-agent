@@ -79,6 +79,9 @@ async def create_world_setting(
     session: AsyncSession, payload: WorldSettingCreate, *, stage_config: StageConfig | None = None,
 ) -> WorldSetting:
     ws = WorldSetting(**payload.model_dump())
+    if _world_setting_embed_text(ws):
+        # R10-⑤ pending flag rides the write transaction ("索引中" indicator).
+        ws.metadata_json = {**(ws.metadata_json or {}), "embedding_pending": True}
     session.add(ws)
     await session.flush()
     await session.refresh(ws)
@@ -97,12 +100,15 @@ async def update_world_setting(
     updates = payload.model_dump(exclude_unset=True)
     for field, value in updates.items():
         setattr(ws, field, value)
+    embed_needed = bool(updates.keys() & _EMBED_TRIGGER_FIELDS) and bool(_world_setting_embed_text(ws))
+    if embed_needed:
+        ws.metadata_json = {**(ws.metadata_json or {}), "embedding_pending": True}
     await session.flush()
     await session.refresh(ws)
     await session.commit()
     await session.refresh(ws)  # re-load after embedding flush expires updated_at
     # Re-embed only when an embedding-relevant field changed (background).
-    if updates.keys() & _EMBED_TRIGGER_FIELDS:
+    if embed_needed:
         schedule_embedding("world_setting", ws.id, _world_setting_embed_text(ws), stage_config, update_world_setting_embedding)
     return ws
 

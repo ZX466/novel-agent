@@ -99,7 +99,9 @@ async def create_character(
     # FastAPI serialises the response. A post-commit refresh re-loads all columns.
     await session.refresh(c)
     # R10-⑤: embedding detached from the write path (a slow/hung embed API
-    # used to stall the create response). Text mirrors the old inline helper.
+    # used to stall the create response). NOTE: no embedding_pending flag —
+    # Character has no metadata_json column; the panel's own saving state
+    # covers the UX.
     schedule_embedding("character", c.id, _character_embed_text(c), stage_config, update_character_embedding)
     return c
 

@@ -133,11 +133,14 @@ async def create_chapter(
     session.add(ch)
     await session.flush()
     await session.refresh(ch)
+    # R10-⑤: embedding detached from the create path — a slow embed API must
+    # not stall the write. The pending flag rides THIS transaction so clients
+    # can show an "索引中" indicator until the background embed clears it.
+    embed_src = (ch.content_text or "").strip() or (ch.summary or "").strip()
+    if embed_src:
+        ch.metadata_json = {**(ch.metadata_json or {}), "embedding_pending": True}
     await session.commit()
     await session.refresh(ch)
-    # R10-⑤: embedding detached from the create path — same rationale as
-    # update_chapter (a slow embed API must not stall the write response).
-    embed_src = (ch.content_text or "").strip() or (ch.summary or "").strip()
     if embed_src:
         schedule_embedding("chapter", ch.id, embed_src, stage_config, update_chapter_embedding)
     await _attach_timeline_warnings(session, ch)
@@ -161,14 +164,17 @@ async def update_chapter(
     await session.refresh(ch)
     if content_changed:
         # R10-⑤: embed in the background on an independent session — the
-        # save response returns as soon as the transaction commits. A slow
-        # or hung embedding API (4096-dim full-precision, seconds to ~60s
-        # on timeout) used to stall every chapter save here.
+        # save response returns as soon as the transaction commits. The
+        # pending flag rides this same transaction ("索引中" indicator).
+        embed_src = (ch.content_text or "").strip() or (ch.summary or "").strip()
+        if embed_src:
+            ch.metadata_json = {**(ch.metadata_json or {}), "embedding_pending": True}
+    await session.commit()
+    await session.refresh(ch)
+    if content_changed:
         embed_src = (ch.content_text or "").strip() or (ch.summary or "").strip()
         if embed_src:
             schedule_embedding("chapter", ch.id, embed_src, stage_config, update_chapter_embedding)
-    await session.commit()
-    await session.refresh(ch)
     await _attach_timeline_warnings(session, ch)
     return ch
 

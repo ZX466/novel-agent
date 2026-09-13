@@ -38,12 +38,16 @@ interface UseEditorSaveOpts {
   onSaved: (updated: EditorDoc) => void;
   onClean: () => void;
   refreshChapters: () => void;
+  /** R10-⑤: receives the saved chapter's metadata_json (embedding_pending
+   *  indicator). Null when no chapter was saved (title-only save). */
+  onChapterSavedMeta?: (metadata: Record<string, unknown> | null) => void;
 }
 
 export function useEditorSave(opts: UseEditorSaveOpts) {
   const {
     docId, doc, editor, activeChapterId, activeChapterTitle,
     title, settings, dirty, onSaved, onClean, refreshChapters,
+    onChapterSavedMeta,
   } = opts;
 
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -57,15 +61,21 @@ export function useEditorSave(opts: UseEditorSaveOpts) {
       // Save current chapter content. metadata_json carries the AI-paragraph
       // markers (ai_paragraphs indices) so the .prose p.ai styling survives
       // reloads; the backend PATCHes the whole metadata dict (full replace
-      // is fine here — chapter metadata only holds our marker + warnings).
+      // is fine here — chapter metadata only holds our marker + warnings,
+      // and the server re-adds its own embedding_pending flag afterwards).
+      let savedChapterMeta: Record<string, unknown> | null = null;
       if (activeChapterId != null) {
-        await updateChapter(docId, activeChapterId, {
+        const savedChapter = await updateChapter(docId, activeChapterId, {
           content_text: text,
           metadata_json: aiParagraphsMetadata(editor.getJSON()) as Record<string, unknown>,
         });
+        savedChapterMeta = (savedChapter.metadata_json ?? null) as Record<string, unknown> | null;
         // Refresh chapter list to update word count in the outline.
         void refreshChapters();
       }
+      // Notify the embedding indicator (R10-⑤) with the server-returned
+      // metadata — it carries the authoritative embedding_pending state.
+      onChapterSavedMeta?.(savedChapterMeta);
       // Update the document title and writing settings.
       // PATCH-merge only the changed settings keys with merge_metadata, so an
       // outline written by Creative Kit (or another tab) is never clobbered by
@@ -97,7 +107,7 @@ export function useEditorSave(opts: UseEditorSaveOpts) {
     }
   }, [
     editor, doc, activeChapterId, activeChapterTitle, title, settings, docId,
-    refreshChapters, onSaved, onClean,
+    refreshChapters, onSaved, onClean, onChapterSavedMeta,
   ]);
 
   const handleAutoSave = useCallback(() => {

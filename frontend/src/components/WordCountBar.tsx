@@ -12,6 +12,9 @@ interface WordCountBarProps {
   onSave: () => void;
   /** Called when the auto-save timer fires (every 30 s) with pending changes. */
   onAutoSave: () => void;
+  /** R10-⑤: true while the background embedding of this chapter is still
+   *  in flight (save → "索引中" badge; cleared → brief "已索引" flash). */
+  embeddingPending?: boolean;
 }
 
 /** Format milliseconds since last save as a relative time string. */
@@ -29,10 +32,19 @@ export function WordCountBar({
   dirty,
   onSave,
   onAutoSave,
+  embeddingPending = false,
 }: WordCountBarProps) {
   // Track when the last successful save happened.
   const [lastSaveTime, setLastSaveTime] = useState<number>(Date.now());
   const [now, setNow] = useState<number>(Date.now());
+
+  // R10-⑤: brief "已索引" confirmation after the pending flag clears.
+  const [wasPending, setWasPending] = useState(false);
+  useEffect(() => {
+    if (embeddingPending) {
+      setWasPending(true);
+    }
+  }, [embeddingPending]);
 
   // Update lastSaveTime when saveState transitions to "saved".
   useEffect(() => {
@@ -128,6 +140,28 @@ export function WordCountBar({
         统计
       </a>
       <span className="flex-1" />
+
+      {/* R10-⑤ embedding indexing indicator */}
+      {embeddingPending ? (
+        <span
+          className="text-[10px] tabular-nums flex items-center gap-sp-1.5"
+          style={{ color: "var(--accent)", fontFamily: "var(--font-mono)" }}
+          title="后台正在为检索索引本章内容，完成后自动消失"
+        >
+          <span
+            className="w-[5px] h-[5px] rounded-full"
+            style={{ background: "var(--accent)", animation: "pulse 1.2s infinite" }}
+          />
+          索引中
+        </span>
+      ) : wasPending ? (
+        <span
+          className="text-[10px] flex items-center gap-sp-1"
+          style={{ color: "var(--success, #4a9)", fontFamily: "var(--font-mono)" }}
+        >
+          ✓ 已索引
+        </span>
+      ) : null}
 
       {/* Save status */}
       <span

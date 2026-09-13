@@ -248,3 +248,71 @@ async def test_update_chapter_returns_before_embedding_completes(mock_session, m
     for t in pending:
         t.cancel()
     await asyncio.gather(*pending, return_exceptions=True)
+
+
+# --- R10-⑤ 补: embedding_pending 标志 ---------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_update_chapter_sets_embedding_pending_on_content_change(mock_session, monkeypatch):
+    """内容变更 → 保存事务内置 metadata_json.embedding_pending=true,
+    后台嵌入完成前检索端可据此提示'索引中'。"""
+    ch = Chapter(id=1, chapter_index=1, title="x", content_text="abc",
+                 metadata_json={})
+    mock_session.set_scalar_results([ch])
+
+    updated = await update_chapter(mock_session, 1, ChapterUpdate(content_text="新内容"))
+    assert updated.metadata_json.get("embedding_pending") is True
+
+
+@pytest.mark.asyncio
+async def test_update_chapter_no_pending_flag_without_content_change(mock_session):
+    """只改标题等非内容字段 → 不触发嵌入 → 不置标志。"""
+    ch = Chapter(id=1, chapter_index=1, title="x", content_text="abc",
+                 metadata_json={})
+    mock_session.set_scalar_results([ch])
+
+    updated = await update_chapter(mock_session, 1, ChapterUpdate(title="新标题"))
+    assert "embedding_pending" not in updated.metadata_json
+
+
+@pytest.mark.asyncio
+async def test_background_embed_clears_pending_flag_on_success(monkeypatch):
+    """后台嵌入成功 → 独立会话写 embedding_pending=false。"""
+    import asyncio
+    from app.services import background_embed
+
+    captured: dict = {}
+
+    class _FakeSession:
+        def __init__(self):
+            self.metadata = {"embedding_pending": True}
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+
+    fake = _FakeSession()
+
+    async def _fast_embed(text, stage_config=None):
+        return [0.1] * 8
+
+    async def _fake_persist(session, object_id, embedding):
+        captured["persisted"] = True
+
+    async def _fake_clear(session, table, object_id):
+        captured["cleared"] = (table, object_id)
+
+    class _FakeLocal:
+        def __call__(self):
+            return fake
+
+    monkeypatch.setattr(background_embed, "_clear_pending_flag", _fake_clear)
+    monkeypatch.setattr("app.db.session.AsyncSessionLocal", _FakeLocal(), raising=False)
+    # Patch embed_text at the lazy-import site used inside _run.
+    monkeypatch.setattr("app.llm.embedding.embed_text", _fast_embed)
+
+    # Run the scheduler to completion (embed is instant).
+    await background_embed._run("chapter", 1, "文本", None, _fake_persist)
+    assert captured.get("persisted") is True
+    assert captured.get("cleared") == ("chapter", 1)

@@ -15,6 +15,8 @@ import { WriterSettingsBar, type WritingSettings } from "@/components/WriterSett
 import { WordCountBar } from "@/components/WordCountBar";
 import { countWords, useEditorSave } from "@/hooks/use-editor-save";
 import { useDebouncedEditorText } from "@/hooks/use-debounced-editor-text";
+import { useEmbeddingPending } from "@/hooks/use-embedding-pending";
+import { listChapters } from "@/lib/chapters";
 import { useEditorData } from "@/hooks/use-editor-data";
 import { useChapterManager } from "@/hooks/use-chapter-manager";
 import { useOutlineWorkflows } from "@/hooks/use-outline-workflows";
@@ -130,6 +132,22 @@ export default function NovelEditorPage() {
 
   // ── Save logic (extracted hook) ─────────────────────────────────────
 
+  // R10-⑤ embedding indicator: seeded from the loaded chapter metadata,
+  // flipped by save responses, polled until the backend clears the flag.
+  const { pending: embeddingPending, markPendingFromSave } = useEmbeddingPending(
+    activeChapter?.id ?? null,
+    activeChapter?.metadata_json as Record<string, unknown> | undefined,
+    listChapters,
+    docId,
+  );
+
+  const handleChapterSavedMeta = useCallback(
+    (metadata: Record<string, unknown> | null) => {
+      markPendingFromSave(metadata);
+    },
+    [markPendingFromSave],
+  );
+
   const handleDocSaved = useCallback((updated: EditorDoc) => {
     setDoc(updated);
   }, [setDoc]);
@@ -146,6 +164,7 @@ export default function NovelEditorPage() {
     onSaved: handleDocSaved,
     onClean: useCallback(() => setDirty(false), []),
     refreshChapters: () => void refreshChapters(),
+    onChapterSavedMeta: handleChapterSavedMeta,
   });
 
   // ── Chapter CRUD (extracted hook) ───────────────────────────────────
@@ -252,6 +271,7 @@ export default function NovelEditorPage() {
             dirty={dirty}
             onSave={handleSave}
             onAutoSave={handleAutoSave}
+            embeddingPending={embeddingPending}
           />
         </>
       )}

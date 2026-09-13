@@ -194,7 +194,8 @@ async def create_plot_event(
     await session.refresh(pe)
     await session.commit()
     await session.refresh(pe)  # re-load after embedding flush expires updated_at
-    # R10-⑤: embedding detached from the write path.
+    # R10-⑤: embedding detached from the write path. NOTE: no pending flag —
+    # PlotEvent has no metadata_json column.
     schedule_embedding("plot_event", pe.id, _plot_event_embed_text(pe), stage_config, update_plot_event_embedding)
     ids, indexes = _affected_chapter_refs(pe, prev)
     await _refresh_chapter_warnings(
@@ -226,12 +227,13 @@ async def update_plot_event(
     old_chapter_index = pe.chapter_index
     for field, value in updates.items():
         setattr(pe, field, value)
+    embed_needed = bool(updates.keys() & _EMBED_TRIGGER_FIELDS) and bool(_plot_event_embed_text(pe))
     await session.flush()
     await session.refresh(pe)
     await session.commit()
     await session.refresh(pe)  # re-load after embedding flush expires updated_at
     # Re-embed only when an embedding-relevant field changed (background).
-    if updates.keys() & _EMBED_TRIGGER_FIELDS:
+    if embed_needed:
         schedule_embedding("plot_event", pe.id, _plot_event_embed_text(pe), stage_config, update_plot_event_embedding)
     ids, indexes = _affected_chapter_refs(pe, new_prev, old_prev)
     if old_chapter_id is not None:

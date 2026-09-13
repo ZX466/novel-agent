@@ -84,7 +84,12 @@ export async function extractAndCreateEntities(
           object_name: r.object_name,
           relation_type: r.relation_type || "关系",
           description: r.description || undefined,
-          strength: r.strength,
+          // Clamp into the stored 1-10 range: the import endpoint rejects
+          // out-of-range values (422) and would drop the whole line.
+          strength:
+            r.strength !== undefined && Number.isFinite(r.strength)
+              ? Math.min(10, Math.max(1, Math.round(r.strength)))
+              : undefined,
         })),
       );
       relationships = result.created + result.updated;

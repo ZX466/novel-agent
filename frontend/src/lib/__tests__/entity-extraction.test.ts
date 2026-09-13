@@ -89,6 +89,23 @@ describe("extractAndCreateEntities relationships", () => {
     ]);
   });
 
+  it("clamps mapped strength into the stored 1-10 range before import", async () => {
+    mockedExtract.mockResolvedValue({
+      ...baseEntities(),
+      relationships: [
+        { subject_name: "陈默", object_name: "苏晚晴", strength: 15 },
+        { subject_name: "林霜", object_name: "周叙", strength: 0.4 },
+        { subject_name: "周叙", object_name: "陈默", strength: 7.6 },
+        { subject_name: "A", object_name: "B", strength: Number.NaN },
+      ],
+    });
+
+    await extractAndCreateEntities(1, "大纲");
+
+    const items = vi.mocked(mockedImport).mock.calls[0]![1];
+    expect(items.map((r) => r.strength)).toEqual([10, 1, 8, undefined]);
+  });
+
   it("does not call importRelationships when extraction has no relationships", async () => {
     const outcome = await extractAndCreateEntities(1, "大纲");
 

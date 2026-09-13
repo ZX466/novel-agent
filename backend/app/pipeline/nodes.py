@@ -511,6 +511,7 @@ async def draft_node(state: PipelineState) -> dict:
             '"plot_events":[{"chapter_index":0,"event_type":"起/承/转/合/高潮/结局/其他","summary":"事件概述"}],'
             '"relationships":[{"subject_name":"角色A","object_name":"角色B","relation_type":"师徒/恋人/敌对/搭档/亲属/其他","strength":5,"description":"关系说明"}]}\n'
             "relationships 为人物关系线：subject_name/object_name 必须是 characters 中出现的姓名，"
+            "strength 为 1-10 的整数，"
             "人物关系取自大纲中角色间的互动/称谓，若大纲未体现则留空 []。"
             "其他类别如果在大纲中不存在，对应数组同样留空 []。"
         )

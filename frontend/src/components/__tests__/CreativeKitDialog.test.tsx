@@ -8,6 +8,9 @@ import {
   EMPTY_KIT,
   type CreativeKitPackage,
 } from "@/lib/creative-kit";
+import { getDocument } from "@/lib/documents";
+import { listCharacters } from "@/lib/characters";
+import { listWorldSettings } from "@/lib/world-settings";
 import type { EditorDoc } from "@/lib/types";
 
 // Controllable useChat state so tests can drive generation → parse.
@@ -32,6 +35,17 @@ vi.mock("@/lib/settings", () => ({
 
 vi.mock("@/lib/config", () => ({ chatEndpoint: "/api/chat" }));
 
+// 作品上下文三件套 mock — 每个用例可覆写返回值/抛错。
+vi.mock("@/lib/documents", () => ({
+  getDocument: vi.fn(),
+}));
+vi.mock("@/lib/characters", () => ({
+  listCharacters: vi.fn(),
+}));
+vi.mock("@/lib/world-settings", () => ({
+  listWorldSettings: vi.fn(),
+}));
+
 vi.mock("@/lib/creative-kit", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/creative-kit")>();
   return { ...actual, applyCreativeKit: vi.fn() };
@@ -44,6 +58,35 @@ const KIT: CreativeKitPackage = {
   outline: "第一章：开局。",
 };
 const DOC = { id: 9, metadata_json: { outline: "第一章：开局。" } } as unknown as EditorDoc;
+
+/** Rich fixture for the 作品现状 block: title/description/outline + cast.
+ *  简介/大纲 live in metadata_json (CreationWizard stores them there). */
+const CONTEXT_DOC = {
+  id: 9,
+  title: "星陨大陆",
+  metadata_json: {
+    description: "灵气复苏后的现代都市修仙故事。",
+    outline: "第一章 觉醒：少年偶得上古功法。\n第二章 入门：进入青云宗。",
+  },
+} as unknown as EditorDoc;
+const CONTEXT_CHARS = {
+  items: [
+    { name: "陈默", role: "主角", description: "", attributes: {}, arc_summary: "", id: 1, novel_id: 9, created_at: "", updated_at: "" },
+    { name: "林霜", role: "宿敌", description: "", attributes: {}, arc_summary: "", id: 2, novel_id: 9, created_at: "", updated_at: "" },
+  ],
+  total: 2,
+};
+const CONTEXT_WORLD = {
+  items: [{ title: "灵气复苏纪元", category: "历史", content_text: "", metadata_json: {}, id: 1, novel_id: 9, created_at: "", updated_at: "" }],
+  total: 1,
+};
+
+/** Default lib-layer mocks: rich context. Individual tests override. */
+function mockFullContext() {
+  vi.mocked(getDocument).mockResolvedValue(CONTEXT_DOC);
+  vi.mocked(listCharacters).mockResolvedValue(CONTEXT_CHARS);
+  vi.mocked(listWorldSettings).mockResolvedValue(CONTEXT_WORLD);
+}
 
 /** Renders a trigger + the dialog and re-renders the whole fragment so the
  *  controllable useChat mock's new value is picked up on demand. */
@@ -76,6 +119,7 @@ describe("CreativeKitDialog", () => {
   beforeEach(() => {
     chat.status = "ready";
     chat.messages = [];
+    chat.sendMessage.mockReset();
     vi.mocked(applyCreativeKit).mockReset();
     vi.mocked(applyCreativeKit).mockResolvedValue({
       created_world_settings: 1,
@@ -87,6 +131,7 @@ describe("CreativeKitDialog", () => {
       outline_applied: true,
       document: DOC as never,
     });
+    mockFullContext();
   });
 
   it("renders nothing when closed", () => {
@@ -168,5 +213,94 @@ describe("CreativeKitDialog", () => {
     chat.messages = [{ role: "assistant", parts: [{ type: "text", text: JSON.stringify(EMPTY_KIT) }] }];
     rerender(dialogTree(true, onClose, onApplied));
     expect(await screen.findByText(/未能解析出结构化设定/)).toBeInTheDocument();
+  });
+
+  describe("作品现状 context injection", () => {
+    /** Clicks 一键生成设定包 and flushes the async context fetches so
+     *  sendMessage has been called with the fully-built prompt. */
+    async function generate() {
+      const { rerender } = render(dialogTree(true, vi.fn()));
+      fireEvent.click(screen.getByRole("button", { name: "一键生成设定包" }));
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      return rerender;
+    }
+
+    /** Extracts the prompt text captured from sendMessage({ text }). */
+    function sentText() {
+      expect(chat.sendMessage).toHaveBeenCalledTimes(1);
+      const arg = chat.sendMessage.mock.calls[0]![0] as { text: string };
+      return arg.text;
+    }
+
+    it("fetches document/characters/world-settings before generating", async () => {
+      await generate();
+      expect(getDocument).toHaveBeenCalledWith(9);
+      expect(listCharacters).toHaveBeenCalledWith(9, 500);
+      expect(listWorldSettings).toHaveBeenCalledWith(9, { limit: 100 });
+    });
+
+    it("injects a 作品现状 block with 标题/简介/角色定位摘要/世界观标题/大纲", async () => {
+      await generate();
+      const text = sentText();
+      expect(text).toContain("作品现状");
+      expect(text).toContain("标题：星陨大陆");
+      expect(text).toContain("简介：灵气复苏后的现代都市修仙故事。");
+      expect(text).toContain("陈默（主角）");
+      expect(text).toContain("林霜（宿敌）");
+      expect(text).toContain("灵气复苏纪元");
+      expect(text).toContain("现有大纲");
+      expect(text).toContain("第一章 觉醒：少年偶得上古功法。");
+    });
+
+    it("rewrites the instruction line to anchor on the current work", async () => {
+      await generate();
+      const text = sentText();
+      expect(text).toContain(
+        "基于作品现状生成与当前故事一致、延续既有设定的灵感套件，世界观与人物不得与已有设定冲突，大纲作为主线参考可扩写但不得推翻既有走向",
+      );
+    });
+
+    it("keeps the duplicate-name avoidance directive with existing names", async () => {
+      await generate();
+      const text = sentText();
+      expect(text).toContain("严禁再生成同名或明显同人的角色");
+      expect(text).toContain("陈默、林霜");
+    });
+
+    it("truncates a long outline to 3000 chars", async () => {
+      const longOutline = "大".repeat(4000);
+      vi.mocked(getDocument).mockResolvedValue({
+        ...CONTEXT_DOC,
+        metadata_json: { outline: longOutline },
+      } as unknown as EditorDoc);
+      await generate();
+      const text = sentText();
+      expect(text).toContain(longOutline.slice(0, 3000));
+      expect(text).not.toContain("大".repeat(3001));
+    });
+
+    it("still generates when every context fetch fails (empty context)", async () => {
+      vi.mocked(getDocument).mockRejectedValue(new Error("network down"));
+      vi.mocked(listCharacters).mockRejectedValue(new Error("network down"));
+      vi.mocked(listWorldSettings).mockRejectedValue(new Error("network down"));
+      await generate();
+      const text = sentText();
+      expect(text).not.toContain("作品现状");
+      expect(text).not.toContain("严禁再生成同名");
+      expect(text).toContain("[task:generate]");
+    });
+
+    it("still generates when only the document fetch fails", async () => {
+      vi.mocked(getDocument).mockRejectedValue(new Error("404"));
+      await generate();
+      const text = sentText();
+      // Cast/world sections still render (from their own fetches).
+      expect(text).toContain("陈默（主角）");
+      expect(text).not.toContain("标题：星陨大陆");
+    });
   });
 });

@@ -7,6 +7,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { chatEndpoint } from "@/lib/config";
 import { loadProviderConfig, ownerAuthHeaders } from "@/lib/settings";
 import { listCharacters } from "@/lib/characters";
+import { getDocument } from "@/lib/documents";
+import { listWorldSettings } from "@/lib/world-settings";
 import {
   applyCreativeKit,
   parseCreativeKit,
@@ -30,14 +32,47 @@ const TONES = ["热血爽文", "轻松治愈", "黑暗压抑", "烧脑悬疑", "
  * R10-⑦: kit prompt v2 — 唯一主角约束、6-10 张多样化角色卡、关系网输出、
  * 库内已有人物名注入（生成时避开重复）。`existingNames` = 当前作品已有
  * 人物（空数组 = 新作品）。
+ *
+ * 作品上下文注入：`context` 携带当前作品现状（标题/简介/已有角色定位/
+ * 世界观标题/现有大纲），生成结果锚定既有故事而非凭空编造。空值字段
+ * 省略，全部为空时不输出「作品现状」块（等价旧行为）。
  */
-function buildKitPrompt(genre: string, tone: string, keywords: string, existingNames: string[]): string {
+interface KitContext {
+  title: string;
+  description: string;
+  outline: string;
+  castSummaries: string[];
+  worldTitles: string[];
+}
+
+function buildKitPrompt(
+  genre: string,
+  tone: string,
+  keywords: string,
+  existingNames: string[],
+  context: KitContext,
+): string {
   const kw = keywords.trim() ? `，题材关键词：${keywords.trim()}` : "";
   const avoid = existingNames.length
     ? `\n以下人物已存在于作品中，严禁再生成同名或明显同人的角色：${existingNames.join("、")}。新角色必须与他们互补（如导师、宿敌、盟友、竞争者），不要重复已有定位。`
     : "";
+  const contextLines = [
+    context.title.trim() ? `标题：${context.title.trim()}` : "",
+    context.description.trim() ? `简介：${context.description.trim()}` : "",
+    context.castSummaries.length ? `已有角色：${context.castSummaries.join("；")}` : "",
+    context.worldTitles.length ? `已有世界观：${context.worldTitles.join("、")}` : "",
+    context.outline.trim() ? `现有大纲：${context.outline.trim().slice(0, 3000)}` : "",
+  ].filter(Boolean);
+  const contextBlock = contextLines.length
+    ? `\n\n【作品现状】\n${contextLines.join("\n")}\n`
+    : "";
+  const anchor =
+    contextLines.length
+      ? `请基于作品现状生成与当前故事一致、延续既有设定的灵感套件，世界观与人物不得与已有设定冲突，大纲作为主线参考可扩写但不得推翻既有走向。`
+      : "请生成一套创作灵感套件。";
   return (
-    `[task:generate] 你是资深小说设定师。请为一部「${genre} · ${tone}」小说${kw}生成一套创作灵感套件，` +
+    `[task:generate] 你是资深小说设定师。请为一部「${genre} · ${tone}」小说${kw}${anchor}` +
+    `${contextBlock}` +
     "包含世界观（3-5 条）、人物（6-10 个）和主线大纲。\n" +
     "人物要求：\n" +
     "- 「主角」恰好 1 名（全书唯一核心，不设双主角）\n" +
@@ -160,11 +195,42 @@ export function CreativeKitDialog({
   const handleGenerate = () => {
     setKit(null);
     setApplyStatus("");
-    // R10-⑦: inject the existing cast so the model avoids duplicates.
-    void listCharacters(docId, 500)
-      .then((r) => r.items.map((c) => c.name))
-      .catch(() => [] as string[])
-      .then((names) => sendMessage({ text: buildKitPrompt(genre, tone, keywords, names) }));
+    // 并行拉取作品现状（文档/角色/世界观）；单项失败降级为空，绝不阻塞生成。
+    void Promise.all([
+      getDocument(docId)
+        .then((doc) => {
+          const meta = (doc.metadata_json ?? {}) as Record<string, unknown>;
+          return {
+            title: doc.title ?? "",
+            description:
+              typeof meta.description === "string" ? meta.description : "",
+            outline: typeof meta.outline === "string" ? meta.outline : "",
+          };
+        })
+        .catch(() => ({ title: "", description: "", outline: "" })),
+      listCharacters(docId, 500)
+        .then((r) => ({
+          names: r.items.map((c) => c.name),
+          cast: r.items.map(
+            (c) => `${c.name}（${c.role || "角色"}）`,
+          ),
+        }))
+        .catch(() => ({ names: [] as string[], cast: [] as string[] })),
+      listWorldSettings(docId, { limit: 100 })
+        .then((r) => r.items.map((w) => w.title))
+        .catch(() => [] as string[]),
+    ]).then(([docCtx, chars, worldTitles]) => {
+      // R10-⑦: inject the existing cast so the model avoids duplicates.
+      sendMessage({
+        text: buildKitPrompt(genre, tone, keywords, chars.names, {
+          title: docCtx.title,
+          description: docCtx.description,
+          outline: docCtx.outline,
+          castSummaries: chars.cast,
+          worldTitles,
+        }),
+      });
+    });
   };
 
   const handleApply = async () => {

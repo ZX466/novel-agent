@@ -237,6 +237,24 @@ export function buildPrompt(
   const titleContext = novelTitle ? `小说标题：${novelTitle}\n` : "";
   const customPart = customPrompt?.trim() ? `\n补充要求：${customPrompt.trim()}` : "";
 
+  // 09-14: surrounding-context block for the rewrite family. The model
+  // previously saw ONLY the selected text — rewriting a line of dialogue
+  // without knowing who was speaking or where the scene sat invited
+  // drift. ~300 chars before + ~100 after, reference-only (never output).
+  const selectionContextBlock = (() => {
+    if (!editorText) return "";
+    const target = selectedText || editorText.slice(-3000);
+    const pos = editorText.indexOf(target);
+    if (pos <= 0) return "";  // target at the very start → nothing before it
+    const before = editorText.slice(Math.max(0, pos - 300), pos).trim();
+    const after = editorText.slice(pos + target.length, pos + target.length + 100).trim();
+    if (!before && !after) return "";
+    let block = `\n\n上下文参考（仅助你理解场景，禁止输出或复述其中内容）：\n`;
+    if (before) block += `【前文】…${before}\n`;
+    if (after) block += `【后文】${after}…\n`;
+    return block;
+  })();
+
   switch (tool) {
     case "outline": {
       const contextPart = editorText.trim()
@@ -301,7 +319,7 @@ export function buildPrompt(
         + `- 在保持原意与情节不变的前提下，补充感官细节、动作、对白、环境与心理描写\n`
         + `- 扩写后长度约为原文的 2-3 倍\n`
         + `- 不新增与主线无关的支线，不改变人物设定\n`
-        + `直接输出扩写后的完整段落，不要解释。\n\n待扩写内容：\n${target}${customPart}`;
+        + `直接输出扩写后的完整段落，不要解释。\n\n待扩写内容：\n${target}${selectionContextBlock}${customPart}`;
     }
     case "rewrite": {
       const target = selectedText || context;
@@ -310,7 +328,7 @@ export function buildPrompt(
         + `- 保持情节与信息不变，只改进文笔：句式更流畅、用词更精准、节奏更有张力\n`
         + `- 保持原文视角与风格基调\n`
         + `- 长度与原文相当（约 ±20%）\n`
-        + `直接输出重写后的完整段落，不要解释。\n\n待重写内容：\n${target}${customPart}`;
+        + `直接输出重写后的完整段落，不要解释。\n\n待重写内容：\n${target}${selectionContextBlock}${customPart}`;
     }
     case "deai": {
       const target = selectedText || context;
@@ -320,7 +338,7 @@ export function buildPrompt(
         + `- 用具体、口语化但不失文采的表述替代模板句\n`
         + `- 保持情节与人物设定完全不变\n`
         + `- 长度与原文相当（约 ±20%）\n`
-        + `直接输出改写后的完整段落，不要解释。\n\n待处理内容：\n${target}${customPart}`;
+        + `直接输出改写后的完整段落，不要解释。\n\n待处理内容：\n${target}${selectionContextBlock}${customPart}`;
     }
   }
 }

@@ -90,6 +90,13 @@ async def _search_one(
     )
     if novel_id is not None:
         stmt = stmt.where(model.novel_id == novel_id)
+    # 09-14: soft-deleted chapters keep their embedding column, so without
+    # this filter the vector search kept serving deleted (abandoned/badly
+    # written) chapters into the generation context. Chapter.status is
+    # 'deleted' after a soft delete; other collections have no such column.
+    status_col = getattr(model, "status", None)
+    if status_col is not None:
+        stmt = stmt.where(status_col != "deleted")
     stmt = stmt.order_by(distance_expr.asc()).limit(k)
     result = await session.execute(stmt)
     hits: list[tuple[Any, float]] = []

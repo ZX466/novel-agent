@@ -558,6 +558,27 @@ async def draft_node(state: PipelineState) -> dict:
             "3. 回复 200-600 字，条理清晰，可直接插入正文或当作修改参考；\n"
             "4. 只输出建议正文，不要任何思考过程、解释或前后缀。"
         )
+    elif task_type == "continue":
+        # 09-14: continue previously fell into the English fallback prompt
+        # below, silently dropping the writing_context blocks the frontend
+        # sends on every request (篇幅/视角/本卷脉络) — the 500-900字 goal
+        # relied on the model's self-discipline alone. Same shape as the
+        # generate branch, tuned for continuation.
+        parts = [
+            "你是一位专业小说写作助手。请从用户给出的内容末尾自然续写。",
+        ]
+        writing_context = state.get("writing_context", "")
+        if writing_context:
+            parts.append(writing_context)
+        parts.append(
+            "【续写要求】\n"
+            "1. 目标长度 500-900 字，一次推进一个情节节拍\n"
+            "2. 与上文风格、视角、时态保持一致，衔接自然，不重复已写内容\n"
+            "3. 结合既有的人物性格与世界观设定推进，不强行反转\n"
+            "4. 正文分段：每个自然段 2-5 句，段间换行，严禁一整段输出\n"
+            "5. 直接输出续写正文，不要解释或思考过程。"
+        )
+        system_content = "\n\n".join(parts)
     elif task_type == "generate":
         # R9-④⑥: dedicated chapter-writing branch. Injects the structured
         # writing context (chapter progress / prior-chapter background /
@@ -648,12 +669,14 @@ async def draft_node(state: PipelineState) -> dict:
     if retrieved_context:
         result["retrieval_hits"] = len(retrieved_context)
 
-    # R9-⑥ word-count post-check (generate only — outline/extract have
-    # different length profiles). Verdict drives refine_node's strategy:
+    # R9-⑥ word-count post-check (generate + continue — outline/extract
+    # have different length profiles). Verdict drives refine_node's strategy:
     # "continue" → top-up instruction; "regenerate" → stronger word-count
     # emphasis on the next iteration. Not wired into evaluate (Pi R9 §3:
     # word-count must not inflate the refine loop cost).
-    if task_type == "generate" and content.strip():
+    # 09-14: extended to task_type="continue" alongside its new dedicated
+    # branch — the 500-900字 target is now enforced, not just requested.
+    if task_type in ("generate", "continue") and content.strip():
         target = _resolve_target_word_count(state)
         if target and target > 0:
             wc = _count_codepoints(content)

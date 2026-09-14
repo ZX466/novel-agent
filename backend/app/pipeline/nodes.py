@@ -431,6 +431,39 @@ def _system_msg(content: str) -> Dict[str, str]:
     return {"role": "system", "content": content}
 
 
+_SOURCE_MARKERS = ("待重写内容：", "待扩写内容：", "待处理内容：", "当前内容：")
+_RETRIEVAL_QUERY_SOURCE_CHARS = 500
+
+
+def _retrieval_query(topic: str, state: PipelineState) -> str:
+    """Purify the vector-search query out of the raw pipeline topic.
+
+    The topic for the rewrite family is an instruction sheet wrapped
+    around the source text ("请重写以下段落…要求：…待重写内容：<3000
+    chars>"). Embedding the whole thing diluted the query vector with
+    instruction boilerplate and dragged recall down. The purified query:
+
+      1. chapter_title (densest semantic signal) when present
+      2. + the tail (~500 chars) of the source text found after a
+         待重写内容/待扩写内容/待处理内容/当前内容 marker
+      3. neither → the raw topic (assistant-style free text unchanged)
+    """
+    title = (state.get("chapter_title") or "").strip()
+    source = ""
+    for marker in _SOURCE_MARKERS:
+        idx = topic.rfind(marker)
+        if idx != -1:
+            source = topic[idx + len(marker):].strip()
+            break
+    if not source:
+        return topic
+    parts: list[str] = []
+    if title:
+        parts.append(title)
+    parts.append(source[-_RETRIEVAL_QUERY_SOURCE_CHARS:])
+    return "\n".join(parts)
+
+
 @_timed("retrieval")
 async def retrieval_node(state: PipelineState) -> dict:
     """Retrieve relevant memories from the novel's lore before drafting.
@@ -464,9 +497,12 @@ async def retrieval_node(state: PipelineState) -> dict:
         # falls back to .env EMBEDDING_* credentials. Never reuse the draft
         # chat stage — its endpoint exposes no /embeddings route.
         embedding_stage = cfg.embedding if cfg is not None else None
+        # 09-14: embed the purified query (title + source tail), not the
+        # raw instruction-laden topic — see _retrieval_query.
+        query = _retrieval_query(topic, state)
         hits = await retrieve(
             session,
-            topic,
+            query,
             novel_id=novel_id,
             k_per_collection=5,
             stage_config=embedding_stage,

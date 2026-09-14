@@ -316,11 +316,16 @@ export default function PlotEventPanel({
           }}
         >
           <option value="all">全部章节</option>
-          {chapters.map((c) => (
-            <option key={c.id} value={String(c.chapter_index)}>
-              第{c.chapter_index}章: {c.title}
-            </option>
-          ))}
+          {chapters.map((c) => {
+            // 09-14: 与 chapterOptions 同规则——标题已带「第N章」直接用,
+            // 否则 index+1(0 起始 → 1 起始),消灭「第0章: 第1章」。
+            const numbered = /^第[一二三四五六七八九十百千零〇两\d]+章/.test(c.title.trim());
+            return (
+              <option key={c.id} value={String(c.chapter_index)}>
+                {numbered ? c.title : `第${c.chapter_index + 1}章: ${c.title}`}
+              </option>
+            );
+          })}
         </select>
       </div>
 

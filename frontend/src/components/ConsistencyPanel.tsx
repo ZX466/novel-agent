@@ -71,7 +71,16 @@ export function ConsistencyPanel({
     void loadHistory();
   }, [loadHistory]);
 
+  // A check needs a draft: the stored chapter (chapterId) or editor text.
+  // Without either the backend 422s (「需要 chapter_id 或非空 content_text」),
+  // which used to surface as a bare "请求失败 (422)".
+  const hasDraft = chapterId != null || chapterText.trim().length > 0;
+
   const run = async () => {
+    if (!hasDraft) {
+      setError("没有可检查的内容——请先选择章节或在编辑器输入文本");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -82,7 +91,13 @@ export function ConsistencyPanel({
       setItems(r.items);
       setRanOnce(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "检查失败");
+      const msg = e instanceof Error ? e.message : "检查失败";
+      // 422 = the request carried no scannable source; say why, not the code.
+      setError(
+        msg.includes("422")
+          ? "没有可检查的内容——请先选择章节或输入文本后重试"
+          : msg,
+      );
     } finally {
       setBusy(false);
     }
@@ -106,10 +121,11 @@ export function ConsistencyPanel({
         </span>
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || !hasDraft}
           onClick={run}
           className="px-sp-2 py-sp-1 rounded-sm text-[11px] font-medium disabled:opacity-50"
           style={{ background: "var(--accent-bg)", color: "var(--accent)" }}
+          title={hasDraft ? undefined : "请先选择章节或在编辑器输入文本"}
         >
           {ranOnce ? "重新检查" : "开始检查"}
         </button>

@@ -28,8 +28,11 @@ import {
   type RelationshipImportItem,
 } from "@/lib/character-relationships";
 
-const W = 320;
-const H = 300;
+// 09-14: 基准从 320×300 放大 3 倍——与 TimelineGraph 同理,原基准配合
+// width:100% 渲染进 ~1376px 容器时整图放大 ~4.3 倍(用户报告"字太大")。
+// 力导向常数(rep 4200/d²、spring d-78)按 W 无量纲耦合,等比放大不变。
+const W = 960;
+const H = 900;
 const ITERATIONS = 260;
 
 function roleColor(role: string): string {
@@ -269,7 +272,7 @@ export function RelationshipGraph({ docId }: { docId: number }) {
         className="block w-full h-auto rounded-sm"
         role="img"
         aria-label="人物关系图。可拖动节点。"
-        style={{ background: "var(--surface-inset, var(--surface-2))", border: "1px solid var(--border-subtle)", touchAction: "none" }}
+        style={{ maxWidth: W, background: "var(--surface-inset, var(--surface-2))", border: "1px solid var(--border-subtle)", touchAction: "none" }}
       >
         {graph.edges.map((e, i) => {
           const a = positions.get(e.subject_id);

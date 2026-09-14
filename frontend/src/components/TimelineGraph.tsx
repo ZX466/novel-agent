@@ -168,6 +168,7 @@ export function TimelineGraph({ docId }: { docId: number }) {
           <svg
             viewBox={`0 0 ${layout.W} ${layout.H}`}
             className="block w-full h-auto"
+            style={{ maxWidth: layout.W }}
             role="img"
             aria-label="时间线因果图"
           >

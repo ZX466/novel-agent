@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>novel-agent 写作模块说明书</title>
+<style>
+  :root {
+    --bg: #faf9f7; --surface: #ffffff; --fg: #1f2328; --fg2: #57606a; --fg3: #8b949e;
+    --accent: #b3541e; --accent-bg: #fdf0e7; --border: #e4e0da; --warn: #9a6700;
+    --code-bg: #f6f5f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16181d; --surface: #1e2128; --fg: #e6e6e6; --fg2: #a8b0ba; --fg3: #6e7681;
+      --accent: #e8874f; --accent-bg: #2b2119; --border: #30353d; --warn: #d29922;
+      --code-bg: #23272e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16181d; --surface: #1e2128; --fg: #e6e6e6; --fg2: #a8b0ba; --fg3: #6e7681;
+    --accent: #e8874f; --accent-bg: #2b2119; --border: #30353d; --warn: #d29922;
+    --code-bg: #23272e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 16px; background: var(--bg); color: var(--fg);
+    font: 15px/1.75 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 0 80px; }
+  h1 { font-size: 26px; line-height: 1.3; margin: 0 0 6px; }
+  .subtitle { color: var(--fg2); font-size: 13px; margin-bottom: 28px; }
+  h2 {
+    font-size: 19px; margin: 44px 0 12px; padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  h2 .no { color: var(--accent); font-family: ui-monospace, monospace; font-size: 14px; margin-right: 8px; }
+  h3 { font-size: 15.5px; margin: 22px 0 8px; }
+  p { margin: 8px 0; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+  strong { color: var(--fg); }
+  .muted { color: var(--fg2); }
+  kbd {
+    display: inline-block; padding: 1px 6px; border: 1px solid var(--border);
+    border-bottom-width: 2px; border-radius: 4px; background: var(--surface);
+    font: 12px ui-monospace, monospace;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13.5px; }
+  th, td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--surface); color: var(--fg2); font-weight: 600; white-space: nowrap; }
+  code {
+    background: var(--code-bg); border-radius: 4px; padding: 1px 5px;
+    font: 13px ui-monospace, monospace;
+  }
+  .tip {
+    border-left: 3px solid var(--accent); background: var(--accent-bg);
+    padding: 10px 14px; border-radius: 0 6px 6px 0; margin: 14px 0; font-size: 13.5px;
+  }
+  .tip b { color: var(--accent); }
+  .toc {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 20px; font-size: 13.5px; columns: 2; column-gap: 32px;
+  }
+  .toc a { color: var(--fg2); text-decoration: none; }
+  .toc a:hover { color: var(--accent); }
+  .toc li { break-inside: avoid; }
+  .flow {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 18px; font-size: 13.5px; overflow-x: auto; white-space: nowrap;
+    color: var(--fg2); margin: 12px 0;
+  }
+  .flow b { color: var(--accent); }
+  @media (max-width: 640px) { .toc { columns: 1; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>novel-agent 写作模块说明书</h1>
+<div class="subtitle">适用于 2026-09-14 之后的版本(f20e60d) · 覆盖编辑器页全部功能 · 快捷键以 Windows 为准,Ctrl 在 macOS 上对应 Cmd</div>
+
+<nav class="toc">
+  <ol>
+    <li><a href="#layout">三栏布局总览</a></li>
+    <li><a href="#start">开始写作:建作品到进章节</a></li>
+    <li><a href="#outline">左侧 · 大纲与章节管理</a></li>
+    <li><a href="#panels">左侧 · 设定面板(角色/世界观/剧情/关系/时间线)</a></li>
+    <li><a href="#consistency">左侧 · 一致性哨兵</a></li>
+    <li><a href="#tools">右侧 · AI 工具六件套</a></li>
+    <li><a href="#assistant">右侧 · AI 编剧</a></li>
+    <li><a href="#topbar">顶栏 · 写作设置/字数/保存/索引</a></li>
+    <li><a href="#export">导出与交稿雷达</a></li>
+    <li><a href="#memory">记忆库</a></li>
+    <li><a href="#shortcuts">快捷键速查</a></li>
+    <li><a href="#mechanism">生成机制 FAQ(知其所以然)</a></li>
+  </ol>
+</nav>
+
+<h2 id="layout"><span class="no">1</span>三栏布局总览</h2>
+<p>编辑器页(<code>/novels/{id}/editor</code>)分三栏:</p>
+<ul>
+  <li><strong>左栏(200px)</strong>:七个标签页——大纲 / 角色 / 世界观 / 剧情 / 关系图 / 时间线 / 🛡一致性,顶部有「✨ 灵感套件」入口;</li>
+  <li><strong>中栏(自适应)</strong>:章节标题条、格式工具栏、正文编辑区;右上角悬浮「导出」和显示设置(字号/行高/页宽);</li>
+  <li><strong>右栏(220px)</strong>:「AI 工具」和「AI 编剧」两个标签页。</li>
+</ul>
+<div class="tip"><b>专注模式</b>:按 <kbd>Ctrl+Shift+F</kbd> 或 <kbd>Ctrl+\</kbd> 进入——两侧栏与顶栏全部收起,只剩正文和一条极简工具条(标题/保存/退出),再按一次退出。</div>
+
+<h2 id="start"><span class="no">2</span>开始写作:建作品到进章节</h2>
+<ol>
+  <li><strong>我的作品</strong>页 →「新建作品」,或用「✨ 创作向导」分步引导(标题/简介/体裁)。</li>
+  <li>进入作品后<strong>点左栏大纲里的某一章</strong>才会打开正文——刚进来时正文区是空的(占位符「开始写作…」),这不是 bug。</li>
+  <li>没有章节时,点大纲面板的「+」新建,或先生成总纲(见 §3)再「应用大纲」批量建章。</li>
+</ol>
+
+<h2 id="outline"><span class="no">3</span>左侧 · 大纲与章节管理</h2>
+<p>大纲面板是全书的中枢,顶部一排操作:</p>
+<table>
+  <tr><th>按钮</th><th>作用</th></tr>
+  <tr><td><strong>AI 提取</strong></td><td>把当前大纲文本交给 AI,提取角色 / 世界观 / 剧情事件 / 人物关系,写入对应设定面板(角色建完才导入关系线,保证按名字解析到 id)。</td></tr>
+  <tr><td><strong>AI 润色</strong></td><td>保持卷/章结构、章节题目、情节走向<strong>完全不变</strong>,只改进表达。走 rewrite 快速管线。完稿后你确认才会写入。</td></tr>
+  <tr><td><strong>⤢ 全局</strong></td><td>弹出居中大窗(92vw×86vh)编辑大纲,超长篇(千行级)必备。<kbd>Esc</kbd> 或点遮罩退出。</td></tr>
+  <tr><td><strong>编辑/保存</strong></td><td>直接手改大纲。<strong>大纲完全归你管</strong>——其他任何功能(灵感套件等)都不会写这个字段。</td></tr>
+</table>
+<h3>生成总纲</h3>
+<p>右侧 AI 工具 →「📋 生成总纲」,会先弹出表单:体裁(玄幻/都市/历史…)、风格基调、故事简介、目标章数。<strong>目标章数 &gt; 40 时自动切分卷模式</strong>:全书按每卷 100-200 章组织,每卷一小段概括 + 卷内只列「第X章 标题」不写内容(千章量级逐章梗概会撑爆输出)。提示词内置标题多样性约束(禁止重复、每 50 章换意象组、禁「X之Y」模板)。</p>
+<h3>应用大纲 → 章节自动进左栏</h3>
+<p>生成结果确认后点「📋 应用大纲」:总纲存入作品元数据,同时<strong>解析全部章节自动创建到左栏</strong>(含拖拽排序的列表视图和脑图视图)。重复标题自动加「·2」后缀消歧;同名章节重复应用不会叠加「·2·2」。</p>
+<h3>章节操作</h3>
+<ul>
+  <li>列表中<strong>拖拽排序</strong>、悬停重命名/删除;脑图视图里每章有「直接续写此章节」按钮(跳到该章并打开 AI 工具)。</li>
+  <li>卷→章结构的大纲在生成正文时,<strong>自动携带「本卷脉络」</strong>:当前章所在卷的主线概括 + 上一章标题(标注"本章须为其铺垫")+ 下一章标题,让逐章生成知道自己在全书的位置。</li>
+</ul>
+
+<h2 id="panels"><span class="no">4</span>左侧 · 设定面板</h2>
+<p>五个设定标签页,所有数据都会进入 AI 的检索记忆(见 §12):</p>
+<ul>
+  <li><strong>角色</strong>:姓名/定位/描述/成长弧线。AI 生成时会参考,灵感套件生成的主角若与库内同名会自动降为配角。</li>
+  <li><strong>世界观</strong>:分类(地理/势力/体系/其他)+ 条目。与知识文档同为"小说设定优先"检索源,排序时加分。</li>
+  <li><strong>剧情</strong>:每个事件可指定<strong>前驱事件</strong>(下拉选择,构成因果链)。客户端会沿前驱链预检成环,成环的候选直接禁用;服务端检测到环只警告不拒绝。</li>
+  <li><strong>关系图</strong>:人物关系可视化。两处入口写入:AI 提取大纲(强度 1-10)、灵感套件(强度 1-5,存储时 ×2)。删除按"谁—对谁"这条边删。</li>
+  <li><strong>时间线</strong>:剧情事件按章节索引排布的时序图,超过 5000 事件截断。</li>
+</ul>
+<div class="tip"><b>灵感套件</b>(左栏顶部「✨」):一键生成一整套世界观/人物/关系/主线。<strong>生成前自动注入作品现状</strong>(标题/简介/角色/世界观/大纲前 3000 字),保证内容与本书相关;应用时只写设定,<strong>绝不碰你的大纲</strong>,预览页也会标注"仅供参考"。</div>
+
+<h2 id="consistency"><span class="no">5</span>左侧 · 🛡 一致性哨兵</h2>
+<p>把当前章节与角色设定做数值比对:出场次数、年龄、境界等与设定是否矛盾。规则:</p>
+<ul>
+  <li><strong>必须有可查内容</strong>:当前打开了章节,或正文区有文字。两者皆无时按钮禁用,悬停有提示。</li>
+  <li>检查历史保留在面板里,可回看每次结果。</li>
+  <li>它查的是<strong>数值型矛盾</strong>;文风、逻辑类问题用右侧「AI 编剧 → 伏笔检查」预设。</li>
+</ul>
+
+<h2 id="tools"><span class="no">6</span>右侧 · AI 工具六件套</h2>
+<table>
+  <tr><th>工具</th><th>做什么</th><th>目标是什么</th></tr>
+  <tr><td>✨ 生成正文</td><td>按大纲梗概写新正文,完整三阶段流水线(草稿→评估循环→润色),带字数保障(不足自动补写)</td><td>当前章节</td></tr>
+  <tr><td>✍️ 续写</td><td>从末尾接着写,500-900 字/次,推进一个情节节拍;同样有字数后检兜底</td><td>章节末尾(上文窗口 6000 字)</td></tr>
+  <tr><td>📝 扩写</td><td>保持原意,补感官/动作/对白/心理,篇幅扩到 2-3 倍</td><td rowspan="3">选中文字;<strong>没选中则处理章节末尾 3000 字</strong>(按钮下方常驻提示当前目标)</td></tr>
+  <tr><td>🔄 重写</td><td>只改文笔不改情节,句式/用词/节奏,长度 ±20%</td></tr>
+  <tr><td>🧹 降AI</td><td>消除 AI 腔(套路排比、"然而/不禁/仿佛"高频词),完成后显示<strong>AI 腔密度 前→后</strong>对比(每千字模板词命中,变低显示绿色)</td></tr>
+  <tr><td>📋 生成总纲</td><td>见 §3,唯一需要填表单的工具</td><td>整本书</td></tr>
+</table>
+<h3>通用机制</h3>
+<ul>
+  <li><strong>上下文参考</strong>:扩写/重写/降AI 处理选中文字时,自动携带选区前 ~300 字 + 后 ~100 字作参考(标注禁止输出),模型知道谁在说话、场景在哪。</li>
+  <li><strong>补充要求</strong>:面板里可展开一个文本框,内容追加到任何工具的提示词(例:"主角性格要热血,每章不少于3000字")。</li>
+  <li><strong>五阶段进度</strong>:生成时显示 检索→草稿→润色→评估→安检 的实时进度条。</li>
+  <li><strong>结果先预览再落笔</strong>:生成完先进可编辑草稿区,你可以手改,然后「插入到编辑器」(追加到文末)或「替换选中文字」(仅扩写/重写/降AI 且有选中时出现)。插入/替换前<strong>自动存一个版本快照</strong>,可回滚。</li>
+  <li><strong>离开页面生成不中断</strong>:后台继续跑,结果保留(最长 10 分钟);回来时会自动取回完整结果。再次点击生成是全新请求,不会"接着断掉的地方写"造成混乱。</li>
+</ul>
+
+<h2 id="assistant"><span class="no">7</span>右侧 · AI 编剧</h2>
+<p>对话式创作助手,带四个预设一键发起:</p>
+<ul>
+  <li><strong>剧情推演</strong>:推演接下来 3 章走向,说明与既有伏笔的呼应;</li>
+  <li><strong>伏笔检查</strong>:查本章与设定的矛盾(性格/世界观/时间线),给修改建议;</li>
+  <li><strong>章节要点</strong>:列 3-5 个写作要点(衔接/推进/伏笔/张力点);</li>
+  <li><strong>人物打磨</strong>:分析出场人物言行是否符合设定与动机。</li>
+</ul>
+<p>打开某章时,提问自动携带该章上下文;没打开章节也能用(通用编剧问答)。建议内容可直接「插入到编辑器」。</p>
+
+<h2 id="topbar"><span class="no">8</span>顶栏 · 写作设置 / 字数 / 保存 / 索引</h2>
+<ul>
+  <li><strong>写作设置</strong>:篇幅(长篇/短篇)× 视角(第一/第三人称)× 频道(男频/女频/全频)。保存进作品元数据,每次生成正文/续写时注入提示词,模型按此行文。</li>
+  <li><strong>本章字数 / 总字数</strong>:本章实时统计(防抖提取,停顿 300ms 刷新);总字数是全部章节之和。</li>
+  <li><strong>保存</strong>:手动 <kbd>Ctrl+S</kbd>;有改动时<strong>每 30 秒自动保存</strong>,按钮显示保存状态("N 秒前保存")。</li>
+  <li><strong>🧠 记忆库</strong>:直达本作品的记忆管理页(见 §10)。</li>
+  <li><strong>索引徽标</strong>:保存后短暂显示「索引中」——后台正在为本章生成检索向量;完成后闪一下「✓已索引」。徽标未消失前,RAG 记忆里还没有这一章的最新内容(通常几秒到几十秒)。</li>
+</ul>
+
+<h2 id="export"><span class="no">9</span>导出与交稿雷达</h2>
+<p>中栏右上角「导出」:支持 <strong>Markdown / TXT / EPUB</strong>。点导出时自动先跑一遍<strong>交稿雷达</strong>(安全预检),有问题会弹窗列出、可忽略继续(不阻塞导出)。</p>
+<p><strong>版本历史</strong>:每次保存、每次 AI 插入/替换都会自动存快照;在历史对话框里可对比任意快照与当前内容的差异并回滚。</p>
+
+<h2 id="memory"><span class="no">10</span>记忆库</h2>
+<p>顶栏「🧠 记忆库」进入(<code>/novels/{id}/memory</code>),一站式查看 AI 能"记住"的全部原料:章节 / 人物 / 世界观 / 剧情事件 / 人物关系 / <strong>知识文档</strong>六类,支持搜索和删除。</p>
+<p><strong>知识文档</strong>是给 AI 喂外部设定的通道:上传 .txt/.md(自动识别 UTF-8 和 GB18030 编码),按 ~800 字分段(段间留重叠防句子被切断)、每段标注「【来源·文件·第N段】」。生成时相关内容会带着出处进入上下文。</p>
+
+<h2 id="shortcuts"><span class="no">11</span>快捷键速查</h2>
+<table>
+  <tr><th>按键</th><th>作用</th></tr>
+  <tr><td><kbd>Ctrl+S</kbd></td><td>保存</td></tr>
+  <tr><td><kbd>Ctrl+Enter</kbd></td><td>快速续写(打开 AI 工具并触发)</td></tr>
+  <tr><td><kbd>Ctrl+Shift+F</kbd> / <kbd>Ctrl+\</kbd></td><td>进入/退出专注模式</td></tr>
+  <tr><td><kbd>Ctrl+F</kbd></td><td>查找替换</td></tr>
+  <tr><td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td><td>撤销 / 重做</td></tr>
+  <tr><td><kbd>Ctrl+B</kbd> / <kbd>Ctrl+I</kbd></td><td>加粗 / 斜体</td></tr>
+  <tr><td><kbd>Esc</kbd></td><td>退出大纲全局模式 / 关闭弹层</td></tr>
+</table>
+
+<h2 id="mechanism"><span class="no">12</span>生成机制 FAQ(知其所以然)</h2>
+<h3>AI 写作时"看"得到什么?</h3>
+<div class="flow"><b>检索</b>(5 路并发): 章节相似段 · 角色 · 世界观 · 剧情事件 · 知识文档 → 按相关度合并,设定类加分 → 注入提示词</div>
+<p>外加:章节进度、前两章末尾原文(1500 字)、人物关系树、字数目标、写作设置、本卷脉络。检索失败自动降级为直接读库内设定,不会因此写不了。</p>
+<h3>为什么推荐"生成正文"而不是让 AI 一次写很多?</h3>
+<p>生成正文走完整流水线:草稿 → <strong>评估打分,不达标自动回炉重润</strong>(最多 3 轮) → 字数复查(低于 60% 重写,60-90% 自动补足) → 安全检查。续写走快速链(无评估轮)所以快;重写类只过润色+安检,所以选区操作几乎即时出稿。</p>
+<h3>检索什么时候能"看到"我刚写的内容?</h3>
+<p>保存后等「✓已索引」徽标出现。向量是后台生成的,期间 RAG 用的是旧索引;structured fallback(直接读库)则总能看到最新保存的内容。</p>
+<h3>灵感套件、AI 提取、应用大纲,谁会改我的大纲?</h3>
+<p><strong>谁都不会</strong>。大纲只有三个写入方:你手动编辑保存、AI 润色(确认后)、应用大纲(替换为新的)。灵感套件应用时明确跳过大纲字段——这是设计红线。</p>
+<h3>写作中途关掉页面会丢稿吗?</h3>
+<p>编辑内容有 30 秒自动保存 + 关闭前拦截提示;AI 生成结果本地暂存,后台生成继续跑完,回来自动恢复。</p>
+
+<div class="tip" style="margin-top:40px"><b>一句话工作流</b>:创作向导/手建作品 → 生成总纲(填体裁章数) → 应用大纲自动建章 → 点开第一章 → 写作设置选好篇幅视角 → 「生成正文」起步 → 写顺手后用「续写」推进、「扩写/重写/降AI」打磨 → 交稿前跑交稿雷达 → 导出。</div>
+
+</main>
+</body>
+</html>

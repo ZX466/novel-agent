@@ -40,6 +40,12 @@ logger = logging.getLogger(__name__)
 # Default per-collection limit. Total result count = k_per_collection * 5.
 DEFAULT_K_PER_COLLECTION = 3
 
+# 09-14 ①: knowledge_docs carry a larger quota than the other collections —
+# uploaded lore files are the main carrier of long-form setting detail, and
+# the file-dedup in _search_knowledge (best chunk per title) already prevents
+# one big upload from crowding out the rest, so a wider net is safe.
+KNOWLEDGE_K_PER_COLLECTION = 8
+
 # Cosine distance threshold below which results are considered irrelevant.
 # pgvector cosine distance: 0 = identical, 2 = opposite. We keep results
 # with distance < 1.0 (similarity > 0.0). Tune via env if needed.
@@ -243,7 +249,7 @@ async def retrieve(
             async with maker() as s:
                 return await _search_knowledge(
                     s, query_embedding,
-                    novel_id=novel_id, k=k_per_collection,
+                    novel_id=novel_id, k=max(k_per_collection, KNOWLEDGE_K_PER_COLLECTION),
                     max_distance=max_distance,
                 )
 
@@ -273,7 +279,7 @@ async def retrieve(
         )
         knowledge_hits = await _search_knowledge(
             session, query_embedding,
-            novel_id=novel_id, k=k_per_collection, max_distance=max_distance,
+            novel_id=novel_id, k=max(k_per_collection, KNOWLEDGE_K_PER_COLLECTION), max_distance=max_distance,
         )
 
     all_hits: list[RetrievalHit] = []

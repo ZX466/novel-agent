@@ -61,39 +61,80 @@ def sanitize_filename(name: str, max_len: int = 255) -> str:
     return (base[:max_len] or "untitled.txt")
 
 
-def chunk_text(text: str, chunk_size: int | None = None) -> list[str]:
+def decode_upload(content: bytes) -> str:
+    """Decode an uploaded file's bytes: UTF-8 first, then GB18030.
+
+    Windows 记事本 defaults to ANSI (GBK family on Chinese systems) — rejecting
+    those outright made the feature unusable for the most common local files.
+    Truly binary bytes fail both decoders and still raise KnowledgeDocError.
+    """
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    try:
+        text = content.decode("gb18030")
+        logger.info("knowledge: decoded upload as gb18030 (%d bytes)", len(content))
+        return text
+    except UnicodeDecodeError:
+        raise KnowledgeDocError("文件编码无法识别，请另存为 UTF-8 或 GB18030 编码的纯文本")
+
+
+def chunk_text(
+    text: str,
+    chunk_size: int | None = None,
+    *,
+    source: str | None = None,
+) -> list[str]:
     """Split text into ~`chunk_size`-char chunks, preferring paragraph
     boundaries so each chunk stays semantically coherent.
 
     Paragraphs (separated by blank lines) are greedily packed into chunks;
     a single paragraph longer than `chunk_size` is hard-split. Empty/blank
     input yields an empty list.
+
+    09-14 optimizations:
+    - `source`: when given, every chunk is prefixed「【来源·{source}·第N段】」
+      so retrieval results can be attributed to their file (③).
+    - Adjacent chunks share the previous chunk's tail (~12% overlap) so a
+      sentence crossing a chunk boundary survives in at least one full copy
+      (②) — zero-overlap splitting used to mangle boundary-spanning rules.
     """
     size = chunk_size or settings.knowledge_chunk_size
     paragraphs = [p.strip() for p in re.split(r"\n[ \t]*\n", text) if p.strip()]
     if not paragraphs:
         return []
 
-    chunks: list[str] = []
+    raw_chunks: list[str] = []
     buf = ""
     for para in paragraphs:
         if len(para) > size:
             if buf:
-                chunks.append(buf)
+                raw_chunks.append(buf)
                 buf = ""
             rest = para
             while len(rest) > size:
-                chunks.append(rest[:size])
+                raw_chunks.append(rest[:size])
                 rest = rest[size:]
             buf = rest
             continue
         if buf and len(buf) + 2 + len(para) > size:
-            chunks.append(buf)
+            raw_chunks.append(buf)
             buf = para
         else:
             buf = f"{buf}\n\n{para}" if buf else para
     if buf:
-        chunks.append(buf)
+        raw_chunks.append(buf)
+
+    if not source:
+        return raw_chunks
+
+    overlap = max(1, size // 8)  # ~12% of the target size
+    chunks: list[str] = []
+    for i, body in enumerate(raw_chunks):
+        anchor = f"【来源·{source}·第{i + 1}段】"
+        prefix = "" if i == 0 else raw_chunks[i - 1][-overlap:]
+        chunks.append(f"{anchor}{prefix}{body}")
     return chunks
 
 
@@ -124,13 +165,10 @@ async def upload_knowledge_doc(
             f"文件过大（{len(content)} 字节，上限 {settings.knowledge_upload_max_bytes} 字节）"
         )
 
-    try:
-        text = content.decode("utf-8")
-    except UnicodeDecodeError:
-        raise KnowledgeDocError("文件必须为 UTF-8 编码的纯文本")
+    text = decode_upload(content)
 
     title = sanitize_filename(filename)
-    chunks = chunk_text(text)
+    chunks = chunk_text(text, source=title)
     if not chunks:
         raise KnowledgeDocError("文件内容为空")
 

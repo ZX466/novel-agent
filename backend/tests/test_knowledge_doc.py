@@ -274,10 +274,10 @@ def _fake_chunk(cid: int = 1, title: str = "lore.md", idx: int = 0) -> SimpleNam
 
 
 def test_upload_requires_auth(app_client: TestClient) -> None:
-    # The dependency declares a required X-API-Key header → FastAPI rejects
-    # the missing header with 422 before the handler runs.
+    # Since the fail-open auth rework (38bd75b) the header is optional and
+    # require_api_key raises 401 for a missing/unknown key.
     r = app_client.post("/v1/documents/7/knowledge")
-    assert r.status_code == 422
+    assert r.status_code == 401
 
 
 def test_upload_201_and_returns_chunks(app_client: TestClient) -> None:

@@ -696,6 +696,13 @@ def _format_retrieval_context(hits: list) -> str:
             title = payload.get("title", "")
             content = payload.get("content_text", "")
             lines.append(f"{i}. [world_setting/{cat}] {title} (relevance={score:.2f}): {content}")
+        elif entity_type == "knowledge_doc":
+            # 09-14 ③: attribute lore chunks to their uploaded file so the
+            # model (and the author debugging it) knows where a rule came from.
+            title = payload.get("title", "")
+            idx = payload.get("chunk_index", 0)
+            content = payload.get("content", "")
+            lines.append(f"{i}. [知识文档/{title}·{idx + 1}] (relevance={score:.2f}): {content}")
         elif entity_type == "plot_event":
             etype = payload.get("event_type", "")
             summary = payload.get("summary", "")

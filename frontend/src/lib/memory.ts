@@ -139,7 +139,8 @@ export async function fetchAllMemoryRows(docId: number): Promise<MemoryRow[]> {
       id: ch.id,
       title: ch.title,
       preview: (ch.content_text || "").slice(0, 80),
-      badge: `第${ch.chapter_index}章`,
+      // 09-14: index 0 起始 → 展示 1 起始(与章节标题「第1章」一致)。
+      badge: `第${ch.chapter_index + 1}章`,
       updatedAt: ch.updated_at,
     });
   }
@@ -169,7 +170,7 @@ export async function fetchAllMemoryRows(docId: number): Promise<MemoryRow[]> {
       id: e.id,
       title: e.summary.slice(0, 40),
       preview: e.summary,
-      badge: e.chapter_index != null ? `第${e.chapter_index}章 · ${e.event_type}` : e.event_type,
+      badge: e.chapter_index != null ? `第${e.chapter_index + 1}章 · ${e.event_type}` : e.event_type,
       updatedAt: e.updated_at,
     });
   }

@@ -16,8 +16,12 @@ import {
   type TimelineResponse,
 } from "@/lib/timeline";
 
-const VIEW_W = 320;
-const VIEW_H = 300;
+const VIEW_W = 960;
+const VIEW_H = 900;
+// 09-14: 基准从 320×300 放大 3 倍。原值配合 width:100% 渲染进 ~916px
+// 容器时整图放大 ~2.9 倍——8.5px 字号实际渲染 ~25px（用户报告"字太大"），
+// 且 320 宽下 colW 天花板极低。基准与容器同量级后缩放比 ≈1，字号回归设计值。
+export const TIMELINE_VIEW_W = VIEW_W;
 // Vertical room per stacked node — H stretches with the tallest column so
 // rows never collide. Dots + right-side labels need far less room than the
 // old 52×24 cards (R10: dense timelines at novel scale).
@@ -63,7 +67,7 @@ export function computeTimelineLayout(
   // accordingly instead of clipping (old fixed W=320 truncated them).
   const tallest = Math.max(...[...cols.values()].map((a) => a.length), 1);
   const H = Math.max(VIEW_H, 46 + tallest * MIN_ROW_PX);
-  const colW = Math.max(160, (VIEW_W - 70) / Math.max(1, maxLayer + 1));
+  const colW = Math.max(280, (VIEW_W - 80) / Math.max(1, maxLayer + 1));
   const W = 40 + (maxLayer + 1) * colW + 40;
   const pos = new Map<number, { x: number; y: number }>();
   for (const [l, arr] of [...cols.entries()].sort((a, b) => a[0] - b[0])) {

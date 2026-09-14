@@ -58,9 +58,11 @@ describe("computeTimelineLayout", () => {
   it("single-layer small graph stays at base geometry", () => {
     const nodes = Array.from({ length: 8 }, (_, i) => ({ id: i + 1 }));
     const layout = computeTimelineLayout(makeData(nodes));
-    expect(layout!.H).toBe(300);
-    // One layer: colW = (320-70)/1 = 250 (prototype base), W = 40+250+40.
-    expect(layout!.W).toBe(330);
+    // 09-14: base scaled 3× (960×900) to match the ~916px container —
+    // the old 320×300 viewBox blew up ~2.9× via width:100% ("字太大").
+    expect(layout!.H).toBe(900);
+    // One layer: colW = (960-80)/1 = 880, W = 40+880+40 = 960.
+    expect(layout!.W).toBe(960);
   });
 
   it("returns null for empty node list", () => {

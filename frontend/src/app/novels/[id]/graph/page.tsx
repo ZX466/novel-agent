@@ -109,9 +109,10 @@ export default function NovelGraphPage() {
         </div>
       </div>
 
-      {/* Full-width graph body */}
+      {/* Full-width graph body — 09-14: 980 锁死宽度过窄（大屏两侧大片留白，
+          用户报告"占更大的屏幕"），放宽到 1440 兼顾超宽屏可读性。 */}
       <div className="flex-1 overflow-y-auto min-h-0 px-sp-8 py-sp-6">
-        <div className="mx-auto" style={{ maxWidth: 980 }}>
+        <div className="mx-auto" style={{ maxWidth: 1440 }}>
           {tab === "graph" && <RelationshipGraph docId={docId} />}
           {tab === "timeline" && <TimelineGraph docId={docId} />}
         </div>

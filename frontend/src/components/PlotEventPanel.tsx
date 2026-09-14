@@ -121,8 +121,9 @@ export default function PlotEventPanel({
   }, [events, chapterFilter]);
 
   /* ---- helpers ---- */
+  // 09-14: 与章节下拉同源——index 0 起始,展示 1 起始(「第1章」对应 index 0)。
   const chapterLabel = (idx: number | null) =>
-    idx == null ? "未关联" : `第${idx}章`;
+    idx == null ? "未关联" : `第${idx + 1}章`;
 
   const findChapterIdByIndex = (idx: number): number | undefined =>
     chapters.find((c) => c.chapter_index === idx)?.id;
@@ -199,10 +200,16 @@ export default function PlotEventPanel({
     () =>
       [...chapters]
         .sort((a, b) => a.chapter_index - b.chapter_index)
-        .map((c) => ({
-          value: String(c.chapter_index),
-          label: `第${c.chapter_index}章: ${c.title}`,
-        })),
+        .map((c) => {
+          // 09-14 fix: 标题本身已带「第N章」（1 起始）——再用 0 起始的
+          // chapter_index 拼一次会出现「第0章: 第1章 加班夜」双重编号。
+          // 标题已有编号则直接用标题，否则用 index+1 补一个。
+          const hasNumberedTitle = /^第[一二三四五六七八九十百千零〇两\d]+章/.test(c.title.trim());
+          return {
+            value: String(c.chapter_index),
+            label: hasNumberedTitle ? c.title : `第${c.chapter_index + 1}章: ${c.title}`,
+          };
+        }),
     [chapters],
   );
 
@@ -230,7 +237,7 @@ export default function PlotEventPanel({
           value !== currentPrev &&
           formsCycle(editedId ?? -1, e.id, events);
         const label = `#${e.id} ${e.summary.slice(0, 18)}${e.summary.length > 18 ? "…" : ""}${
-          e.chapter_index != null ? `（第${e.chapter_index}章）` : ""
+          e.chapter_index != null ? `（第${e.chapter_index + 1}章）` : ""
         }`;
         return { value, label, disabled: wouldCycle || e.id === editedId };
       });

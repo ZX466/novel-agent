@@ -45,7 +45,9 @@ export function AssistantPanel({
   const [contextFull, setContextFull] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const hasContext = Boolean(activeChapterId) || contextFull;
+  // 09-14 优化3: a novel is enough context — with no chapters yet the
+  // backend falls back to the outline/lore, so the panel works on new works.
+  const hasContext = Boolean(novelId);
 
   // Scroll to bottom on new messages.
   const listRef = useRef<HTMLDivElement>(null);
@@ -203,8 +205,43 @@ export function AssistantPanel({
           {contextFull ? "参考全文" : "参考当前章节"}
         </button>
         <span className="text-[10px] truncate" style={{ color: "var(--muted)" }}>
-          {hasContext ? (contextFull ? "全部章节" : chapterTitle || "当前章节") : "（无可参考章节）"}
+          {contextFull ? "全部章节" : chapterTitle || "大纲与设定（尚无章节）"}
         </span>
+      </div>
+
+      {/* Quick prompts (09-14 优化4): one-click planning presets that fill
+          the input — the assistant then answers with full work context. */}
+      <div className="px-sp-3 py-sp-1.5 border-b flex flex-wrap gap-sp-1 shrink-0" style={{ borderColor: "var(--border-subtle)" }}>
+        {[
+          { label: "剧情推演", text: "请根据大纲和已写内容,推演接下来 3 章的剧情走向:每章给出 2-3 句梗概,并说明与既有伏笔的呼应关系。" },
+          { label: "伏笔检查", text: "检查当前章节与既有设定是否有矛盾(人物性格/世界观/时间线),列出具体冲突点和修改建议。" },
+          { label: "章节要点", text: "为本章列出 3-5 个写作要点:需要衔接的前文、要推进的情节、可埋的伏笔、结尾张力点建议。" },
+          { label: "人物打磨", text: "分析当前章节出场人物的言行是否符合其设定与动机,指出不符之处并给出更贴合的写法。" },
+        ].map((p) => (
+          <button
+            key={p.label}
+            type="button"
+            onClick={() => setInput(p.text)}
+            disabled={streaming}
+            className="px-sp-2 py-[2px] rounded-full text-[10px] border transition-colors disabled:opacity-40"
+            style={{
+              borderColor: "var(--border-hairline)",
+              color: "var(--fg-tertiary)",
+              background: "transparent",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "var(--accent)";
+              e.currentTarget.style.borderColor = "var(--accent-muted)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "var(--fg-tertiary)";
+              e.currentTarget.style.borderColor = "var(--border-hairline)";
+            }}
+            title={p.text}
+          >
+            {p.label}
+          </button>
+        ))}
       </div>
 
       {/* Messages */}
@@ -297,7 +334,7 @@ export function AssistantPanel({
               disabled={!input.trim() || !hasContext}
               className="w-9 h-9 flex items-center justify-center rounded-md shrink-0 transition-all disabled:opacity-30"
               style={{ background: "var(--accent)", color: "var(--bg)" }}
-              title={hasContext ? "发送" : "请先创建章节"}
+              title="发送"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="22" y1="2" x2="11" y2="13" />

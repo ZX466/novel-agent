@@ -208,6 +208,26 @@ async def _build_writing_context(state: dict) -> str:
     if progress_lines:
         blocks.append("【章节进度】\n" + "\n".join(progress_lines))
 
+    # ── Block 1b: volume context (09-14 优化2) ─────────────────────────
+    # Volume-style outlines (卷→章, title-only) have NO per-chapter synopsis,
+    # so generation was blind to its volume. The frontend extracts the
+    # current volume's summary + neighbor chapter titles into
+    # state["volume_context"]; render it as a block when present.
+    vc = state.get("volume_context") or {}
+    vc_lines: list[str] = []
+    if isinstance(vc, dict):
+        summary = str(vc.get("volume_summary") or "").strip()
+        if summary:
+            vc_lines.append(f"本卷主线：{summary}")
+        prev_title = str(vc.get("prev_title") or "").strip()
+        if prev_title:
+            vc_lines.append(f"上一章：{prev_title}")
+        next_title = str(vc.get("next_title") or "").strip()
+        if next_title:
+            vc_lines.append(f"下一章：{next_title}（本章须为其铺垫）")
+    if vc_lines:
+        blocks.append("【本卷脉络】\n" + "\n".join(vc_lines))
+
     # ── Blocks 2-3 need the DB ─────────────────────────────────────────
     target = state.get("target_word_count")
     if session is not None and novel_id is not None:

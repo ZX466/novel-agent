@@ -141,6 +141,77 @@ function outlineForPrompt(outlineText: string, chapterTitle?: string): string {
   return lines.slice(from, to).join("\n").slice(0, 1500);
 }
 
+export interface VolumeContext {
+  volume_summary: string;
+  prev_title?: string;
+  next_title?: string;
+}
+
+/**
+ * 09-14 优化2: for 卷→章 title-only outlines, locate the CURRENT chapter's
+ * volume block and extract its summary paragraph (the prose line right under
+ * the 卷 heading) plus the previous/next chapter titles. The backend renders
+ * this as the 【本卷脉络】 prompt block, so generation knows its volume even
+ * without per-chapter synopses. Returns null when the outline has no
+ * chapter headings or the current chapter can't be located.
+ */
+export function extractVolumeContext(
+  outlineText: string,
+  chapterTitle?: string,
+): VolumeContext | null {
+  const CHAP_LINE = /^第[一二三四五六七八九十百千零〇两\d]+章/;
+  const VOL_LINE = /^第[一二三四五六七八九十百千零〇两\d]+卷/;
+  const lines = outlineText.split("\n");
+  const starts: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (CHAP_LINE.test(lines[i].trim())) starts.push(i);
+  }
+  if (starts.length === 0) return null;
+
+  // Locate the current chapter by title (same matching as outlineForPrompt).
+  let cur = -1;
+  if (chapterTitle) {
+    const wanted = chapterTitle.replace(/\s+/g, "");
+    cur = starts.findIndex((s) => {
+      const h = lines[s].replace(/\s+/g, "").replace(/·\d+$/, "");
+      return h === wanted || h.startsWith(wanted) || wanted.startsWith(h);
+    });
+  }
+  if (cur === -1) return null;
+
+  const curLine = starts[cur];
+  // Volume heading above the current chapter + its summary (first
+  // non-heading prose line under the 卷 heading).
+  let volLine = -1;
+  for (let i = curLine - 1; i >= 0; i--) {
+    if (VOL_LINE.test(lines[i].trim())) {
+      volLine = i;
+      break;
+    }
+  }
+  let volumeSummary = "";
+  if (volLine !== -1) {
+    for (let i = volLine + 1; i < curLine; i++) {
+      const t = lines[i].trim();
+      if (!t || CHAP_LINE.test(t) || VOL_LINE.test(t)) continue;
+      volumeSummary = `${lines[volLine].trim()}——${t}`;
+      break;
+    }
+    if (!volumeSummary) volumeSummary = lines[volLine].trim();
+  }
+
+  const prevTitle = cur > 0 ? lines[starts[cur - 1]].trim() : undefined;
+  const nextTitle =
+    cur + 1 < starts.length ? lines[starts[cur + 1]].trim() : undefined;
+
+  if (!volumeSummary && !prevTitle && !nextTitle) return null;
+  return {
+    volume_summary: volumeSummary.slice(0, 2000),
+    ...(prevTitle ? { prev_title: prevTitle } : {}),
+    ...(nextTitle ? { next_title: nextTitle } : {}),
+  };
+}
+
 export function buildPrompt(
   tool: ToolKey,
   editorText: string,
@@ -304,6 +375,13 @@ export function AIToolPanel({
     return count && count > 0 ? count : null;
   }, [outlineText]);
 
+  // 09-14 优化2: 卷纲脉络(本卷主线+上一章/下一章)——卷→章 title-only 大纲
+  // 没有每章梗概,让逐章生成知道自己的卷。
+  const volumeContext = useMemo(
+    () => (outlineText ? extractVolumeContext(outlineText, chapterTitle) : null),
+    [outlineText, chapterTitle],
+  );
+
   // R9-② fix: the backend emits non-AI-SDK SSE event types (stage /
   // pipeline_start / perf). DefaultChatTransport runs every event through
   // the SDK's strict uiMessageChunkSchema, which THROWS on unknown types
@@ -332,9 +410,11 @@ export function AIToolPanel({
           target_word_count: targetWordCount ?? null,
           // R10-⑨: 篇幅/视角/频道 —— 后端注入【写作设置】提示块
           writing_settings: writingSettings ?? null,
+          // 09-14 优化2: 卷纲脉络 —— 后端注入【本卷脉络】提示块
+          volume_context: volumeContext,
         }),
       }),
-    [chatEndpoint, chapterIndex, totalChapters, chapterTitle, targetWordCount, writingSettings, applyStageEvent],
+    [chatEndpoint, chapterIndex, totalChapters, chapterTitle, targetWordCount, writingSettings, volumeContext, applyStageEvent],
   );
 
   const { messages, sendMessage, status, stop, error, setMessages } = useChat({ transport });

@@ -136,6 +136,10 @@ class ChatRequest(BaseModel):
     # prompt as a 【写作设置】 block. Values are constrained below; unknown
     # keys are dropped rather than flowing raw into the prompt.
     writing_settings: dict | None = None
+    # 09-14 优化2: volume-outline context (本卷主线 + 上一章/下一章题) for
+    # 卷→章 title-only outlines. Whitelisted + bounded below like
+    # writing_settings — it is formatted into the system prompt.
+    volume_context: dict | None = None
 
     model_config = {"extra": "ignore"}
 
@@ -155,6 +159,18 @@ class ChatRequest(BaseModel):
                 if isinstance(v, str) and v.strip():
                     cleaned[k] = v.strip()[:32]
             self.writing_settings = cleaned or None
+        # 09-14 优化2: whitelist volume_context keys (summary ≤2000 chars,
+        # titles ≤200) — same prompt-injection discipline as writing_settings.
+        if self.volume_context:
+            vc: dict = {}
+            summary = self.volume_context.get("volume_summary")
+            if isinstance(summary, str) and summary.strip():
+                vc["volume_summary"] = summary.strip()[:2000]
+            for k in ("prev_title", "next_title"):
+                v = self.volume_context.get(k)
+                if isinstance(v, str) and v.strip():
+                    vc[k] = v.strip()[:200]
+            self.volume_context = vc or None
         return self
 
     @model_validator(mode="after")
@@ -207,9 +223,11 @@ def _extract_task_type(messages: List[ChatMessage], explicit: str | None = None)
 # and lets the existing single-turn draft pipeline serve as a chat assistant.
 
 _ASSISTANT_MAX_TURNS = 12
-_ASSISTANT_CONTEXT_DEFAULT = 6000  # chars of work context by default
-_ASSISTANT_CONTEXT_HARD_CAP = 12000  # hard cap for injected context
-_ASSISTANT_PROMPT_HARD_CAP = 20000  # total assembled prompt cap
+# 09-14 优化3: raised from 6000/12000 — plot-reasoning questions on long
+# novels need far more lore; the assistant system prompt cap stays safe.
+_ASSISTANT_CONTEXT_DEFAULT = 12000  # chars of work context by default
+_ASSISTANT_CONTEXT_HARD_CAP = 24000  # hard cap for injected context
+_ASSISTANT_PROMPT_HARD_CAP = 30000  # total assembled prompt cap
 
 
 def _strip_routing_tags(text: str) -> str:
@@ -276,7 +294,18 @@ async def _load_work_context(
         )
 
     blocks = lore_blocks + [f"[{c.title}]\n{c.content_text or ''}" for c in chapters]
-    return "\n\n".join(blocks)[:max_chars]
+    context = "\n\n".join(blocks)[:max_chars]
+    if context:
+        return context
+    # 09-14 优化3: no chapter content at all (new work / title-only outline)
+    # → fall back to the outline so the assistant still has something
+    # meaningful to work with instead of an empty context.
+    try:
+        doc = await get_document(session, req.context_doc_id, owner_key_hash=owner)
+    except DocumentNotFound:
+        raise HTTPException(status_code=404, detail="作品不存在")
+    outline = str((doc.metadata_json or {}).get("outline") or "").strip()
+    return outline[:max_chars] if outline else ""
 
 
 async def _build_assistant_topic(
@@ -432,6 +461,7 @@ async def _event_stream(
     chapter_title: str = "",
     target_word_count: int | None = None,
     writing_settings: dict | None = None,
+    volume_context: dict | None = None,
 ) -> AsyncIterator[str]:
     """Runs the pipeline and emits AI SDK v5 UI Message Stream SSE events.
 
@@ -469,7 +499,7 @@ async def _event_stream(
             persist_key=f"ai-draft:{novel_id}" if novel_id else None,
             chapter_index=chapter_index, total_chapters=total_chapters,
             chapter_title=chapter_title, target_word_count=target_word_count,
-            writing_settings=writing_settings,
+            writing_settings=writing_settings, volume_context=volume_context,
             on_event=True,
         ):
             if isinstance(item, tuple) and len(item) == 2 and item[0] == "__event__":
@@ -621,7 +651,7 @@ async def chat(
             session=session, novel_id=novel_id, task_type=task_type,
             chapter_index=req.chapter_index, total_chapters=req.total_chapters,
             chapter_title=req.chapter_title, target_word_count=req.target_word_count,
-            writing_settings=req.writing_settings,
+            writing_settings=req.writing_settings, volume_context=req.volume_context,
         ),
         media_type="text/event-stream",
         headers=_sse_headers(),

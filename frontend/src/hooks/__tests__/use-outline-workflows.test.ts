@@ -61,4 +61,49 @@ describe("parseOutlineChapters", () => {
     const entries = parseOutlineChapters(text);
     expect(entries.length).toBeGreaterThanOrEqual(3);
   });
+
+  it("disambiguates duplicate bare titles with a sequence suffix", () => {
+    const text = [
+      "**第1章 神庭之魂**",
+      "**第2章 夜火之眼**",
+      "**第3章 神庭之魂**",
+      "**第4章 神庭之魂**",
+    ].join("\n");
+    const entries = parseOutlineChapters(text);
+    expect(entries).toHaveLength(4);
+    // First occurrence keeps the bare title; later ones get ·N.
+    expect(entries[0].title).toBe("第1章 神庭之魂");
+    expect(entries[2].title).toBe("第3章 神庭之魂·2");
+    expect(entries[3].title).toBe("第4章 神庭之魂·3");
+  });
+
+  it("different chapter numbers with the same bare title all get suffixes past the first", () => {
+    const text = ["第1章 破晓", "第2章 破晓", "第3章 破晓"].join("\n");
+    const entries = parseOutlineChapters(text);
+    expect(entries.map((e) => e.title)).toEqual([
+      "第1章 破晓",
+      "第2章 破晓·2",
+      "第3章 破晓·3",
+    ]);
+  });
+
+  it("leaves unique titles untouched", () => {
+    const text = "第1章 火种\n第2章 永夜将至\n第3章 猎火者";
+    const entries = parseOutlineChapters(text);
+    expect(entries.map((e) => e.title)).toEqual([
+      "第1章 火种",
+      "第2章 永夜将至",
+      "第3章 猎火者",
+    ]);
+  });
+
+  it("does not double-suffix a title that already carries ·N", () => {
+    const text = ["第1章 归途", "第2章 归途·2", "第3章 归途"].join("\n");
+    const entries = parseOutlineChapters(text);
+    expect(entries.map((e) => e.title)).toEqual([
+      "第1章 归途",
+      "第2章 归途·2",
+      "第3章 归途·3",
+    ]);
+  });
 });

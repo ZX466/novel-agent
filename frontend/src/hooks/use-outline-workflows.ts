@@ -53,18 +53,40 @@ function stripHeadingDecoration(line: string): string {
     .replace(/[\s*#]+$/, "");
 }
 
+/** Bare title of a heading (「第X章 题目」→ 题目) — the disambiguation key:
+ *  LLM volume outlines repeat the same title words across hundreds of
+ *  chapters (deployed 09-14: 神庭之魂×61), and while the stored titles stay
+ *  unique via the 第N章 prefix, the visible repetition confuses readers. */
+const BARE_TITLE_RE = /^第[一二三四五六七八九十百千零〇两\d]+章\s*/;
+
 /** Parse outline heading lines → chapter titles (R10-⑨: title-only parsing
  *  is volume-outline friendly — 1000+ chapter outlines carry just
- *  「第X章 题目」 lines under 卷 blocks, no per-chapter synopsis needed). */
+ *  「第X章 题目」 lines under 卷 blocks, no per-chapter synopsis needed).
+ *  Duplicate bare titles get a ·N sequence suffix (·2, ·3, …) past the first
+ *  occurrence so every chapter is recognizably distinct. */
 export function parseOutlineChapters(outlineText: string): Array<{ idx: number; title: string; summary: string }> {
   const lines = outlineText.split("\n");
   const entries: Array<{ idx: number; title: string; summary: string }> = [];
+  const bareCounts = new Map<string, number>();
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
     if (isChapterHeadingLine(trimmed)) {
-      const title =
+      let title =
         stripHeadingDecoration(trimmed).slice(0, 200) ||
         `第${entries.length + 1}章`;
+      // Disambiguate repeated bare titles: keep first occurrence bare,
+      // suffix later ones 「·N」. Pre-existing ·N from a re-applied outline
+      // is stripped before counting AND before re-suffixing, so re-apply
+      // doesn't stack suffixes (归途·2 → 归途·3, never 归途·2·2).
+      const bare = title.replace(BARE_TITLE_RE, "").replace(/·\d+$/, "").trim();
+      if (bare) {
+        const n = (bareCounts.get(bare) ?? 0) + 1;
+        bareCounts.set(bare, n);
+        if (n > 1) {
+          const prefix = title.match(BARE_TITLE_RE)?.[0] ?? "";
+          title = `${prefix}${bare}·${n}`;
+        }
+      }
       entries.push({ idx: i, title, summary: "" });
     }
   }

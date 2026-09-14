@@ -141,7 +141,7 @@ function outlineForPrompt(outlineText: string, chapterTitle?: string): string {
   return lines.slice(from, to).join("\n").slice(0, 1500);
 }
 
-function buildPrompt(
+export function buildPrompt(
   tool: ToolKey,
   editorText: string,
   chapterTitle: string,
@@ -185,7 +185,8 @@ function buildPrompt(
       const chaptersDirective = (() => {
         const n = Number(outlineForm?.targetChapters);
         if (Number.isFinite(n) && n > 40) {
-          return `4. 【分卷大纲】全书按每卷 100-200 章分卷。每卷一小段（3-5 句：本卷主线冲突、关键转折、卷末钩子）。卷内列出全部章节题目，每行一个「第X章 标题」，只写题目、不写内容；\n`;
+          return `4. 【分卷大纲】全书按每卷 100-200 章分卷。每卷一小段（3-5 句：本卷主线冲突、关键转折、卷末钩子）。卷内列出全部章节题目，每行一个「第X章 标题」，只写题目、不写内容；\n`
+            + `5. 【标题多样性】章节标题不得重复：同一标题全书只能出现一次；不要围绕单一意象词反复套用「X之Y」模板——每 50 章切换一组新的意象/事件/地点/人物关系来构思标题；标题 2-6 字，具体可感（动作、地点、物件、人物事件），避免空泛大词；\n`;
         }
         return `4. 【章节梗概】${chapPart.trim() ? `按${outlineForm?.targetChapters}章逐章列出，` : "逐章列出（8-20章，每章"}每章以"第X章 标题"开头，接 2-3 句该章发生的事、冲突与伏笔。\n`;
       })();

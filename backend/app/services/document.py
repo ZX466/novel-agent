@@ -22,6 +22,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.document import Document, STATUS_ACTIVE, STATUS_DELETED
+from app.models.chapter import Chapter
 from app.schemas.document import DocumentCreate, DocumentUpdate
 
 _ALLOWED_HTML_TAGS = {
@@ -163,7 +164,31 @@ async def list_documents(
     total = await session.scalar(total_stmt)
     list_stmt = list_stmt.limit(limit).offset(offset)
     result = await session.execute(list_stmt)
-    return list(result.scalars().all()), int(total or 0)
+    docs = list(result.scalars().all())
+
+    # 09-14: fill word_count from the chapters table — the editor save path
+    # writes chapter rows and never touches documents.word_count, so the
+    # column stays 0 and every works-list card showed 0 字 while the stats
+    # page (already chapter-aggregated) showed real numbers. Read-only
+    # aggregate over the fetched page; the document column is NOT written.
+    if docs:
+        agg_stmt = (
+            select(
+                Chapter.novel_id,
+                func.coalesce(func.sum(Chapter.word_count), 0).label("words"),
+            )
+            .where(
+                Chapter.novel_id.in_([d.id for d in docs]),
+                Chapter.status != "deleted",
+            )
+            .group_by(Chapter.novel_id)
+        )
+        agg_result = await session.execute(agg_stmt)
+        words_by_novel = {int(row[0]): int(row[1] or 0) for row in agg_result.all()}
+        for d in docs:
+            d.word_count = words_by_novel.get(d.id, 0)
+
+    return docs, int(total or 0)
 
 
 async def get_document(

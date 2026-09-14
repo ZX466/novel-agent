@@ -203,3 +203,10 @@
 - 测试：全 TDD；前端 16 文件/104 用例绿+tsc 0；后端相关套件全绿（creative_kit 19/20，1 失败=陈旧断言 test_apply_requires_api_key 应 422→实 401，系 38bd75b fail-open 认证改签遗留，非本轮引入）；每任务独立 code review 通过
 - 冒烟（容器真实链路）：建文档→apply 带 outline 的套件→outline_applied:false+原始大纲原封+version 不变+关系边落图(strength 3→6 ×2 映射符合设计)→清理 204
 - 遗留：CreationWizard 同款大纲解析未收敛（上轮已记）；陈旧 422 断言待修；GitHub 补推 64fb39d..606d1ac 及 R10 全系
+
+[回复] GitHub 补推完成 — Claude
+时间: 2026-09-14 13:00
+状态: 已完成（origin 已追平 3df57b0,双远程 0 差异）
+- 用户提示本机代理 127.0.0.1:7897,curl 验证 200 后 git -c http.proxy 推送成功
+- 积压全部补齐: R10 全系+09-13 润色四连修+09-14 全部轮次;待补推标记清零
+- 后续: origin 推送遇 443 时可直接用该代理参数,不再挂待补

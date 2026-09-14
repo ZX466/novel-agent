@@ -68,6 +68,32 @@ const TOOLS: Array<{ key: ToolKey; icon: string; label: string; desc: string }> 
   { key: "deai",     icon: "🧹", label: "降AI",     desc: "降低 AI 检测率，重写为更自然的语言" },
 ];
 
+// 09-14: AI 腔高频词表 — 纯规则密度计，零 LLM 成本。统计的是"每千字
+// 命中数"，让降AI 工具的效果可度量（前→后对比），也用于面板提示。
+const AI_TONE_PATTERNS: RegExp[] = [
+  /然而/g, /不禁/g, /仿佛/g, /瞬间/g, /似乎/g, /宛如/g,
+  /空气仿佛凝固/g, /心中一动/g, /目光一凝/g, /嘴角勾起/g,
+  /深吸一口气/g, /心中暗道/g, /不由得/g, /竟让/g, /顿了顿/g,
+  /一抹/g, /一丝/g, /涌上心头/g, /久久不能平静/g, /命运的车轮/g,
+  /他知道，/g, /她知道，/g, /这一刻，/g, /那一刻，/g,
+];
+
+/**
+ * AI 腔密度：模板化高频词命中数 / 千字。纯本地正则统计，不发请求。
+ * 密度只是启发式信号——低于 1 ≈ 干净的人类文风，5+ ≈ 明显 AI 腔。
+ */
+export function aiToneDensity(text: string): number {
+  if (!text) return 0;
+  const total = text.length;
+  if (total === 0) return 0;
+  let hits = 0;
+  for (const re of AI_TONE_PATTERNS) {
+    const matches = text.match(re);
+    if (matches) hits += matches.length;
+  }
+  return (hits / total) * 1000;
+}
+
 const CONTEXT_DRAFT_ENDPOINT = (novelId: number) => `/v1/chat/draft/${novelId}`;
 
 /**
@@ -649,14 +675,21 @@ export function AIToolPanel({
         ))}
       </div>
 
-      {/* Selected text indicator */}
-      {selectedText && (
+      {/* Target indicator: selection takes priority; otherwise the
+          rewrite family silently targets the last 3000 chars — say so. */}
+      {selectedText ? (
         <div className="px-sp-3 pb-sp-2">
           <div className="text-[10px] px-sp-2 py-sp-1 rounded" style={{ background: "var(--accent-bg)", color: "var(--accent)" }}>
             已选中 {selectedText.length} 字，扩写/重写/降AI 将针对选中内容
           </div>
         </div>
-      )}
+      ) : editorText.trim() ? (
+        <div className="px-sp-3 pb-sp-2">
+          <div className="text-[10px] px-sp-2 py-sp-1 rounded" style={{ background: "var(--surface)", color: "var(--fg-tertiary)" }}>
+            未选中文字：扩写/重写/降AI 将处理章节末尾 {Math.min(editorText.length, 3000)} 字
+          </div>
+        </div>
+      ) : null}
 
       {/* Custom prompt toggle + input */}
       <div className="px-sp-3 pb-sp-2 shrink-0">
@@ -788,6 +821,23 @@ export function AIToolPanel({
               ))}
             </div>
             <span className="text-[11px]">正在生成…</span>
+          </div>
+        )}
+
+        {/* AI 腔密度计（降AI 工具）：前 → 后 对比，让效果可度量。 */}
+        {!isBusy && editedText && activeTool === "deai" && (
+          <div className="px-sp-3 pb-sp-1 flex items-center gap-sp-2 text-[10px]" style={{ color: "var(--muted)" }}>
+            <span>AI 腔密度</span>
+            <span style={{ color: "var(--fg-tertiary)" }}>前 {aiToneDensity(editorText).toFixed(1)}</span>
+            <span>→</span>
+            <span
+              style={{
+                color: aiToneDensity(editedText) < aiToneDensity(editorText) ? "var(--accent)" : "var(--warn)",
+              }}
+            >
+              后 {aiToneDensity(editedText).toFixed(1)}
+            </span>
+            <span style={{ color: "var(--fg-tertiary)" }}>（每千字模板词命中）</span>
           </div>
         )}
 

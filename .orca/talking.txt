@@ -181,3 +181,25 @@
 - ⑤总纲编辑: AI 润色按钮(rewrite 管线,回填+自动保存)+⤢全局模式(编辑区占满整栏)
 - ⑥基建: Dockerfile apt/pip 换 USTC/阿里云源(清缓存后官方源 1700s+ 27 包;镜像源 90s 全程)
 - 测试: 后端 +6 全绿,容器对照 40→39(环境性);前端 98/98;tsc 0
+
+[回复] 润色毁大纲/全屏失效/章节不建/422崩溃 四连修 — Claude
+时间: 2026-09-13 20:05
+状态: 已完成（`682d20c`，gitee 已推，backend/frontend 已重建；origin 443 不可达待补推）
+- ①AI润色毁大纲(最严重): rewrite/polish 路由跳过 draft,refine_node 只读 state["draft"] 不读 topic → LLM 收到空 Original draft 瞎编,输出无关英文散文被前端自动保存覆盖总纲(文档296「低语者」总纲数据丢失,不可恢复;实体表 5角色/7世界观/21事件完好)。修复: _refine_from_topic 分支——无 draft 时 topic(指令+全文)直通 user 消息+中文编辑 system;refine 循环路径不变
+- ②总纲全局模式无效: 全屏容器 flex-1 但 textarea 未跟随,补 flex-1 min-h-0/overflow-y-auto
+- ③大纲插入章节不建(静默): parseOutlineChapters 只匹配裸「第X章」行首,AI 生成 **第一章**/### 第1章/1. 第一章/【第一章】全解析为 0 条(nginx 日志 33+ 实体 POST、0 章 POST 铁证)。修复: 剥离前导装饰后锚定行首再匹配+叙述行不误判+解析 0 条 alert 提示
+- ④附带发现: 422 处理器把 ValueError 对象直接 json.dumps → 自身崩溃 500(POST /consistency/check 实录);main.py 序列化前转字符串
+- 测试: 4 测试文件 RED→GREEN(后端 6+前端 11),相关回归 47 passed,容器内 6 passed,容器重建 bundle 验证;宿主机全量 36 failed=既有基线(git stash 对照证实)
+- 教训: graph 路由新增跳过 draft 的 task_type 必须同步核查每个存活节点读的 state 键;润色类功能上线前真模型冒烟
+- 遗留: CreationWizard 的同款大纲解析未收敛(数字编号场景幸存,装饰场景仍漏);GitHub 补推 682d20c(R10 全系同前)
+
+[回复] 全局弹层+灵感套件三问题修复 — Claude
+时间: 2026-09-14 03:05
+状态: 已完成（6 提交 64fb39d..606d1ac，gitee 已推，backend/frontend 已重建+API 冒烟通过；origin 443 不可达待补推）
+- ①总纲「全局」改居中弹层：fixed z-50+遮罩+92vw 面板（样式对齐 CreativeKitDialog），内联伸展废除，非全屏布局复原
+- ②灵感套件注入作品现状：生成前拉取标题/简介(metadata_json.description)/已有角色(名+定位)/世界观标题/现有大纲前3000字，指令要求延续既有设定——根治"生成内容与作品无关"
+- ③大纲提取补关系线：extract 提示词加 relationships 第四类(subject_name/object_name/relation_type/strength 1-10 整数)，前端解析后走现成 /relationships/import 按名字导入，失败不拖垮提取，摘要计「N 条关系」；clamp 越界值防 422 丢整批
+- ④灵感套件不再写大纲（用户明令）：后端合并块删除、outline_applied 恒 False、前端请求剥离 outline、预览标注「仅供参考，不会写入作品」；大纲唯一写入方=编辑器保存/AI润色/应用大纲
+- 测试：全 TDD；前端 16 文件/104 用例绿+tsc 0；后端相关套件全绿（creative_kit 19/20，1 失败=陈旧断言 test_apply_requires_api_key 应 422→实 401，系 38bd75b fail-open 认证改签遗留，非本轮引入）；每任务独立 code review 通过
+- 冒烟（容器真实链路）：建文档→apply 带 outline 的套件→outline_applied:false+原始大纲原封+version 不变+关系边落图(strength 3→6 ×2 映射符合设计)→清理 204
+- 遗留：CreationWizard 同款大纲解析未收敛（上轮已记）；陈旧 422 断言待修；GitHub 补推 64fb39d..606d1ac 及 R10 全系

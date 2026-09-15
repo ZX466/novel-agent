@@ -150,7 +150,16 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
                     break;
                   }
                   case "text-end":
-                    controller.enqueue({ type: "text-end", id: partId() });
+                    // 后端在 [DONE] 前会发一次收尾 text-end(chat.py
+                    // _encode_text_end)。只在确实有打开的 part 时转发,
+                    // 并把 textStarted 复位——否则 [DONE] 分支的兜底会再
+                    // 发一次同 id text-end,AI SDK 的 activeTextParts[id]
+                    // 已被删除,二次 end 抛 "Cannot set properties of
+                    // undefined (setting 'state')"(09-15 用户报告)。
+                    if (textStarted) {
+                      controller.enqueue({ type: "text-end", id: partId() });
+                      textStarted = false;
+                    }
                     break;
                   case "data-perf":
                     // Backend wraps perf as a data- prefixed part (AI SDK v5

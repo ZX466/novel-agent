@@ -30,7 +30,7 @@ import re
 from typing import Annotated, Any, AsyncIterator, Dict, List, Literal
 
 import litellm
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, BeforeValidator, Field, ValidationError, model_validator
 from typing import Annotated
@@ -821,7 +821,11 @@ async def test_connection(
     provider_config: Annotated[
         ProviderConfig | None, Depends(_extract_provider_config)
     ],
-    stage: str = "draft",
+    # 09-15: must be Body(embed=True) — a bare `stage: str = "draft"` reads
+    # the QUERY string only, so the frontend's JSON body {"stage": "embedding"}
+    # was silently ignored and every 测试连接 actually probed the draft
+    # stage's credentials (user-visible as "embedding 测的却是别的模型").
+    stage: Annotated[str, Body(embed=True)] = "draft",
     _api_key: str = Depends(enforce_chat_test_rate_limit),
 ) -> dict:
     """Test LLM connection for a specific stage. Returns success/error."""
@@ -856,9 +860,14 @@ async def test_connection(
 
         if stage == "embedding":
             # Embedding stage: use openai client directly for /embeddings.
+            # 09-15: timeout from settings — the old hardcoded 30s made the
+            # 测试连接 button hang half a minute against a stalled provider.
             logger.info("TEST_CONNECTION: embedding stage, model=%s, base=%s", stage_cfg.model, stage_cfg.api_base)
             client = openai_lib.AsyncOpenAI(
-                api_key=stage_cfg.api_key, base_url=stage_cfg.api_base, timeout=30,
+                api_key=stage_cfg.api_key,
+                base_url=stage_cfg.api_base,
+                timeout=settings.connection_test_timeout_seconds,
+                max_retries=0,
             )
             resp = await client.embeddings.create(model=stage_cfg.model, input="hi")
             dim = len(resp.data[0].embedding)
@@ -892,7 +901,10 @@ async def test_connection(
             if "does not exist" in str(chat_err).lower():
                 logger.info("TEST_CONNECTION: chat endpoint rejected model; trying embeddings fallback")
                 client = openai_lib.AsyncOpenAI(
-                    api_key=stage_cfg.api_key, base_url=stage_cfg.api_base, timeout=30,
+                    api_key=stage_cfg.api_key,
+                    base_url=stage_cfg.api_base,
+                    timeout=settings.connection_test_timeout_seconds,
+                    max_retries=0,
                 )
                 resp = await client.embeddings.create(model=stage_cfg.model, input="hi")
                 dim = len(resp.data[0].embedding)

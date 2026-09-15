@@ -75,16 +75,18 @@ async def lifespan(app: FastAPI):
         logger.exception("Redis ping failed at startup — continuing anyway")
 
     # Embedding config sanity check. Embeddings (RAG memory layer) use their
-    # OWN credentials (EMBEDDING_*), separate from the BYOK chat stages. When
-    # the key is empty, every ingestion silently no-ops and retrieval 404s —
-    # surface it loudly at boot so it isn't buried in per-write warnings.
+    # OWN credentials. In the standard BYOK deployment the frontend supplies
+    # them per-request via X-Provider-Config (the .env EMBEDDING_* values are
+    # a server-side fallback for non-BYOK / CLI callers, not a hard
+    # requirement) — so an empty .env key is normal, not an error.
     if not settings.embedding_api_key or settings.embedding_api_key.startswith(
         "sk-your-"
     ):
-        logger.error(
-            "EMBEDDING_API_KEY is not configured (backend/.env). "
-            "Memory ingestion and semantic retrieval will be DISABLED — "
-            "set EMBEDDING_API_KEY / EMBEDDING_API_BASE / EMBEDDING_MODEL."
+        logger.info(
+            "EMBEDDING_API_KEY not set in backend/.env — fine under BYOK "
+            "(frontend X-Provider-Config supplies the embedding stage per "
+            "request). Server-side fallback callers (CLI/scripts) would be "
+            "disabled."
         )
     else:
         logger.info(

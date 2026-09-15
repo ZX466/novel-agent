@@ -111,6 +111,16 @@ class Settings(BaseSettings):
             "lore fallback kicked in (09-15 用户报告'卡在记忆库检索')."
         ),
     )
+    connection_test_timeout_seconds: float = Field(
+        default=8.0,
+        ge=1.0,
+        le=60.0,
+        description=(
+            "Timeout for /v1/chat/test connection probes (设置对话框'测试"
+            "连接'按钮). A stalled provider must surface an error quickly "
+            "— 30s per attempt made the button hang half a minute."
+        ),
+    )
 
     # --- Knowledge base (F4) upload controls ---
     knowledge_upload_extensions: List[str] = Field(

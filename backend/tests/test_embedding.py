@@ -383,3 +383,32 @@ async def test_embed_text_rejects_hostname_resolving_to_private_ip(monkeypatch):
     with pytest.raises(ValueError, match="Blocked internal address"):
         await embedding.embed_text("hello", stage_config=stage)
 
+
+
+# ---------------------------------------------------------------------------
+# 09-15: client timeout / retry bounds — a dead embedding endpoint must not
+# stall the retrieval stage for minutes (openai defaults: 60s, 2 retries).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_client_env_uses_configured_timeout_and_retries(monkeypatch):
+    """Env-default client honors embedding_timeout_seconds / max_retries."""
+    import openai as openai_lib
+
+    monkeypatch.setattr(settings, "embedding_timeout_seconds", 15.0)
+    monkeypatch.setattr(settings, "embedding_max_retries", 1)
+    client = await embedding._get_client(None)
+    assert isinstance(client, openai_lib.AsyncOpenAI)
+    assert client.timeout == 15.0
+    assert client.max_retries == 1
+
+
+@pytest.mark.asyncio
+async def test_get_client_byok_also_bounded(monkeypatch):
+    """BYOK stage_config client gets the same timeout/retry bounds."""
+    monkeypatch.setattr(settings, "embedding_timeout_seconds", 12.0)
+    monkeypatch.setattr(settings, "embedding_max_retries", 0)
+    client = await embedding._get_client(_make_stage())
+    assert client.timeout == 12.0
+    assert client.max_retries == 0

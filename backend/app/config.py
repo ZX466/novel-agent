@@ -88,6 +88,29 @@ class Settings(BaseSettings):
         ge=1,
         description="Embedding dimension. MUST match the vector(N) column in migrations.",
     )
+    embedding_timeout_seconds: float = Field(
+        default=15.0,
+        ge=1.0,
+        le=120.0,
+        description=(
+            "Per-request timeout for the embedding API. Retrieval queries "
+            "(single text) must fail fast so the pipeline falls back to "
+            "structured lore instead of stalling the draft for minutes; "
+            "background ingestion tolerates the same bound (batch of a few "
+            "chunks per call)."
+        ),
+    )
+    embedding_max_retries: int = Field(
+        default=1,
+        ge=0,
+        le=5,
+        description=(
+            "OpenAI-client retries for embedding requests. openai's default "
+            "is 2 with exponential backoff — combined with a long timeout "
+            "that stalled retrieval by 2-3 minutes before the structured-"
+            "lore fallback kicked in (09-15 用户报告'卡在记忆库检索')."
+        ),
+    )
 
     # --- Knowledge base (F4) upload controls ---
     knowledge_upload_extensions: List[str] = Field(

@@ -98,20 +98,30 @@ def _cache_set(key: str, vec: list[float]) -> None:
 
 
 async def _get_client(stage_config: StageConfig | None):
-    """Build an AsyncOpenAI client from stage_config or .env defaults."""
+    """Build an AsyncOpenAI client from stage_config or .env defaults.
+
+    Timeout/retries come from settings (embedding_timeout_seconds /
+    embedding_max_retries). openai's defaults (60s, 2 retries with
+    backoff) let a dead embedding endpoint stall the retrieval stage for
+    2-3 minutes before the structured-lore fallback fired (09-15).
+    """
     import openai as openai_lib
 
+    timeout = settings.embedding_timeout_seconds
+    max_retries = settings.embedding_max_retries
     if stage_config is not None:
         _validate_api_base(stage_config.api_base)
         return openai_lib.AsyncOpenAI(
             api_key=stage_config.api_key,
             base_url=stage_config.api_base,
-            timeout=60,
+            timeout=timeout,
+            max_retries=max_retries,
         )
     return openai_lib.AsyncOpenAI(
         api_key=settings.embedding_api_key,
         base_url=settings.embedding_api_base,
-        timeout=60,
+        timeout=timeout,
+        max_retries=max_retries,
     )
 
 

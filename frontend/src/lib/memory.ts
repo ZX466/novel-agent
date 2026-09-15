@@ -53,7 +53,9 @@ async function knowledgeRequest<T>(path: string, init?: RequestInit): Promise<T>
 }
 
 export function listKnowledgeDocs(docId: number): Promise<{ items: KnowledgeFileSummary[]; total: number }> {
-  return knowledgeRequest(`/v1/documents/${docId}/knowledge-docs?limit=500`);
+  // 09-15: 后端路由是 /knowledge(非 knowledge-docs)——R10-⑥ 起路径写错,
+  // 知识文档 tab 恒 404(聚合降级掩盖)。limit 后端校验 le=200,传 500 会 422。
+  return knowledgeRequest(`/v1/documents/${docId}/knowledge?limit=200`);
 }
 
 /** Upload a text file (txt/md) via multipart — the backend validates size/
@@ -61,7 +63,7 @@ export function listKnowledgeDocs(docId: number): Promise<{ items: KnowledgeFile
 export function uploadKnowledgeDoc(docId: number, file: File): Promise<unknown> {
   const form = new FormData();
   form.append("file", file, file.name);
-  return knowledgeRequest(`/v1/documents/${docId}/knowledge-docs`, {
+  return knowledgeRequest(`/v1/documents/${docId}/knowledge`, {
     method: "POST",
     body: form,
   });
@@ -72,7 +74,7 @@ export function uploadKnowledgeText(docId: number, title: string, text: string):
   const filename = /\.(txt|md|markdown)$/i.test(title) ? title : `${title}.txt`;
   const form = new FormData();
   form.append("file", new File([text], filename, { type: "text/plain" }), filename);
-  return knowledgeRequest(`/v1/documents/${docId}/knowledge-docs`, {
+  return knowledgeRequest(`/v1/documents/${docId}/knowledge`, {
     method: "POST",
     body: form,
   });
@@ -80,7 +82,7 @@ export function uploadKnowledgeText(docId: number, title: string, text: string):
 
 export function deleteKnowledgeDoc(docId: number, title: string): Promise<void> {
   return knowledgeRequest<void>(
-    `/v1/documents/${docId}/knowledge-docs/${encodeURIComponent(title)}`,
+    `/v1/documents/${docId}/knowledge/${encodeURIComponent(title)}`,
     { method: "DELETE" },
   );
 }

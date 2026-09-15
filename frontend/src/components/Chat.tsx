@@ -53,11 +53,13 @@ export function Chat({ onInsertIntoEditor }: ChatProps) {
     setInput("");
   };
 
+  // 09-15: 与 AIToolPanel 同理——取**最后一个** text part(最终稿)而非拼接
+  // 全部。多阶段流(generate)里初稿和润色是分开的 part,拼接会把被丢弃的
+  // 初稿也带回正文(内容重复)。
   const collectMessageText = (parts: Array<{ type: string; text?: string }>): string => {
-    return parts
-      .filter((p) => p.type === "text" && typeof p.text === "string")
-      .map((p) => p.text as string)
-      .join("");
+    const textParts = parts.filter((p) => p.type === "text" && typeof p.text === "string");
+    const last = textParts[textParts.length - 1];
+    return last && typeof last.text === "string" ? last.text : "";
   };
 
   const errorMessage = error ? "Pipeline 出错，请重试" : "";

@@ -97,7 +97,8 @@ describe("fetchAllMemoryRows", () => {
     expect(rel.title).toContain("灰姑");
     expect(rel.title).toContain("救助");
     const ev = rows.find((r) => r.kind === "event")!;
-    expect(ev.badge).toContain("第2章");
+    // 09-15: badge 现为 1 起始(index 2 → 第3章,与章节标题「第N章」一致)。
+    expect(ev.badge).toContain("第3章");
   });
 
   it("degrades a failing kind to zero rows instead of rejecting", async () => {

@@ -97,7 +97,13 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
     const decoder = new TextDecoder();
     let buffer = "";
     let textStarted = false;
-    const TEXT_ID = "text-0";
+    // 09-15: generate 全链上 draft(初稿)与 refine(润色稿)都通过 on_token
+    // 流进同一个 SSE 文本流。若把它们拼进同一个 text part,面板会显示
+    // "初稿+润色稿"拼接体(实测:同一段故事写两遍,4286字)。收到
+    // refine 阶段开始时,结束当前 part 并开新 part——useChat 的 parts
+    // 数组里最后一个 text part 即最终稿,消费方(面板/插入)取它即可。
+    let partIndex = 0;
+    const partId = () => `text-${partIndex}`;
     const onPerf = this.onPerf; // capture (avoid `this` inside stream callbacks)
     const onStage = this.onStage;
 
@@ -118,6 +124,9 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
                 if (!line.startsWith("data:")) continue;
                 const payload = line.slice(5).trim();
                 if (payload === "[DONE]") {
+                  if (textStarted) {
+                    controller.enqueue({ type: "text-end", id: partId() });
+                  }
                   controller.close();
                   return;
                 }
@@ -130,18 +139,18 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
                 switch (evt.type) {
                   case "text-delta": {
                     if (!textStarted) {
-                      controller.enqueue({ type: "text-start", id: TEXT_ID });
+                      controller.enqueue({ type: "text-start", id: partId() });
                       textStarted = true;
                     }
                     controller.enqueue({
                       type: "text-delta",
-                      id: TEXT_ID,
+                      id: partId(),
                       delta: String(evt.delta ?? ""),
                     });
                     break;
                   }
                   case "text-end":
-                    controller.enqueue({ type: "text-end", id: TEXT_ID });
+                    controller.enqueue({ type: "text-end", id: partId() });
                     break;
                   case "data-perf":
                     // Backend wraps perf as a data- prefixed part (AI SDK v5
@@ -164,6 +173,26 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
                       } as unknown as StageEvent;
                       onStage(restored);
                     }
+                    // 09-15 多阶段分段: refine 开始 = 初稿已被润色稿取代。
+                    // 结束当前 part、开新 part;后一个 part 在 UI parts 数组
+                    // 里排后,消费方取最后一个 text part 即最终稿。只在
+                    // 已有打开的 part 时切(避免 refine 先于任何文本时产生
+                    // 空 part);iteration>0(evaluate 回炉)不切——同一份
+                    // 润色稿的重跑不该再多开 part。
+                    const st = (evt.data ?? {}) as {
+                      type?: string; stage?: string; status?: string; iteration?: number;
+                    };
+                    if (
+                      st.type === "stage" &&
+                      st.stage === "refine" &&
+                      st.status === "started" &&
+                      textStarted &&
+                      (st.iteration ?? 0) === 0
+                    ) {
+                      controller.enqueue({ type: "text-end", id: partId() });
+                      partIndex += 1;
+                      textStarted = false;
+                    }
                     break;
                   }
                   case "error":
@@ -180,7 +209,7 @@ export class PerfChatTransport implements ChatTransport<UIMessage> {
             }
           }
           if (textStarted) {
-            controller.enqueue({ type: "text-end", id: TEXT_ID });
+            controller.enqueue({ type: "text-end", id: partId() });
           }
           controller.close();
         } catch (e) {

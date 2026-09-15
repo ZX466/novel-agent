@@ -477,13 +477,16 @@ export function AIToolPanel({
   }, [isBusy]);
 
   // Latest assistant message text (for live streaming display).
+  // 09-15: 取**最后一个** text part 而非拼接全部——generate 全链的流里有
+  // 初稿 part 和润色 part(transport 在 refine 开始时切段),最终稿是
+  // 最后一个;拼接会显示"初稿+润色稿"导致章节内容重复(实测 4286 字双份)。
   const latestAssistantText = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "assistant") {
-        return messages[i].parts
-          .filter((p) => p.type === "text")
-          .map((p) => (p as { type: string; text: string }).text)
-          .join("");
+        const textParts = messages[i].parts.filter(
+          (p): p is { type: "text"; text: string } => p.type === "text" && "text" in p,
+        );
+        return textParts[textParts.length - 1]?.text ?? "";
       }
     }
     return "";
